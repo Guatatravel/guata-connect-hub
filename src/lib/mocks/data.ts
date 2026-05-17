@@ -248,8 +248,11 @@ export const mockServices: AgencyService[] = [
 
 export const mockSettings: ChannelSettings = {
   metaStatus: "conectado",
-  webhookDescubraUrl: "https://api.guata.app/webhooks/wa/descubra",
+  webhookDescubraUrl: "https://api.guata.app/webhooks/descubra-ms",
   webhookViagensUrl: "https://api.guata.app/webhooks/wa/viagens",
+  descubraCanalWebhookReady: false,
+  descubraSupabaseConfigured: false,
+  descubraWebhookSecretConfigured: false,
   mensagemBoasVindas:
     "Oi! Eu sou o Guatá 🦫, guia oficial do Descubra MS. Posso te ajudar com eventos, roteiros e viagens pelo Mato Grosso do Sul. Sobre o que quer saber hoje?",
   palavrasGatilhoTriagem: [

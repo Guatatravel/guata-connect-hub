@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Trash2, Plus, CheckCircle2, XCircle } from "lucide-react";
-import { isDescubraConfigured } from "@/integrations/descubra/client";
 import type { AgencyService } from "@/types/guata";
 
 export const Route = createFileRoute("/_app/configuracoes")({
@@ -116,17 +115,22 @@ function ConfigPage() {
             <Input readOnly value={settings.webhookViagensUrl} className="font-mono text-xs" />
           </div>
           <p className="text-xs text-muted-foreground">
-            Integração com Descubra MS:{" "}
-            {isDescubraConfigured() ? (
-              <span className="text-emerald-700 font-medium">configurada</span>
+            Canal (eventos → posts):{" "}
+            {settings.descubraCanalWebhookReady ? (
+              <span className="text-emerald-700 font-medium">ativa</span>
             ) : (
               <span className="text-amber-700 font-medium">
-                pendente — defina VITE_DESCUBRA_SUPABASE_URL e VITE_DESCUBRA_SUPABASE_PUBLISHABLE_KEY
+                pendente — configure Database Webhook no Supabase Descubra apontando
+                para a URL acima com o mesmo{" "}
+                <code className="text-[10px]">DESCUBRA_WEBHOOK_SECRET</code> da API
               </span>
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            Base de conhecimento continua sendo gerenciada no admin do Descubra MS.
+            Guia: <code className="text-[10px]">guata-channel-api/integrations/descubra-ms/README.md</code>
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Base de conhecimento do chat: admin do Descubra MS (Supabase na API).
           </p>
         </CardContent>
       </Card>

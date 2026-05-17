@@ -8,7 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Copy, Check, X, ExternalLink, Megaphone } from "lucide-react";
 import { formatDate } from "@/lib/format";
-import { isDescubraConfigured } from "@/integrations/descubra/client";
 
 export const Route = createFileRoute("/_app/canal")({
   component: CanalPage,
@@ -19,6 +18,11 @@ function CanalPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["channel-posts"],
     queryFn: () => api.listChannelPosts(),
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.getSettings(),
   });
 
   const updateMut = useMutation({
@@ -50,9 +54,14 @@ function CanalPage() {
             Posts gerados automaticamente quando o Descubra MS publica um evento.
           </p>
         </div>
-        {!isDescubraConfigured() && (
-          <Badge variant="outline" className="border-accent text-accent-foreground">
-            Modo mock — integração Descubra pendente
+        {settings && !settings.descubraCanalWebhookReady && (
+          <Badge variant="outline" className="border-amber-500/50 text-amber-900">
+            Webhook Supabase pendente — veja Configurações
+          </Badge>
+        )}
+        {settings?.descubraCanalWebhookReady && (
+          <Badge variant="outline" className="border-emerald-500/50 text-emerald-900">
+            Integração Canal ativa
           </Badge>
         )}
       </div>

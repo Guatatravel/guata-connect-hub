@@ -87,6 +87,9 @@ export interface ChannelSettings {
   webhookViagensUrl: string;
   mensagemBoasVindas: string;
   palavrasGatilhoTriagem: string[];
+  descubraCanalWebhookReady?: boolean;
+  descubraSupabaseConfigured?: boolean;
+  descubraWebhookSecretConfigured?: boolean;
 }
 
 export const CONSULTORES = [

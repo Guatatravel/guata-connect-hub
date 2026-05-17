@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { signIn } from "@/lib/auth";
+import { saveSession } from "@/lib/auth";
+import { api, isUsingMock } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -13,7 +15,9 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(
+    isUsingMock ? "" : "admin@guata.local",
+  );
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,10 +28,21 @@ function LoginPage() {
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
-    signIn(email);
-    toast.success("Bem-vindo de volta!");
-    navigate({ to: "/dashboard" });
+    try {
+      const { token, user } = await api.login(email, password);
+      saveSession({
+        email: user.email,
+        name: user.name,
+        token,
+        loggedAt: new Date().toISOString(),
+      });
+      toast.success("Bem-vindo de volta!");
+      navigate({ to: "/dashboard" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha no login");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -45,6 +60,11 @@ function LoginPage() {
               <p className="text-sm text-muted-foreground">
                 Painel operacional WhatsApp
               </p>
+              {!isUsingMock && (
+                <Badge variant="outline" className="mt-2 text-xs">
+                  API conectada
+                </Badge>
+              )}
             </div>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -74,7 +94,9 @@ function LoginPage() {
               {loading ? "Entrando..." : "Entrar"}
             </Button>
             <p className="text-xs text-center text-muted-foreground">
-              Login mock — qualquer credencial funciona nesta versão.
+              {isUsingMock
+                ? "Modo mock — defina VITE_GUATA_API_URL para usar a API real."
+                : "Use as credenciais do admin (seed da API)."}
             </p>
           </form>
         </CardContent>
