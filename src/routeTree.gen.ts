@@ -14,7 +14,9 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppConversasRouteImport } from './routes/_app.conversas'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
+import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -40,24 +42,38 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConversasRoute = AppConversasRouteImport.update({
+  id: '/conversas',
+  path: '/conversas',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => AppTriagensRoute,
 } as any)
+const AppConversasIdRoute = AppConversasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppConversasRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/triagens': typeof AppTriagensRouteWithChildren
+  '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/triagens': typeof AppTriagensRouteWithChildren
+  '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesById {
@@ -65,22 +81,40 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/conversas': typeof AppConversasRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/triagens': typeof AppTriagensRouteWithChildren
+  '/_app/conversas/$id': typeof AppConversasIdRoute
   '/_app/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dashboard' | '/triagens' | '/triagens/$id'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/conversas'
+    | '/dashboard'
+    | '/triagens'
+    | '/conversas/$id'
+    | '/triagens/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/triagens' | '/triagens/$id'
+  to:
+    | '/'
+    | '/login'
+    | '/conversas'
+    | '/dashboard'
+    | '/triagens'
+    | '/conversas/$id'
+    | '/triagens/$id'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/login'
+    | '/_app/conversas'
     | '/_app/dashboard'
     | '/_app/triagens'
+    | '/_app/conversas/$id'
     | '/_app/triagens/$id'
   fileRoutesById: FileRoutesById
 }
@@ -127,6 +161,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/conversas': {
+      id: '/_app/conversas'
+      path: '/conversas'
+      fullPath: '/conversas'
+      preLoaderRoute: typeof AppConversasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/triagens/$id': {
       id: '/_app/triagens/$id'
       path: '/$id'
@@ -134,8 +175,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTriagensIdRouteImport
       parentRoute: typeof AppTriagensRoute
     }
+    '/_app/conversas/$id': {
+      id: '/_app/conversas/$id'
+      path: '/$id'
+      fullPath: '/conversas/$id'
+      preLoaderRoute: typeof AppConversasIdRouteImport
+      parentRoute: typeof AppConversasRoute
+    }
   }
 }
+
+interface AppConversasRouteChildren {
+  AppConversasIdRoute: typeof AppConversasIdRoute
+}
+
+const AppConversasRouteChildren: AppConversasRouteChildren = {
+  AppConversasIdRoute: AppConversasIdRoute,
+}
+
+const AppConversasRouteWithChildren = AppConversasRoute._addFileChildren(
+  AppConversasRouteChildren,
+)
 
 interface AppTriagensRouteChildren {
   AppTriagensIdRoute: typeof AppTriagensIdRoute
@@ -150,11 +210,13 @@ const AppTriagensRouteWithChildren = AppTriagensRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppConversasRoute: typeof AppConversasRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppTriagensRoute: typeof AppTriagensRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppConversasRoute: AppConversasRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppTriagensRoute: AppTriagensRouteWithChildren,
 }
