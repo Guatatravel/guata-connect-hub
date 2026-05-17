@@ -1,0 +1,262 @@
+import type {
+  AgencyService,
+  ChannelPost,
+  ChannelSettings,
+  Conversation,
+  TravelIntake,
+} from "@/types/guata";
+
+const now = Date.now();
+const hoursAgo = (h: number) => new Date(now - h * 3600_000).toISOString();
+const daysAgo = (d: number) => new Date(now - d * 86400_000).toISOString();
+const daysAhead = (d: number) =>
+  new Date(now + d * 86400_000).toISOString().slice(0, 10);
+
+export const mockTriages: TravelIntake[] = [
+  {
+    id: "t1",
+    protocol: "#VG-0001",
+    name: "Mariana Cordeiro",
+    phone: "5567999110011",
+    line: "guata_viagens",
+    destino: "Bonito",
+    dataIda: daysAhead(20),
+    dataVolta: daysAhead(25),
+    viajantes: 2,
+    faixaOrcamento: "R$ 4.000 – R$ 6.000",
+    origem: "Campo Grande",
+    preferencias: "Flutuação, gruta do lago azul, hotel com café",
+    status: "novo",
+    createdAt: hoursAgo(2),
+    updatedAt: hoursAgo(2),
+  },
+  {
+    id: "t2",
+    protocol: "#VG-0002",
+    name: "Renato Alves",
+    phone: "5567988220033",
+    line: "guata_viagens",
+    destino: "Pantanal Sul",
+    dataIda: daysAhead(45),
+    dataVolta: daysAhead(50),
+    viajantes: 4,
+    faixaOrcamento: "R$ 10.000 – R$ 15.000",
+    origem: "São Paulo",
+    preferencias: "Pousada com pesca, safari fotográfico",
+    status: "atribuido",
+    assignedTo: "Ana Souza",
+    createdAt: hoursAgo(8),
+    updatedAt: hoursAgo(3),
+  },
+  {
+    id: "t3",
+    protocol: "#VG-0003",
+    name: "Juliana Prado",
+    phone: "5567977330055",
+    line: "guata_viagens",
+    destino: "Corumbá + Pantanal",
+    dataIda: daysAhead(60),
+    dataVolta: daysAhead(68),
+    viajantes: 2,
+    faixaOrcamento: "R$ 8.000 – R$ 10.000",
+    status: "contactado",
+    assignedTo: "Bruno Lima",
+    notes: "Cliente prefere contato pela manhã.",
+    createdAt: daysAgo(2),
+    updatedAt: hoursAgo(20),
+  },
+  {
+    id: "t4",
+    protocol: "#VG-0004",
+    name: "Felipe Tavares",
+    phone: "5511944550066",
+    line: "guata_viagens",
+    destino: "Bonito",
+    dataIda: daysAhead(15),
+    dataVolta: daysAhead(19),
+    viajantes: 3,
+    faixaOrcamento: "R$ 6.000 – R$ 8.000",
+    status: "proposta_enviada",
+    assignedTo: "Ana Souza",
+    notes: "Proposta enviada por e-mail dia 12. Aguardando retorno.",
+    createdAt: daysAgo(4),
+    updatedAt: daysAgo(1),
+  },
+  {
+    id: "t5",
+    protocol: "#VG-0005",
+    name: "Patrícia Nogueira",
+    phone: "5567966770088",
+    line: "guata_viagens",
+    destino: "Aquidauana",
+    dataIda: daysAhead(30),
+    dataVolta: daysAhead(34),
+    viajantes: 2,
+    faixaOrcamento: "R$ 3.000 – R$ 4.000",
+    status: "fechado",
+    assignedTo: "Carla Pires",
+    createdAt: daysAgo(10),
+    updatedAt: daysAgo(2),
+  },
+  {
+    id: "t6",
+    protocol: "#VG-0006",
+    name: "Ricardo Bueno",
+    phone: "5567955880099",
+    line: "descubra_ms",
+    destino: "Rota Bioceânica",
+    dataIda: daysAhead(90),
+    dataVolta: daysAhead(100),
+    viajantes: 1,
+    faixaOrcamento: "Sem definir",
+    status: "novo",
+    createdAt: hoursAgo(1),
+    updatedAt: hoursAgo(1),
+  },
+];
+
+export const mockConversations: Conversation[] = [
+  {
+    id: "c1",
+    phone: "5567999110011",
+    contactName: "Mariana Cordeiro",
+    line: "guata_viagens",
+    mode: "triagem",
+    lastMessageAt: hoursAgo(2),
+    lastMessage: "Pode ser entre o dia 20 e 25 do mês que vem.",
+    messages: [
+      { id: "m1", role: "user", text: "Oi, queria fazer uma viagem pra Bonito", at: hoursAgo(3) },
+      { id: "m2", role: "bot", text: "Oi! Sou o Guatá 🦫 que ótimo, Bonito é mágico. Pra te ajudar melhor, posso te passar pra nossa agência?", at: hoursAgo(3) },
+      { id: "m3", role: "user", text: "Pode sim", at: hoursAgo(2.8) },
+      { id: "m4", role: "bot", text: "Show! Pra montar uma proposta, me conta: quantas pessoas vão e quando?", at: hoursAgo(2.8) },
+      { id: "m5", role: "user", text: "Somos 2, datas ainda flexíveis", at: hoursAgo(2.5) },
+      { id: "m6", role: "bot", text: "Perfeito. Qual a faixa de orçamento por pessoa?", at: hoursAgo(2.5) },
+      { id: "m7", role: "user", text: "Pode ser entre o dia 20 e 25 do mês que vem.", at: hoursAgo(2) },
+    ],
+  },
+  {
+    id: "c2",
+    phone: "5567912340000",
+    contactName: "Carlos Drumond",
+    line: "descubra_ms",
+    mode: "informacional",
+    lastMessageAt: hoursAgo(5),
+    lastMessage: "Valeu, Guatá!",
+    messages: [
+      { id: "m1", role: "user", text: "Quais eventos rolam em Campo Grande esse fim de semana?", at: hoursAgo(6) },
+      { id: "m2", role: "bot", text: "Tem o Festival Gastronômico no Mercadão sábado, e Feira Central tradicional no domingo 🍻", at: hoursAgo(6) },
+      { id: "m3", role: "user", text: "Valeu, Guatá!", at: hoursAgo(5) },
+    ],
+  },
+  {
+    id: "c3",
+    phone: "5567988220033",
+    contactName: "Renato Alves",
+    line: "guata_viagens",
+    mode: "humano",
+    lastMessageAt: hoursAgo(1),
+    lastMessage: "Ana: oi Renato, te ligo às 15h ok?",
+    messages: [
+      { id: "m1", role: "user", text: "Oi, gostaria de orçamento Pantanal", at: hoursAgo(8) },
+      { id: "m2", role: "bot", text: "Te passei pra Ana, nossa consultora.", at: hoursAgo(7) },
+      { id: "m3", role: "human", text: "Oi Renato! Aqui é a Ana da Guatá Viagens. Tudo bem?", at: hoursAgo(2) },
+      { id: "m4", role: "human", text: "Ana: oi Renato, te ligo às 15h ok?", at: hoursAgo(1) },
+    ],
+  },
+  {
+    id: "c4",
+    phone: "5567900112233",
+    contactName: "Luana Vidal",
+    line: "descubra_ms",
+    mode: "aguardando",
+    lastMessageAt: hoursAgo(10),
+    lastMessage: "Posso falar com um humano?",
+    messages: [
+      { id: "m1", role: "user", text: "Posso falar com um humano?", at: hoursAgo(10) },
+    ],
+  },
+];
+
+export const mockChannelPosts: ChannelPost[] = [
+  {
+    id: "p1",
+    eventId: "ev-101",
+    thumbnail:
+      "https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=400&h=300&fit=crop",
+    title: "Festival América do Sul Pantanal 2026",
+    eventDate: daysAhead(35),
+    city: "Corumbá",
+    link: "https://descubra.ms/eventos/festival-pantanal",
+    body:
+      "🎶 *Festival América do Sul Pantanal 2026*\n📍 Corumbá — MS\n📅 Veja a programação completa\n\nMúsica, gastronomia e cultura do Pantanal em 4 dias de festival.\n\n👉 descubra.ms/eventos/festival-pantanal",
+    status: "rascunho",
+    createdAt: hoursAgo(4),
+  },
+  {
+    id: "p2",
+    eventId: "ev-102",
+    thumbnail:
+      "https://images.unsplash.com/photo-1533105079780-92b9be482077?w=400&h=300&fit=crop",
+    title: "Inverno Bonito — Festival de Cinema",
+    eventDate: daysAhead(50),
+    city: "Bonito",
+    link: "https://descubra.ms/eventos/inverno-bonito",
+    body:
+      "🎬 *Inverno Bonito — Festival de Cinema*\n📍 Bonito — MS\n📅 De 12 a 18 de julho\n\nSessões ao ar livre, mostras e debates com cineastas.\n\n👉 descubra.ms/eventos/inverno-bonito",
+    status: "rascunho",
+    createdAt: hoursAgo(20),
+  },
+  {
+    id: "p3",
+    eventId: "ev-099",
+    thumbnail:
+      "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400&h=300&fit=crop",
+    title: "Feira Central de Campo Grande",
+    eventDate: daysAhead(3),
+    city: "Campo Grande",
+    link: "https://descubra.ms/eventos/feira-central",
+    body:
+      "🥟 *Feira Central de Campo Grande*\n📍 Campo Grande — MS\n📅 Todas as sextas e sábados\n\nSobá, espetinho e cultura sul-mato-grossense.\n\n👉 descubra.ms/eventos/feira-central",
+    status: "publicado",
+    createdAt: daysAgo(3),
+  },
+];
+
+export const mockServices: AgencyService[] = [
+  {
+    id: "s1",
+    nome: "Pacotes Bonito",
+    descricao: "Pacotes completos com hospedagem e passeios principais.",
+    regioes: ["Bonito", "Jardim"],
+    ativo: true,
+  },
+  {
+    id: "s2",
+    nome: "Safári Pantanal",
+    descricao: "Roteiros de 3 a 7 noites em pousadas pantaneiras.",
+    regioes: ["Pantanal Sul", "Aquidauana", "Corumbá"],
+    ativo: true,
+  },
+  {
+    id: "s3",
+    nome: "Day-use em Campo Grande",
+    descricao: "Bate-volta cultural com gastronomia local.",
+    regioes: ["Campo Grande"],
+    ativo: false,
+  },
+];
+
+export const mockSettings: ChannelSettings = {
+  metaStatus: "conectado",
+  webhookDescubraUrl: "https://api.guata.app/webhooks/wa/descubra",
+  webhookViagensUrl: "https://api.guata.app/webhooks/wa/viagens",
+  mensagemBoasVindas:
+    "Oi! Eu sou o Guatá 🦫, guia oficial do Descubra MS. Posso te ajudar com eventos, roteiros e viagens pelo Mato Grosso do Sul. Sobre o que quer saber hoje?",
+  palavrasGatilhoTriagem: [
+    "quero viagem",
+    "pacote",
+    "orçamento",
+    "agência",
+    "viajar",
+  ],
+};
