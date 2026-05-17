@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
@@ -37,7 +37,6 @@ function TriagensPage() {
   const [consultor, setConsultor] = useState<string>("all");
   const [destino, setDestino] = useState("");
 
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["triages", { status, line, consultor, destino }],
