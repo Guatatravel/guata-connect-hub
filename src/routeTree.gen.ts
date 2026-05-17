@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -39,18 +40,25 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppTriagensRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof AppDashboardRoute
-  '/triagens': typeof AppTriagensRoute
+  '/triagens': typeof AppTriagensRouteWithChildren
+  '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof AppDashboardRoute
-  '/triagens': typeof AppTriagensRoute
+  '/triagens': typeof AppTriagensRouteWithChildren
+  '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -58,13 +66,14 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/dashboard': typeof AppDashboardRoute
-  '/_app/triagens': typeof AppTriagensRoute
+  '/_app/triagens': typeof AppTriagensRouteWithChildren
+  '/_app/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/dashboard' | '/triagens'
+  fullPaths: '/' | '/login' | '/dashboard' | '/triagens' | '/triagens/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/dashboard' | '/triagens'
+  to: '/' | '/login' | '/dashboard' | '/triagens' | '/triagens/$id'
   id:
     | '__root__'
     | '/'
@@ -72,6 +81,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/dashboard'
     | '/_app/triagens'
+    | '/_app/triagens/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,17 +127,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/triagens/$id': {
+      id: '/_app/triagens/$id'
+      path: '/$id'
+      fullPath: '/triagens/$id'
+      preLoaderRoute: typeof AppTriagensIdRouteImport
+      parentRoute: typeof AppTriagensRoute
+    }
   }
 }
 
+interface AppTriagensRouteChildren {
+  AppTriagensIdRoute: typeof AppTriagensIdRoute
+}
+
+const AppTriagensRouteChildren: AppTriagensRouteChildren = {
+  AppTriagensIdRoute: AppTriagensIdRoute,
+}
+
+const AppTriagensRouteWithChildren = AppTriagensRoute._addFileChildren(
+  AppTriagensRouteChildren,
+)
+
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
-  AppTriagensRoute: typeof AppTriagensRoute
+  AppTriagensRoute: typeof AppTriagensRouteWithChildren
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
-  AppTriagensRoute: AppTriagensRoute,
+  AppTriagensRoute: AppTriagensRouteWithChildren,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -140,3 +169,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
