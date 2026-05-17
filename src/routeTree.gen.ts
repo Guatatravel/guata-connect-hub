@@ -9,38 +9,161 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
+import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppConversasRouteImport } from './routes/_app.conversas'
+import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
+import { Route as AppCanalRouteImport } from './routes/_app.canal'
+import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
+import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppTriagensRoute = AppTriagensRouteImport.update({
+  id: '/triagens',
+  path: '/triagens',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConversasRoute = AppConversasRouteImport.update({
+  id: '/conversas',
+  path: '/conversas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCanalRoute = AppCanalRouteImport.update({
+  id: '/canal',
+  path: '/canal',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppTriagensRoute,
+} as any)
+const AppConversasIdRoute = AppConversasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppConversasRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/canal': typeof AppCanalRoute
+  '/configuracoes': typeof AppConfiguracoesRoute
+  '/conversas': typeof AppConversasRouteWithChildren
+  '/dashboard': typeof AppDashboardRoute
+  '/triagens': typeof AppTriagensRouteWithChildren
+  '/conversas/$id': typeof AppConversasIdRoute
+  '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/canal': typeof AppCanalRoute
+  '/configuracoes': typeof AppConfiguracoesRoute
+  '/conversas': typeof AppConversasRouteWithChildren
+  '/dashboard': typeof AppDashboardRoute
+  '/triagens': typeof AppTriagensRouteWithChildren
+  '/conversas/$id': typeof AppConversasIdRoute
+  '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_app/canal': typeof AppCanalRoute
+  '/_app/configuracoes': typeof AppConfiguracoesRoute
+  '/_app/conversas': typeof AppConversasRouteWithChildren
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/triagens': typeof AppTriagensRouteWithChildren
+  '/_app/conversas/$id': typeof AppConversasIdRoute
+  '/_app/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/canal'
+    | '/configuracoes'
+    | '/conversas'
+    | '/dashboard'
+    | '/triagens'
+    | '/conversas/$id'
+    | '/triagens/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/canal'
+    | '/configuracoes'
+    | '/conversas'
+    | '/dashboard'
+    | '/triagens'
+    | '/conversas/$id'
+    | '/triagens/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/_app/canal'
+    | '/_app/configuracoes'
+    | '/_app/conversas'
+    | '/_app/dashboard'
+    | '/_app/triagens'
+    | '/_app/conversas/$id'
+    | '/_app/triagens/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +171,105 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/triagens': {
+      id: '/_app/triagens'
+      path: '/triagens'
+      fullPath: '/triagens'
+      preLoaderRoute: typeof AppTriagensRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/conversas': {
+      id: '/_app/conversas'
+      path: '/conversas'
+      fullPath: '/conversas'
+      preLoaderRoute: typeof AppConversasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/configuracoes': {
+      id: '/_app/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AppConfiguracoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/canal': {
+      id: '/_app/canal'
+      path: '/canal'
+      fullPath: '/canal'
+      preLoaderRoute: typeof AppCanalRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/triagens/$id': {
+      id: '/_app/triagens/$id'
+      path: '/$id'
+      fullPath: '/triagens/$id'
+      preLoaderRoute: typeof AppTriagensIdRouteImport
+      parentRoute: typeof AppTriagensRoute
+    }
+    '/_app/conversas/$id': {
+      id: '/_app/conversas/$id'
+      path: '/$id'
+      fullPath: '/conversas/$id'
+      preLoaderRoute: typeof AppConversasIdRouteImport
+      parentRoute: typeof AppConversasRoute
+    }
   }
 }
 
+interface AppConversasRouteChildren {
+  AppConversasIdRoute: typeof AppConversasIdRoute
+}
+
+const AppConversasRouteChildren: AppConversasRouteChildren = {
+  AppConversasIdRoute: AppConversasIdRoute,
+}
+
+const AppConversasRouteWithChildren = AppConversasRoute._addFileChildren(
+  AppConversasRouteChildren,
+)
+
+interface AppTriagensRouteChildren {
+  AppTriagensIdRoute: typeof AppTriagensIdRoute
+}
+
+const AppTriagensRouteChildren: AppTriagensRouteChildren = {
+  AppTriagensIdRoute: AppTriagensIdRoute,
+}
+
+const AppTriagensRouteWithChildren = AppTriagensRoute._addFileChildren(
+  AppTriagensRouteChildren,
+)
+
+interface AppRouteChildren {
+  AppCanalRoute: typeof AppCanalRoute
+  AppConfiguracoesRoute: typeof AppConfiguracoesRoute
+  AppConversasRoute: typeof AppConversasRouteWithChildren
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppTriagensRoute: typeof AppTriagensRouteWithChildren
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppCanalRoute: AppCanalRoute,
+  AppConfiguracoesRoute: AppConfiguracoesRoute,
+  AppConversasRoute: AppConversasRouteWithChildren,
+  AppDashboardRoute: AppDashboardRoute,
+  AppTriagensRoute: AppTriagensRouteWithChildren,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
