@@ -1,12 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { saveSession } from "@/lib/auth";
-import { api, isUsingMock } from "@/lib/api/client";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
+import { checkAdminExists } from "@/lib/auth/admin.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -18,6 +18,12 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const check = useServerFn(checkAdminExists);
+
+  useEffect(() => {
+    check().then((r) => setNeedsSetup(!r.exists)).catch(() => {});
+  }, [check]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,13 +33,11 @@ function LoginPage() {
     }
     setLoading(true);
     try {
-      const { token, user } = await api.login(email, password);
-      saveSession({
-        email: user.email,
-        name: user.name,
-        token,
-        loggedAt: new Date().toISOString(),
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
+      if (error) throw error;
       toast.success("Bem-vindo de volta!");
       navigate({ to: "/dashboard" });
     } catch (err) {
@@ -58,11 +62,6 @@ function LoginPage() {
               <p className="text-sm text-muted-foreground">
                 Painel operacional WhatsApp
               </p>
-              {!isUsingMock && (
-                <Badge variant="outline" className="mt-2 text-xs">
-                  API conectada
-                </Badge>
-              )}
             </div>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -91,11 +90,18 @@ function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Entrando..." : "Entrar"}
             </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              {isUsingMock
-                ? "Modo de desenvolvimento. Configure VITE_GUATA_API_URL antes de publicar."
-                : "Entre em contato com o administrador para obter credenciais."}
-            </p>
+            {needsSetup ? (
+              <p className="text-xs text-center text-muted-foreground">
+                Primeiro acesso?{" "}
+                <Link to="/setup" className="text-primary underline font-medium">
+                  Configurar administrador
+                </Link>
+              </p>
+            ) : (
+              <p className="text-xs text-center text-muted-foreground">
+                Esqueceu a senha? Peça ao administrador para redefinir.
+              </p>
+            )}
           </form>
         </CardContent>
       </Card>

@@ -66,7 +66,7 @@ async function request<T>(
     Accept: "application/json",
   };
   const token = getAuthToken();
-  if (token && token !== "mock") {
+  if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
   if (body !== undefined) {

@@ -9,9 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
 import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppConversasRouteImport } from './routes/_app.conversas'
@@ -20,6 +23,16 @@ import { Route as AppCanalRouteImport } from './routes/_app.canal'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 
+const TrocarSenhaRoute = TrocarSenhaRouteImport.update({
+  id: '/trocar-senha',
+  path: '/trocar-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -33,6 +46,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppUsuariosRoute = AppUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppTriagensRoute = AppTriagensRouteImport.update({
   id: '/triagens',
@@ -73,22 +91,28 @@ const AppConversasIdRoute = AppConversasIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
+  '/trocar-senha': typeof TrocarSenhaRoute
   '/canal': typeof AppCanalRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/triagens': typeof AppTriagensRouteWithChildren
+  '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
+  '/trocar-senha': typeof TrocarSenhaRoute
   '/canal': typeof AppCanalRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/triagens': typeof AppTriagensRouteWithChildren
+  '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
 }
@@ -97,11 +121,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
+  '/trocar-senha': typeof TrocarSenhaRoute
   '/_app/canal': typeof AppCanalRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/conversas': typeof AppConversasRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/triagens': typeof AppTriagensRouteWithChildren
+  '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
   '/_app/triagens/$id': typeof AppTriagensIdRoute
 }
@@ -110,22 +137,28 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/setup'
+    | '/trocar-senha'
     | '/canal'
     | '/configuracoes'
     | '/conversas'
     | '/dashboard'
     | '/triagens'
+    | '/usuarios'
     | '/conversas/$id'
     | '/triagens/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/setup'
+    | '/trocar-senha'
     | '/canal'
     | '/configuracoes'
     | '/conversas'
     | '/dashboard'
     | '/triagens'
+    | '/usuarios'
     | '/conversas/$id'
     | '/triagens/$id'
   id:
@@ -133,11 +166,14 @@ export interface FileRouteTypes {
     | '/'
     | '/_app'
     | '/login'
+    | '/setup'
+    | '/trocar-senha'
     | '/_app/canal'
     | '/_app/configuracoes'
     | '/_app/conversas'
     | '/_app/dashboard'
     | '/_app/triagens'
+    | '/_app/usuarios'
     | '/_app/conversas/$id'
     | '/_app/triagens/$id'
   fileRoutesById: FileRoutesById
@@ -146,10 +182,26 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  SetupRoute: typeof SetupRoute
+  TrocarSenhaRoute: typeof TrocarSenhaRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/trocar-senha': {
+      id: '/trocar-senha'
+      path: '/trocar-senha'
+      fullPath: '/trocar-senha'
+      preLoaderRoute: typeof TrocarSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -170,6 +222,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/usuarios': {
+      id: '/_app/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof AppUsuariosRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/triagens': {
       id: '/_app/triagens'
@@ -253,6 +312,7 @@ interface AppRouteChildren {
   AppConversasRoute: typeof AppConversasRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppTriagensRoute: typeof AppTriagensRouteWithChildren
+  AppUsuariosRoute: typeof AppUsuariosRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -261,6 +321,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConversasRoute: AppConversasRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppTriagensRoute: AppTriagensRouteWithChildren,
+  AppUsuariosRoute: AppUsuariosRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -269,6 +330,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  SetupRoute: SetupRoute,
+  TrocarSenhaRoute: TrocarSenhaRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

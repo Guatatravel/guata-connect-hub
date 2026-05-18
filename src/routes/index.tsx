@@ -1,12 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Navigate } from "@tanstack/react-router";
-import { getSession } from "@/lib/auth";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
 function Index() {
-  const session = getSession();
+  const { loading, session } = useAuth();
+  if (loading) return null;
   return <Navigate to={session ? "/dashboard" : "/login"} />;
 }

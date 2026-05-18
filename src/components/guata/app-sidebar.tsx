@@ -18,6 +18,7 @@ import {
   Megaphone,
   Settings,
   LogOut,
+  Users,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 
@@ -26,6 +27,7 @@ const items = [
   { to: "/triagens", label: "Triagens Viagens", icon: Plane },
   { to: "/conversas", label: "Conversas", icon: MessageSquare },
   { to: "/canal", label: "Canal", icon: Megaphone },
+  { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
@@ -33,8 +35,8 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    signOut();
+  const handleLogout = async () => {
+    await signOut();
     navigate({ to: "/login" });
   };
 
