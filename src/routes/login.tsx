@@ -15,9 +15,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(
-    isUsingMock ? "" : "admin@guata.local",
-  );
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -95,8 +93,8 @@ function LoginPage() {
             </Button>
             <p className="text-xs text-center text-muted-foreground">
               {isUsingMock
-                ? "Modo mock — defina VITE_GUATA_API_URL para usar a API real."
-                : "Use as credenciais do admin (seed da API)."}
+                ? "Modo de desenvolvimento. Configure VITE_GUATA_API_URL antes de publicar."
+                : "Entre em contato com o administrador para obter credenciais."}
             </p>
           </form>
         </CardContent>
