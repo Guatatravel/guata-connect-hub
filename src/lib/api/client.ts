@@ -19,6 +19,13 @@ import type {
 const API_URL = import.meta.env.VITE_GUATA_API_URL as string | undefined;
 export const isUsingMock = !API_URL;
 
+// Em produção, nunca permitir o modo mock — exige API real.
+if (import.meta.env.PROD && isUsingMock && typeof console !== "undefined") {
+  console.error(
+    "[guata] VITE_GUATA_API_URL não definida em build de produção. Login mock está bloqueado.",
+  );
+}
+
 const state = {
   triages: [...mockTriages],
   conversations: [...mockConversations],
@@ -95,6 +102,11 @@ export const api = {
     password: string,
   ): Promise<{ token: string; user: { email: string; name: string } }> {
     if (isUsingMock) {
+      if (import.meta.env.PROD) {
+        throw new Error(
+          "Configuração ausente: API não definida para produção.",
+        );
+      }
       await delay();
       return {
         token: "mock",
