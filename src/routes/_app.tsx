@@ -1,44 +1,38 @@
 import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   SidebarProvider,
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/guata/app-sidebar";
-import { getSession } from "@/lib/auth";
-import { isUsingMock } from "@/lib/api/client";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
 });
 
 function AppLayout() {
-  const [checked, setChecked] = useState(false);
-  const [authed, setAuthed] = useState(false);
+  const { loading, user } = useAuth();
 
-  useEffect(() => {
-    setAuthed(Boolean(getSession()));
-    setChecked(true);
-  }, []);
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("must_change_password")
+        .eq("id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  if (!checked) return null;
-  if (import.meta.env.PROD && isUsingMock) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        <div className="max-w-md space-y-3">
-          <h1 className="text-xl font-semibold text-destructive">
-            Configuração ausente
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Este painel não pode ser executado em produção sem uma API real.
-            Defina <code>VITE_GUATA_API_URL</code> antes de publicar.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  if (!authed) return <Navigate to="/login" />;
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" />;
+  if (profile?.must_change_password) return <Navigate to="/trocar-senha" />;
 
   return (
     <SidebarProvider>
