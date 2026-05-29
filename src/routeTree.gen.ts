@@ -22,6 +22,8 @@ import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoe
 import { Route as AppCanalRouteImport } from './routes/_app.canal'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
+import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
+import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
 
 const TrocarSenhaRoute = TrocarSenhaRouteImport.update({
   id: '/trocar-senha',
@@ -87,6 +89,18 @@ const AppConversasIdRoute = AppConversasIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AppConversasRoute,
 } as any)
+const ApiPublicWebhooksWhatsappRoute =
+  ApiPublicWebhooksWhatsappRouteImport.update({
+    id: '/api/public/webhooks/whatsapp',
+    path: '/api/public/webhooks/whatsapp',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWebhooksDescubraMsRoute =
+  ApiPublicWebhooksDescubraMsRouteImport.update({
+    id: '/api/public/webhooks/descubra-ms',
+    path: '/api/public/webhooks/descubra-ms',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -101,6 +115,8 @@ export interface FileRoutesByFullPath {
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
+  '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
+  '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -115,6 +131,8 @@ export interface FileRoutesByTo {
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
+  '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
+  '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,6 +149,8 @@ export interface FileRoutesById {
   '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
   '/_app/triagens/$id': typeof AppTriagensIdRoute
+  '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
+  '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -147,6 +167,8 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/conversas/$id'
     | '/triagens/$id'
+    | '/api/public/webhooks/descubra-ms'
+    | '/api/public/webhooks/whatsapp'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -161,6 +183,8 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/conversas/$id'
     | '/triagens/$id'
+    | '/api/public/webhooks/descubra-ms'
+    | '/api/public/webhooks/whatsapp'
   id:
     | '__root__'
     | '/'
@@ -176,6 +200,8 @@ export interface FileRouteTypes {
     | '/_app/usuarios'
     | '/_app/conversas/$id'
     | '/_app/triagens/$id'
+    | '/api/public/webhooks/descubra-ms'
+    | '/api/public/webhooks/whatsapp'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +210,8 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
   TrocarSenhaRoute: typeof TrocarSenhaRoute
+  ApiPublicWebhooksDescubraMsRoute: typeof ApiPublicWebhooksDescubraMsRoute
+  ApiPublicWebhooksWhatsappRoute: typeof ApiPublicWebhooksWhatsappRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -279,6 +307,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConversasIdRouteImport
       parentRoute: typeof AppConversasRoute
     }
+    '/api/public/webhooks/whatsapp': {
+      id: '/api/public/webhooks/whatsapp'
+      path: '/api/public/webhooks/whatsapp'
+      fullPath: '/api/public/webhooks/whatsapp'
+      preLoaderRoute: typeof ApiPublicWebhooksWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/webhooks/descubra-ms': {
+      id: '/api/public/webhooks/descubra-ms'
+      path: '/api/public/webhooks/descubra-ms'
+      fullPath: '/api/public/webhooks/descubra-ms'
+      preLoaderRoute: typeof ApiPublicWebhooksDescubraMsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -332,17 +374,9 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
   TrocarSenhaRoute: TrocarSenhaRoute,
+  ApiPublicWebhooksDescubraMsRoute: ApiPublicWebhooksDescubraMsRoute,
+  ApiPublicWebhooksWhatsappRoute: ApiPublicWebhooksWhatsappRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
