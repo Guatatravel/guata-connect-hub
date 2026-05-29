@@ -27,7 +27,7 @@ interface SessionRow {
 }
 
 async function loadOrCreateSession(
-  line: string,
+  line: "descubra" | "viagens",
   phone: string,
   contactName?: string,
 ): Promise<SessionRow> {
@@ -44,7 +44,7 @@ async function loadOrCreateSession(
     .select("id, mode, intake_state, intake_data")
     .single();
   if (error) throw new Error(error.message);
-  return created as SessionRow;
+  return created as unknown as SessionRow;
 }
 
 async function persistMessage(
@@ -97,14 +97,17 @@ async function continueIntake(
   userText: string,
 ): Promise<string> {
   const step = (session.intake_state ?? "origem") as IntakeStep;
-  const data = { ...session.intake_data, [step]: userText };
+  const data: Record<string, unknown> = {
+    ...(session.intake_data ?? {}),
+    [step]: userText,
+  };
   const idx = INTAKE_STEPS.indexOf(step);
   const next = INTAKE_STEPS[idx + 1];
 
   if (next) {
     await supabaseAdmin
       .from("sessions")
-      .update({ intake_state: next, intake_data: data })
+      .update({ intake_state: next, intake_data: data as never })
       .eq("id", session.id);
     return STEP_PROMPT[next];
   }
@@ -118,7 +121,7 @@ async function continueIntake(
     protocol,
     origem: String(data.origem ?? ""),
     destino: String(data.destino ?? ""),
-    preferencias: data,
+    preferencias: data as never,
     status: "aberta",
   });
   await supabaseAdmin
