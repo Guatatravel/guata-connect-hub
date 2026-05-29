@@ -1,152 +1,176 @@
-## Decisão de arquitetura
+## O que falta para tudo funcionar de verdade
 
-**Recomendação: rodar tudo neste projeto** usando TanStack Start server functions + Lovable Cloud (Supabase gerenciado). Motivos:
-
-- Sem segundo repo para manter, deploy ou monitorar.
-- `createServerFn` cobre Admin API (`/admin/*`), e `src/routes/api/public/*` cobre webhooks externos (Meta, Descubra).
-- Secrets sensíveis (service role do Descubra, tokens Meta, Gemini) ficam em `process.env` server-side e nunca no bundle.
-- Auth real (login, signup, reset, RLS) sai pronta do Lovable Cloud — substitui o `auth.ts` mock atual.
-- O guata-channel-api separado do doc 04 vira plano B caso o volume cresça muito; hoje é overkill.
-
-Lovable Cloud do projeto = banco operacional do Channel (sessions, messages, triagens, channel_posts, agency_services, consultores).
-Supabase do Descubra MS = **somente leitura** (KB, prompts, eventos).
+Hoje só existe a Etapa 1 (auth real + setup admin). O painel ainda lê do mock em memória, a aba Canal mostra dados falsos, não há webhook do Descubra, não há brain do Guatá e não há pipeline de WhatsApp. Este plano fecha as **etapas 2 a 7** de uma vez só.
 
 ---
 
-## Como tudo se conecta
+## Pré-requisitos seus (antes de eu começar)
+
+Para tudo ligar no fim, preciso destes secrets — vou pedir via formulário seguro logo no início:
+
+**Descubra MS (você confirmou ter acesso admin):**
+- `DESCUBRA_SUPABASE_URL` — URL do projeto Supabase do Descubra
+- `DESCUBRA_SUPABASE_SERVICE_ROLE_KEY` — service role (server-only, lê KB + prompts)
+- `VITE_DESCUBRA_SUPABASE_URL` + `VITE_DESCUBRA_SUPABASE_PUBLISHABLE_KEY` — para leitura pública de eventos no painel
+- `DESCUBRA_WEBHOOK_SECRET` — você escolhe uma string forte; cola no header `Authorization: Bearer …` do Database Webhook lá no Supabase do Descubra
+
+**Meta WhatsApp (em aprovação):** deixo o código pronto e os campos vazios. Quando o número for aprovado, você roda `add_secret` para `META_VERIFY_TOKEN`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_PHONE_NUMBER_ID` e o webhook passa a funcionar sem precisar mexer em código.
+
+**Já configurado:** `LOVABLE_API_KEY` (Gemini via gateway) — usado pelo brain.
+
+---
+
+## Etapa 2 — Banco operacional do Channel
+
+Migration única criando as tabelas do contrato (doc 04), com GRANTs + RLS:
+
+| Tabela | Para quê |
+|---|---|
+| `sessions` | 1 por (linha, telefone). Guarda `mode` (`bot`/`humano`/`triagem`/`aguardando`), `intake_state`, `intake_data`, `assigned_to` |
+| `messages` | Histórico de mensagens (direction in/out, texto, metadata) |
+| `travel_intake` | Triagens fechadas. Protocolo `VG-XXXX`, dados estruturados de viagem |
+| `channel_posts` | Posts do Canal. `status='rascunho'` até consultor aprovar |
+| `agency_services` | Catálogo da agência (define o que é "agência" vs "turismo geral") |
+| `channel_settings` | 1 linha. Persona, horário, webhook URL, mensagens padrão |
+
+**RLS:**
+- Consultor autenticado lê tudo de sessions/messages/triagens/posts.
+- Só `admin` faz UPDATE em `agency_services` e `channel_settings`.
+- Service role bypassa tudo (webhooks).
+
+Função `update_updated_at_column` + triggers em todas as tabelas com `updated_at`.
+
+---
+
+## Etapa 3 — Admin API real (mata o mock)
+
+`src/lib/admin.functions.ts` — todos protegidos por `requireSupabaseAuth`. Substitui 1:1 o que `src/lib/api/client.ts` faz hoje em memória:
+
+- `getDashboardStats` — agrega contadores de `sessions` + `triagens` + `channel_posts`
+- `listTriages` / `getTriage` / `updateTriage` / `assumeTriage` / `releaseBot`
+- `listConversations` / `getConversation` / `replyConversation` (envia via Meta no fim do fluxo)
+- `listChannelPosts` / `updateChannelPost` (aprovar / editar rascunho)
+- `listServices` / `upsertService` / `deleteService`
+- `getSettings` / `updateSettings`
+
+`src/lib/api/client.ts` vira fachada fina que chama os server fns via `useServerFn`. **Nenhuma tela precisa mudar** — só a fonte dos dados.
+
+---
+
+## Etapa 4 — Integração Descubra (leitura)
+
+Dois clientes server-only, isolados:
 
 ```text
-WhatsApp ──► Meta Cloud API ──► POST /api/public/webhooks/whatsapp
-                                       │
-                                       ▼
-                              processMessage()  ◄── lê Descubra (KB, prompts, eventos)
-                                       │              via service role server-side
-                                       ├─► Gemini (Lovable AI Gateway)
-                                       └─► grava em sessions / messages (Cloud)
-
-Admin Descubra publica evento ──► Database Webhook Supabase
-                                       │
-                                       ▼
-                         POST /api/public/webhooks/descubra-ms
-                              (verifica Bearer secret)
-                                       │
-                                       ▼
-                              insert channel_posts (rascunho)
-
-Painel (este app)  ──► createServerFn ──► Cloud (RLS por consultor)
-                       └── leitura ao vivo de eventos publicados (anon key)
+src/integrations/descubra/anon.server.ts    → lista eventos públicos (events_public)
+src/integrations/descubra/admin.server.ts   → KB (guata_knowledge_base) + prompts (ai_prompt_configs)
 ```
 
-Três camadas, um deploy só.
+Server fn `listDescubraEvents()` substitui o mock atual da aba Canal. Se as envs não estiverem definidas, fallback para mock (não quebra dev).
 
 ---
 
-## Plano de implementação
+## Etapa 5 — Webhook Descubra → Canal
 
-### Etapa 1 — Habilitar Lovable Cloud e auth real
+`src/routes/api/public/webhooks/descubra-ms.ts` (rota pública, bypassa auth):
 
-1. Ativar Lovable Cloud.
-2. Migrations:
-   - `profiles` (id ref `auth.users`, nome, email, `must_change_password boolean default true`, `created_at`).
-   - Enum `app_role` (`admin`, `consultor`) + tabela `user_roles` + função `has_role` (security definer).
-   - Trigger `on_auth_user_created` → cria `profiles` automaticamente.
-3. Substituir `src/lib/auth.ts` mock pelo cliente Supabase Cloud real.
-4. Tela `/login` usa `supabase.auth.signInWithPassword`.
-5. Após login: se `profiles.must_change_password = true` → redireciona para `/trocar-senha` (rota nova; bloqueia acesso ao restante até resetar).
-6. Página `/admin/usuarios` (visível só para role `admin`) com botão **“Cadastrar consultor”**: cria usuário via server function admin (`supabaseAdmin.auth.admin.createUser`), seta senha temporária e `must_change_password = true`.
-7. Seed do primeiro admin: `guilhermearevalo27@gmail.com` criado por migration + senha temporária definida por você no primeiro deploy (Lovable Cloud → Users) ou via server function de bootstrap. Role `admin` inserida em `user_roles`.
-8. Fluxo “Esqueci a senha” usando `resetPasswordForEmail` + página `/reset-password`.
+1. Lê `Authorization: Bearer …` e compara em tempo constante com `DESCUBRA_WEBHOOK_SECRET`.
+2. Aceita payload Database Webhook do Supabase (`type=INSERT|UPDATE`, `record={evento}`) **ou** formato `event.published` do doc 04.
+3. Formata `body` (título + data + local + link) e insere `channel_posts` com `status='rascunho'` via `supabaseAdmin`.
+4. URL final aparece em `/configuracoes` ("Webhook Descubra MS — copie no admin do Descubra").
 
-### Etapa 2 — Banco operacional do Channel
-
-Migrations para as tabelas do doc 04 (snake_case no DB, camelCase na API):
-`sessions`, `messages`, `travel_intake`, `channel_posts`, `agency_services`, `channel_settings`.
-RLS:
-- Consultor lê tudo de triagens/conversas; só admin altera `agency_services` e `channel_settings`.
-- Webhooks usam `supabaseAdmin` (service role) e bypassam RLS.
-
-### Etapa 3 — Admin API real (substitui o mock)
-
-Reescrever `src/lib/api/client.ts` para chamar `createServerFn` em vez do estado em memória. Cada endpoint do contrato vira uma server function em `src/lib/admin.functions.ts` protegida por `requireSupabaseAuth`:
-
-- `getDashboardStats`, `listTriages`, `getTriage`, `updateTriage`, `assumeTriage`, `releaseBot`
-- `listConversations`, `getConversation`, `replyConversation` (envia via Meta Cloud API)
-- `listChannelPosts`, `updateChannelPost`
-- `listServices`, `upsertService`, `deleteService`
-- `getSettings`, `updateSettings`
-
-Componentes/rotas existentes continuam funcionando — só troca a fonte dos dados.
-
-### Etapa 4 — Integração Descubra (leitura)
-
-Dois clientes no servidor:
-
-- `descubra-anon.server.ts` → `VITE_DESCUBRA_SUPABASE_URL` + publishable key, usado em server fn pública para listar eventos para a aba **Canal** (substitui o mock atual; mantém o fallback se as envs não estiverem definidas).
-- `descubra-admin.server.ts` → `DESCUBRA_SUPABASE_URL` + `DESCUBRA_SUPABASE_SERVICE_ROLE_KEY`, usado pelo pipeline de mensagens para ler `guata_knowledge_base`, `ai_prompt_configs` (`chatbot_name='guata'`) e `events_public`.
-
-> Você disse que tem URL + publishable key. Para o brain funcionar com KB e prompts, vai precisar também da **service role** do Descubra (server-only). Sem ela, dá para começar só com eventos públicos e plugar o brain depois.
-
-### Etapa 5 — Webhook Descubra → Canal
-
-`src/routes/api/public/webhooks/descubra-ms.ts`:
-
-- Aceita payload Supabase Database Webhook ou formato `event.published`.
-- Verifica `Authorization: Bearer ${DESCUBRA_WEBHOOK_SECRET}` em tempo constante.
-- Monta `body` formatado e insere `channel_posts` com `status='rascunho'` via `supabaseAdmin`.
-- URL fica visível em `/configuracoes` para copiar no admin do Descubra.
-
-### Etapa 6 — Brain compartilhado + pipeline de mensagem
-
-`src/lib/message-pipeline.server.ts` com `processMessage(ctx)`:
-
-1. Carrega/cria sessão (Cloud).
-2. Comandos globais `menu` / `humano`.
-3. Se `mode='humano'` → só loga.
-4. Se `mode='triagem'` → state machine `intake_state`.
-5. Senão classifica com Gemini (Lovable AI Gateway, `process.env.LOVABLE_API_KEY`).
-6. `turismo_geral` → busca KB do Descubra; miss → RAG sobre eventos + persona do `ai_prompt_configs`.
-7. `agencia` → checa `agency_services`; inicia triagem ou explica limite.
-8. Persiste `messages` e devolve resposta(s).
-
-Triagem completa → cria `travel_intake` com protocolo `VG-XXXX`, `mode='aguardando'`.
-
-### Etapa 7 — Webhook Meta + envio outbound
-
-- `src/routes/api/public/webhooks/whatsapp.ts`: GET handshake (`hub.verify_token`), POST valida HMAC `X-Hub-Signature-256` com `META_APP_SECRET`, extrai `phone_number_id` → `line`, chama `processMessage`.
-- `meta-send.server.ts`: POST `graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages` com `typing_on` + delay; usado por `replyConversation` e pelo pipeline.
-- Suporta 2 números (sufixos `_DESCUBRA` / `_VIAGENS` nas envs).
-
-### Etapa 8 — Cleanup
-
-- Remover guarda “mock em produção” quando todas as rotas tiverem backend real.
-- Atualizar `docs/02` e `docs/05` para refletir a nova arquitetura monorepo.
+Passo a passo de configuração do Database Webhook no Descubra fica documentado em `/configuracoes` também.
 
 ---
 
-## Secrets necessários (Lovable Cloud → Secrets)
+## Etapa 6 — Brain compartilhado + pipeline de mensagem
 
-Server-only:
-- `DESCUBRA_SUPABASE_URL`, `DESCUBRA_SUPABASE_SERVICE_ROLE_KEY` (para KB/prompts)
-- `DESCUBRA_WEBHOOK_SECRET`
-- `META_VERIFY_TOKEN`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_PHONE_NUMBER_ID` (+ variantes `_VIAGENS` se 2 números)
-- `LOVABLE_API_KEY` já vem com Lovable Cloud (Gemini via gateway).
+`src/lib/message-pipeline.server.ts` exporta `processMessage(ctx)`:
 
-Cliente (já em `.env` via Cloud):
-- `VITE_DESCUBRA_SUPABASE_URL`, `VITE_DESCUBRA_SUPABASE_PUBLISHABLE_KEY` (para listagem pública de eventos no painel, se quiser leitura direta do navegador).
+```text
+1. carrega/cria sessão (telefone + linha)
+2. comandos globais: "menu" / "humano" / "voltar"
+3. mode=humano   → só persiste; consultor responde manualmente
+4. mode=triagem  → state machine intake_state (origem→destino→datas→pax→orçamento→preferências)
+5. classifica intent com Gemini (turismo_geral | agencia | misto)
+6. turismo_geral → busca KB Descubra; miss → RAG sobre events_public + persona ai_prompt_configs
+7. agencia       → checa agency_services; inicia triagem ou explica limite da agência
+8. grava messages + retorna texto(s) para envio
+```
+
+Triagem completa → cria linha em `travel_intake` com `protocol='VG-XXXX'`, marca `sessions.mode='aguardando'` e notifica painel (via realtime, etapa futura).
+
+Gemini chamado via Lovable AI Gateway (`google/gemini-2.5-flash` para classificação/respostas, `gemini-2.5-pro` para RAG denso).
 
 ---
 
-## Fora do escopo desta entrega
+## Etapa 7 — Webhook Meta + envio outbound
 
-- Publicação automática no WhatsApp Channel (Fase 2 — Meta não libera API estável hoje).
-- Embeddings novos para KB (reusa o que o Descubra já tem).
-- Migração final para Supabase Auth do Descubra (esta arquitetura usa Cloud próprio para consultores; o usuário final de WhatsApp não loga).
+`src/routes/api/public/webhooks/whatsapp.ts`:
+- **GET**: handshake (`hub.verify_token` ↔ `META_VERIFY_TOKEN`).
+- **POST**: valida HMAC `X-Hub-Signature-256` com `META_APP_SECRET` em tempo constante. Extrai `phone_number_id` → identifica linha (Descubra/Viagens). Chama `processMessage`.
+
+`src/lib/meta-send.server.ts`:
+- POST `https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages` com bearer `META_ACCESS_TOKEN`.
+- Suporta `typing_on` + delay artificial (mais humano).
+- Usado por `replyConversation` (consultor no painel) **e** pelo pipeline (bot).
+
+Suporta 1 ou 2 números via sufixo `_DESCUBRA` / `_VIAGENS` nas envs. Sem secret = endpoint retorna 503 limpo (não quebra deploy).
 
 ---
 
-## Perguntas antes de começar
+## Arquitetura final
 
-1. Posso **ativar Lovable Cloud** agora? (necessário para auth, banco operacional e secrets).
-2. Você consegue a **service role key do Supabase do Descubra**, ou começo só com os eventos públicos e deixo o brain (KB + prompts) preparado para plugar depois?
-3. Vamos com **dois números WhatsApp** (Descubra + Viagens) ou **um número com modos** na primeira versão? (Etapas 6/7 mudam pouco, mas as envs são diferentes.)
-4. Confirma a senha temporária inicial do admin `guilhermearevalo27@gmail.com` por canal seguro (eu não devo escolher senha em código) — você prefere recebê-la por email automático (`inviteUserByEmail`) ou definir manualmente no painel do Cloud na primeira execução?
+```text
+WhatsApp ─► Meta Cloud ─► /api/public/webhooks/whatsapp
+                                │ (HMAC verify)
+                                ▼
+                         processMessage()
+                          │      │      │
+                          │      │      └─► Gemini (Lovable AI Gateway)
+                          │      └─► Descubra (service role: KB + prompts + eventos)
+                          └─► Cloud (sessions, messages, triagens)
+
+Descubra publica evento ─► Database Webhook
+                                │ (Bearer secret)
+                                ▼
+                       /api/public/webhooks/descubra-ms
+                                │
+                                ▼
+                          channel_posts (rascunho)
+
+Painel ─► useServerFn ─► createServerFn (requireSupabaseAuth) ─► Cloud
+                                                              └─► Descubra (anon, leitura)
+```
+
+---
+
+## Após eu terminar — o que VOCÊ faz
+
+1. **Eu peço os secrets** no início (formulário seguro). Você cola e me libera.
+2. **No Supabase do Descubra**: Database → Webhooks → Create. Tabela `events`, eventos Insert+Update, URL = a que aparecer em `/configuracoes`, header `Authorization: Bearer <DESCUBRA_WEBHOOK_SECRET>`.
+3. **Teste**: publica um evento no Descubra → aparece em `/canal` como rascunho.
+4. **Login no painel** com seu admin já criado.
+5. **Quando Meta aprovar**: adiciona os 4 secrets `META_*`, configura webhook URL no Meta Business apontando para `/api/public/webhooks/whatsapp` com o `META_VERIFY_TOKEN`. WhatsApp passa a responder.
+
+---
+
+## Fora do escopo
+
+- Publicar automaticamente no **WhatsApp Channel** (Meta não tem API estável — Fase 2).
+- Re-embedar a KB (reuso a existente do Descubra).
+- Realtime no painel (consultor precisa dar F5 para ver triagem nova) — adicionável depois com `supabase.channel`.
+- Página `/reset-password` para "esqueci a senha" (só admin cria usuário hoje, conforme decidimos).
+
+---
+
+## Detalhes técnicos
+
+- **Stack server**: `createServerFn` para tudo interno; `src/routes/api/public/*` só para webhooks Meta/Descubra.
+- **Clients Supabase**: 3 isolados — browser (`client.ts`), auth middleware (`auth-middleware.ts`), admin (`client.server.ts`). Descubra ganha 2 análogos em `src/integrations/descubra/`.
+- **Import graph**: tudo que toca service role fica em `*.server.ts`. Server fns em `*.functions.ts` finos (só declarações).
+- **Validação**: Zod em todo `inputValidator` e em todo body de webhook.
+- **Erros**: webhooks retornam 401/400 sem vazar detalhes; server fns retornam shape `{ data, error }` para erros recuperáveis.
+- **Migration única** com todas as 6 tabelas + GRANTs + RLS + triggers, para garantir transação atômica.
+
+Quando aprovar, começo pelos secrets, depois rodo a migration, depois código.
