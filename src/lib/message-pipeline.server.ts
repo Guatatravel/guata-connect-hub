@@ -37,7 +37,7 @@ async function loadOrCreateSession(
     .eq("line", line)
     .eq("phone", phone)
     .maybeSingle();
-  if (existing) return existing as SessionRow;
+  if (existing) return existing as unknown as SessionRow;
   const { data: created, error } = await supabaseAdmin
     .from("sessions")
     .insert({ line, phone, contact_name: contactName ?? null, mode: "bot" })
