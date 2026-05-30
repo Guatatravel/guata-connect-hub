@@ -413,7 +413,7 @@ export const updateTriage = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin
       .from("travel_intake")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -467,7 +467,7 @@ export const updateChannelPost = createServerFn({ method: "POST" })
     }
     const { error } = await supabaseAdmin
       .from("channel_posts")
-      .update(patch)
+      .update(patch as never)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -539,11 +539,13 @@ export const updateSettings = createServerFn({ method: "POST" })
     if (existing) {
       const { error } = await supabaseAdmin
         .from("channel_settings")
-        .update(patch)
+        .update(patch as never)
         .eq("id", existing.id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabaseAdmin.from("channel_settings").insert(patch);
+      const { error } = await supabaseAdmin
+        .from("channel_settings")
+        .insert(patch as never);
       if (error) throw new Error(error.message);
     }
     return { ok: true };
