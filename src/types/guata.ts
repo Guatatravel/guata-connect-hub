@@ -27,6 +27,8 @@ export interface TravelIntake {
   preferencias?: string;
   status: TriagemStatus;
   assignedTo?: string;
+  assignedToName?: string;
+  sessionId?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -68,7 +70,8 @@ export interface AgencyService {
   id: string;
   nome: string;
   descricao: string;
-  regioes: string[];
+  categoria?: string;
+  keywords: string[];
   ativo: boolean;
 }
 
@@ -83,18 +86,20 @@ export interface DashboardStats {
 
 export interface ChannelSettings {
   metaStatus: "conectado" | "desconectado";
-  webhookDescubraUrl: string;
-  webhookViagensUrl: string;
-  mensagemBoasVindas: string;
-  palavrasGatilhoTriagem: string[];
-  descubraCanalWebhookReady?: boolean;
-  descubraSupabaseConfigured?: boolean;
-  descubraWebhookSecretConfigured?: boolean;
+  metaConfiguredDescubra: boolean;
+  metaConfiguredViagens: boolean;
+  descubraSupabaseConfigured: boolean;
+  descubraWebhookSecretConfigured: boolean;
+  descubraCanalWebhookReady: boolean;
+  personaDescubra: string;
+  personaViagens: string;
+  horarioAtendimento: string;
+  mensagemForaHorario: string;
+  mensagemHumano: string;
 }
 
-export const CONSULTORES = [
-  "Ana Souza",
-  "Bruno Lima",
-  "Carla Pires",
-  "Diego Mendes",
-] as const;
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
+}
