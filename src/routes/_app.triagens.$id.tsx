@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CONSULTORES, type TriagemStatus } from "@/types/guata";
+import { type TriagemStatus } from "@/types/guata";
 import { formatDate, waLink, formatPhone } from "@/lib/format";
 import { ArrowLeft, MessageCircle, Send } from "lucide-react";
 
@@ -39,6 +39,10 @@ function TriagemDetailPage() {
   const { data: conversations } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => api.listConversations(),
+  });
+  const { data: staff } = useQuery({
+    queryKey: ["staff"],
+    queryFn: () => api.listStaff(),
   });
 
   const conv = conversations?.find((c) => c.phone === triage?.phone);
@@ -190,9 +194,9 @@ function TriagemDetailPage() {
                   <SelectValue placeholder="Selecionar consultor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CONSULTORES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
+                  {(staff ?? []).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -212,7 +216,10 @@ function TriagemDetailPage() {
                 size="sm"
                 onClick={() => {
                   updateMut.mutate(
-                    { assignedTo: triage.assignedTo ?? CONSULTORES[0], status: "atribuido" },
+                    {
+                      assignedTo: triage.assignedTo ?? staff?.[0]?.id,
+                      status: "atribuido",
+                    },
                     { onSuccess: () => toast.success("Atendimento assumido — bot pausado") },
                   );
                   if (conv) replyMut.mutate("Olá! Aqui é da Guatá Viagens. Como posso ajudar?");

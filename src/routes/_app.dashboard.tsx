@@ -119,7 +119,7 @@ function DashboardPage() {
                     <LineBadge line={t.line} />
                   </div>
                   <div className="col-span-1">
-                    <TriagemStatusBadge status={t.status} />
+                    <TriagemStatusBadge status={t.status as never} />
                   </div>
                   <div className="col-span-1 text-right text-xs text-muted-foreground">
                     {timeAgo(t.createdAt)}
