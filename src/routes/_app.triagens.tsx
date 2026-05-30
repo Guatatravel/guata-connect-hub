@@ -24,7 +24,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { CONSULTORES, type TriagemStatus } from "@/types/guata";
+import { type TriagemStatus } from "@/types/guata";
 import { formatDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/triagens")({
@@ -38,6 +38,10 @@ function TriagensPage() {
   const [destino, setDestino] = useState("");
 
   const qc = useQueryClient();
+  const { data: staff } = useQuery({
+    queryKey: ["staff"],
+    queryFn: () => api.listStaff(),
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["triages", { status, line, consultor, destino }],
     queryFn: () => api.listTriages({ status, line, consultor, destino }),
@@ -96,10 +100,10 @@ function TriagensPage() {
               <SelectValue placeholder="Consultor" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos consultores</SelectItem>
-              {CONSULTORES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
+                <SelectItem value="all">Todos consultores</SelectItem>
+              {(staff ?? []).map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -154,7 +158,7 @@ function TriagensPage() {
                       <TriagemStatusBadge status={t.status} />
                     </TableCell>
                     <TableCell className="text-sm">
-                      {t.assignedTo ?? (
+                      {t.assignedToName ?? (
                         <span className="text-muted-foreground italic">
                           —
                         </span>
@@ -170,11 +174,11 @@ function TriagensPage() {
                           Ver
                         </Link>
                       </Button>
-                      {t.status === "novo" && (
+                      {t.status === "novo" && staff && staff[0] && (
                         <Button
                           size="sm"
                           onClick={() =>
-                            assumeMut.mutate({ id: t.id, who: CONSULTORES[0] })
+                            assumeMut.mutate({ id: t.id, who: staff[0].id })
                           }
                         >
                           Assumir

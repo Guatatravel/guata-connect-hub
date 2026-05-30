@@ -122,7 +122,7 @@ async function continueIntake(
     origem: String(data.origem ?? ""),
     destino: String(data.destino ?? ""),
     preferencias: data as never,
-    status: "aberta",
+    status: "novo",
   });
   await supabaseAdmin
     .from("sessions")

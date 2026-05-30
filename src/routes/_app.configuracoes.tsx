@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Trash2, Plus, CheckCircle2, XCircle } from "lucide-react";
+import { Trash2, Plus, CheckCircle2, XCircle, Copy } from "lucide-react";
 import type { AgencyService } from "@/types/guata";
 
 export const Route = createFileRoute("/_app/configuracoes")({
@@ -29,24 +29,30 @@ function ConfigPage() {
     queryFn: () => api.listServices(),
   });
 
-  const [welcome, setWelcome] = useState("");
-  const [triggers, setTriggers] = useState("");
+  const [personaDescubra, setPersonaDescubra] = useState("");
+  const [personaViagens, setPersonaViagens] = useState("");
+  const [horario, setHorario] = useState("");
+  const [foraHorario, setForaHorario] = useState("");
+  const [msgHumano, setMsgHumano] = useState("");
 
   useEffect(() => {
     if (settings) {
-      setWelcome(settings.mensagemBoasVindas);
-      setTriggers(settings.palavrasGatilhoTriagem.join(", "));
+      setPersonaDescubra(settings.personaDescubra);
+      setPersonaViagens(settings.personaViagens);
+      setHorario(settings.horarioAtendimento);
+      setForaHorario(settings.mensagemForaHorario);
+      setMsgHumano(settings.mensagemHumano);
     }
   }, [settings]);
 
   const saveSettings = useMutation({
     mutationFn: () =>
       api.updateSettings({
-        mensagemBoasVindas: welcome,
-        palavrasGatilhoTriagem: triggers
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        personaDescubra,
+        personaViagens,
+        horarioAtendimento: horario,
+        mensagemForaHorario: foraHorario,
+        mensagemHumano: msgHumano,
       }),
     onSuccess: () => {
       toast.success("Configurações salvas");
@@ -69,6 +75,20 @@ function ConfigPage() {
 
   if (isLoading || !settings) return <Skeleton className="h-96 rounded-2xl" />;
 
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "https://guata-connect-hub.lovable.app";
+  const whatsappWebhook = `${origin}/api/public/webhooks/whatsapp`;
+  const descubraWebhook = `${origin}/api/public/webhooks/descubra-ms`;
+
+  const copy = async (s: string) => {
+    try {
+      await navigator.clipboard.writeText(s);
+      toast.success("Copiado");
+    } catch {
+      toast.error("Falha ao copiar");
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
@@ -76,89 +96,117 @@ function ConfigPage() {
           Configurações
         </h1>
         <p className="text-muted-foreground">
-          Conexão Meta, mensagens do bot, gatilhos de triagem e serviços da agência.
+          Status das integrações, personas do bot, horário e serviços da agência.
         </p>
       </div>
 
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle className="font-display flex items-center justify-between">
-            Conexão WhatsApp Business (Meta Cloud API)
-            <Badge
-              variant="outline"
-              className={
-                settings.metaStatus === "conectado"
-                  ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                  : "bg-destructive/10 text-destructive border-destructive/30"
-              }
-            >
-              {settings.metaStatus === "conectado" ? (
-                <CheckCircle2 className="h-3 w-3 mr-1" />
-              ) : (
-                <XCircle className="h-3 w-3 mr-1" />
-              )}
-              {settings.metaStatus}
-            </Badge>
+          <CardTitle className="font-display flex items-center justify-between gap-2 flex-wrap">
+            Integração WhatsApp Business (Meta)
+            <div className="flex gap-2">
+              <StatusBadge ok={settings.metaConfiguredDescubra} label="Linha Descubra" />
+              <StatusBadge ok={settings.metaConfiguredViagens} label="Linha Viagens" />
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div>
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Webhook Descubra MS
+              Webhook a configurar no Meta App (Configurations → Webhooks → WhatsApp Business)
             </Label>
-            <Input readOnly value={settings.webhookDescubraUrl} className="font-mono text-xs" />
+            <div className="flex gap-2">
+              <Input readOnly value={whatsappWebhook} className="font-mono text-xs" />
+              <Button size="sm" variant="outline" onClick={() => copy(whatsappWebhook)}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Verify Token: use o valor que você definiu como secret <code className="text-[10px]">META_VERIFY_TOKEN</code>.
+              Subscreva o campo <code className="text-[10px]">messages</code>.
+            </p>
           </div>
-          <div>
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Webhook Guatá Viagens
-            </Label>
-            <Input readOnly value={settings.webhookViagensUrl} className="font-mono text-xs" />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Canal (eventos → posts):{" "}
-            {settings.descubraCanalWebhookReady ? (
-              <span className="text-emerald-700 font-medium">ativa</span>
-            ) : (
-              <span className="text-amber-700 font-medium">
-                pendente — configure Database Webhook no Supabase Descubra apontando
-                para a URL acima com o mesmo{" "}
-                <code className="text-[10px]">DESCUBRA_WEBHOOK_SECRET</code> da API
-              </span>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Guia: <code className="text-[10px]">guata-channel-api/integrations/descubra-ms/README.md</code>
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Base de conhecimento do chat: admin do Descubra MS (Supabase na API).
-          </p>
         </CardContent>
       </Card>
 
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle className="font-display">Mensagens e gatilhos do bot</CardTitle>
+          <CardTitle className="font-display flex items-center justify-between gap-2 flex-wrap">
+            Integração Descubra MS
+            <div className="flex gap-2">
+              <StatusBadge
+                ok={settings.descubraSupabaseConfigured}
+                label="Banco Descubra"
+              />
+              <StatusBadge
+                ok={settings.descubraCanalWebhookReady}
+                label="Webhook eventos"
+              />
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              URL para o Database Webhook no Supabase do Descubra MS
+            </Label>
+            <div className="flex gap-2">
+              <Input readOnly value={descubraWebhook} className="font-mono text-xs" />
+              <Button size="sm" variant="outline" onClick={() => copy(descubraWebhook)}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Adicione o header <code className="text-[10px]">Authorization: Bearer &lt;DESCUBRA_WEBHOOK_SECRET&gt;</code>{" "}
+              (valor já configurado nos secrets). Eventos: INSERT/UPDATE na tabela de eventos.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <CardTitle className="font-display">Personas e horário do bot</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Mensagem de boas-vindas</Label>
+            <Label>Persona — Linha Descubra MS</Label>
             <Textarea
               rows={4}
-              value={welcome}
-              onChange={(e) => setWelcome(e.target.value)}
+              value={personaDescubra}
+              onChange={(e) => setPersonaDescubra(e.target.value)}
+              placeholder="Sou o Guatá, assistente turístico oficial..."
             />
           </div>
           <div className="space-y-2">
-            <Label>Palavras-gatilho para triagem comercial</Label>
-            <Input
-              value={triggers}
-              onChange={(e) => setTriggers(e.target.value)}
-              placeholder="quero viagem, pacote, orçamento"
+            <Label>Persona — Linha Viagens</Label>
+            <Textarea
+              rows={4}
+              value={personaViagens}
+              onChange={(e) => setPersonaViagens(e.target.value)}
+              placeholder="Sou consultor da agência..."
             />
-            <p className="text-xs text-muted-foreground">
-              Separadas por vírgula. Quando o cliente menciona uma delas, o bot
-              entra em modo triagem e coleta os dados da viagem.
-            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Horário de atendimento</Label>
+              <Input
+                value={horario}
+                onChange={(e) => setHorario(e.target.value)}
+                placeholder="Seg a Sex, 8h às 18h"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Mensagem fora do horário</Label>
+              <Input
+                value={foraHorario}
+                onChange={(e) => setForaHorario(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Mensagem ao acionar "humano"</Label>
+            <Input value={msgHumano} onChange={(e) => setMsgHumano(e.target.value)} />
           </div>
           <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
             Salvar alterações
@@ -178,7 +226,8 @@ function ConfigPage() {
                   id: `s-${Date.now()}`,
                   nome: "Novo serviço",
                   descricao: "",
-                  regioes: [],
+                  categoria: "",
+                  keywords: [],
                   ativo: true,
                 })
               }
@@ -211,6 +260,22 @@ function ConfigPage() {
   );
 }
 
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={
+        ok
+          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+          : "bg-amber-100 text-amber-900 border-amber-300"
+      }
+    >
+      {ok ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+      {label}
+    </Badge>
+  );
+}
+
 function ServiceRow({
   service,
   onSave,
@@ -232,16 +297,24 @@ function ServiceRow({
           placeholder="Nome"
         />
         <Input
-          value={draft.regioes.join(", ")}
-          onChange={(e) =>
-            setDraft({
-              ...draft,
-              regioes: e.target.value.split(",").map((r) => r.trim()).filter(Boolean),
-            })
-          }
-          placeholder="Regiões (vírgula)"
+          value={draft.categoria ?? ""}
+          onChange={(e) => setDraft({ ...draft, categoria: e.target.value })}
+          placeholder="Categoria"
         />
       </div>
+      <Input
+        value={(draft.keywords ?? []).join(", ")}
+        onChange={(e) =>
+          setDraft({
+            ...draft,
+            keywords: e.target.value
+              .split(",")
+              .map((r) => r.trim())
+              .filter(Boolean),
+          })
+        }
+        placeholder="Palavras-chave (vírgula)"
+      />
       <Textarea
         rows={2}
         value={draft.descricao}
