@@ -1,101 +1,90 @@
-# Plano: deixar o Guatá Channel 100% no ar, 24/7
 
-## Visão geral — o que estamos construindo (confirmado)
+# Plano de ação — Ativar Guatá Channel 24/7
 
-**Guatá Channel** é o cérebro operacional do WhatsApp do ecossistema **Descubra Mato Grosso do Sul**, com 2 linhas:
+## O que eu já vejo nas suas credenciais (print da Meta)
 
-1. **Descubra MS** (turismo institucional) — bot Guatá responde dúvidas turísticas usando a base de conhecimento + eventos do Descubra MS; publica eventos no canal após aprovação humana.
-2. **Viagens MS** (agência) — bot faz triagem (origem, destino, datas, pax, orçamento), gera protocolo e repassa para consultor humano.
+Da tela "Configuração da API" do seu App Meta:
+- **Phone Number ID (Descubra)**: `1043833208824290`
+- **WhatsApp Business Account ID**: `3421874141319363`
+- **Número**: `+55 67 9131-7630`
+- **Access Token**: precisa clicar em **"Gerar token de acesso"** e copiar (token temporário de 24h serve para teste; depois trocamos por **token permanente de System User** para 24/7).
 
-Painel web para a equipe gerenciar conversas, triagens, posts, usuários e configurações.
+Faltam você me passar (pelo formulário seguro de secrets, não pelo chat):
+- `META_ACCESS_TOKEN_DESCUBRA` (o que aparecer no botão "Gerar token de acesso")
+- `META_APP_SECRET` (em **Configurações do App → Básico → Chave Secreta do App**)
+- `META_VERIFY_TOKEN` (você inventa uma string aleatória, ex.: `guata-verify-2026-xyz`. Vai usar a MESMA na Meta e aqui)
 
-## Onde fica o banco / quem é o "dono"
-
-| Banco | Hospedagem | Acesso |
-|---|---|---|
-| **Guatá Channel (operacional)** | Lovable Cloud → Supabase `jztdpriuainptgzgiyal` | Sua conta Gmail do Lovable. Acesso pelo botão **View Backend** dentro do Lovable. |
-| **Descubra MS (institucional)** | Supabase próprio seu | Sua conta admin (já configurada via secrets `DESCUBRA_SUPABASE_*`). Somente leitura a partir daqui. |
-
-## Como funciona o 24/7
-
-Tudo roda no servidor da Lovable após **Publish**. **Não depende** do seu computador, do navegador ou de qualquer máquina ligada. O que mantém isso vivo:
-- Banco Lovable Cloud → sempre on.
-- Webhooks `/api/public/webhooks/whatsapp` e `/api/public/webhooks/descubra-ms` → sempre on no domínio publicado.
-- Pipeline do bot (IA, intake, respostas, envio Meta) → server-side, sem dependência de cliente.
-
-**Único requisito**: clicar em **Publish** uma vez (e republicar a cada mudança grande). URL fixa: `https://guata-connect-hub.lovable.app`.
+`META_PHONE_NUMBER_ID_DESCUBRA` (`1043833208824290`) eu já preencho direto no secret.
 
 ---
 
-## Etapas desta rodada
+## Etapa 1 — Reset da sua senha do painel Guatá Channel
 
-### Etapa A — Meta WhatsApp: criar o App (guia)
+Você acabou de chegar em `/login`. Vou:
+1. Garantir que a rota `/trocar-senha` (já existe no projeto) aceite o fluxo `type=recovery` do Supabase.
+2. Adicionar link **"Esqueci minha senha"** na tela de login que dispara `supabase.auth.resetPasswordForEmail(email, { redirectTo: <published_url>/trocar-senha })`.
+3. Você recebe e-mail → clica → define nova senha → entra no painel.
 
-Como você ainda não criou o App na Meta, vou te entregar um **passo-a-passo objetivo** (no chat, após o plano aprovado) para:
-1. Criar App em developers.facebook.com → tipo **Business**.
-2. Adicionar produto **WhatsApp**.
-3. Vincular seu número (Business Manager → WhatsApp Manager).
-4. Coletar: `App Secret`, `Phone Number ID`, `Access Token permanente (System User)`, e definir um `Verify Token` (você inventa).
-5. Configurar Webhook na Meta apontando para:
-   `https://guata-connect-hub.lovable.app/api/public/webhooks/whatsapp`
-   Subscrição: `messages`.
+Alternativa rápida (se preferir): você me diz o e-mail e eu gero um **link mágico de recuperação** direto via admin API server-side (1 clique, sem e-mail). Me diga qual prefere.
 
-Depois disso, eu peço os secrets:
-- `META_APP_SECRET` (verifica assinatura)
-- `META_VERIFY_TOKEN` (handshake)
+---
+
+## Etapa 2 — Cadastrar os secrets da Meta
+
+Vou abrir o formulário seguro pedindo:
+- `META_APP_SECRET`
+- `META_VERIFY_TOKEN` (você escolhe — anote, vai precisar colar na Meta também)
 - `META_ACCESS_TOKEN_DESCUBRA`
-- `META_PHONE_NUMBER_ID_DESCUBRA`
-- (opcionais p/ 2ª linha) `META_ACCESS_TOKEN_VIAGENS`, `META_PHONE_NUMBER_ID_VIAGENS`
+- `META_PHONE_NUMBER_ID_DESCUBRA` → já sei: `1043833208824290`
 
-### Etapa B — Painel real (matar mock)
-
-Substituir `src/lib/api/client.ts` (mock) por server functions com `requireSupabaseAuth` lendo do Supabase real:
-- `_app.dashboard.tsx` → stats reais (sessões/dia, triagens abertas, posts pendentes).
-- `_app.conversas.tsx` / `.$id.tsx` → `sessions` + `messages` reais; ação "assumir conversa" (mode=human, assigned_to).
-- `_app.triagens.tsx` / `.$id.tsx` → `travel_intake` real; mudar status, atribuir consultor.
-- `_app.canal.tsx` → `channel_posts` real; aprovar/rejeitar rascunhos.
-- `_app.configuracoes.tsx` → `channel_settings` (persona, horário, fora-de-horário).
-- Realtime em `sessions` e `messages` para o painel atualizar sozinho.
-
-Arquivos novos: `src/lib/dashboard.functions.ts`, `conversations.functions.ts`, `triages.functions.ts`, `posts.functions.ts`, `settings.functions.ts`.
-
-### Etapa C — Webhook Descubra MS (instruções para você)
-
-Como você tem acesso admin no Supabase do Descubra, vou te entregar:
-1. SQL/configuração do **Database Webhook** no painel do Descubra MS:
-   - URL: `https://guata-connect-hub.lovable.app/api/public/webhooks/descubra-ms`
-   - Header: `Authorization: Bearer <DESCUBRA_WEBHOOK_SECRET>` (valor já está nos secrets)
-   - Eventos: `INSERT` e `UPDATE` na tabela `events` (ou equivalente).
-2. Teste end-to-end: criar evento de teste → ver aparecer como rascunho em `channel_posts` → aprovar no painel.
-
-### Etapa D — Robustez 24/7
-
-- **Cron job (`pg_cron`)**: backfill diário de eventos do Descubra (segurança, caso webhook falhe).
-- **Cron job**: limpar sessões inativas > 30 dias.
-- **Mensagem fora de horário**: pipeline já tem hook em `channel_settings.mensagem_fora_horario` — ligar a checagem.
-- **Tratamento de falha Meta**: se `sendWhatsAppText` retornar erro, gravar em `messages.metadata.error` para reprocesso manual.
-- **Logs**: confirmar que erros do pipeline aparecem em `server-function-logs`.
-
-### Etapa E — Verificação final
-
-1. `cloud_status` → garantir `ACTIVE_HEALTHY`.
-2. `invoke-server-function` no webhook WhatsApp com payload de teste.
-3. Mandar mensagem real para o número → ver no painel em tempo real.
-4. Aprovar evento do Descubra como post.
-5. **Publish**.
+Como o token "Gerar token de acesso" expira em 24h, em paralelo te entrego o **guia de System User** (Business Manager → Configurações → Usuários do sistema → criar admin "guata-bot" → gerar token **sem expiração** com permissões `whatsapp_business_messaging` e `whatsapp_business_management` → atribuir o ativo do WhatsApp). Esse vira o token definitivo 24/7.
 
 ---
 
-## Ordem de execução proposta
+## Etapa 3 — Configurar o Webhook na Meta
 
-1. **Etapa B (painel real)** — não bloqueia em nada externo, dá visibilidade imediata.
-2. **Etapa D (robustez)** — crons e fallbacks.
-3. Te entrego em paralelo o **guia da Etapa A (Meta)** e o **guia da Etapa C (webhook Descubra)** para você executar do seu lado.
-4. Quando você voltar com as credenciais Meta → adiciono os secrets e ativamos a Linha Descubra (Linha Viagens fica pronta para quando você tiver o 2º número).
-5. **Etapa E** — testes + Publish.
+No mesmo App, na seção **WhatsApp → Configuração** (logo abaixo de "Configuração da API"):
 
-## Riscos conhecidos
+- **URL de callback**:
+  `https://guata-connect-hub.lovable.app/api/public/webhooks/whatsapp`
+- **Token de verificação**: o mesmo `META_VERIFY_TOKEN` que você escolheu.
+- Clicar **Verificar e salvar** → Meta faz GET handshake → nosso código responde 200.
+- **Inscrever campos**: marcar `messages`.
 
-- **Meta Business Verification**: pode demorar dias. Enquanto isso, o número só envia para destinatários cadastrados como testers no App.
-- **Janela 24h**: WhatsApp só permite mensagem livre dentro de 24h após o usuário escrever. Fora disso, exige **template aprovado**. Para o bot reativo não é problema; para notificações ativas sim — fica fora desta rodada.
-- **Rate limit Lovable AI Gateway**: se atingirmos limite, o bot devolve mensagem de fallback amigável (já implementado no pipeline).
+Pré-requisito: precisamos clicar em **Publish** no Lovable ANTES desse passo, senão a URL `guata-connect-hub.lovable.app` ainda não está no ar com o código mais recente.
+
+---
+
+## Etapa 4 — Publish + teste end-to-end
+
+1. **Publish** no Lovable (botão no topo).
+2. Cadastrar seu próprio WhatsApp como **destinatário de teste** na Meta (enquanto a verificação Business não termina, só números cadastrados recebem).
+3. Mandar "oi" do seu WhatsApp para `+55 67 9131-7630`.
+4. Conferir no painel `/conversas` em tempo real.
+5. Bot responde com o menu → testar "2" para disparar triagem de viagem → ver protocolo em `/triagens`.
+
+---
+
+## Etapa 5 — Webhook do Descubra MS (paralelo)
+
+Depois do WhatsApp funcionando, te entrego o passo-a-passo de **Database Webhook** no Supabase do Descubra MS apontando para:
+- URL: `https://guata-connect-hub.lovable.app/api/public/webhooks/descubra-ms`
+- Header: `Authorization: Bearer <DESCUBRA_WEBHOOK_SECRET>`
+- Eventos: INSERT/UPDATE em `events`
+
+---
+
+## Resumindo o que estamos construindo (recap)
+
+**Guatá Channel** = central operacional de WhatsApp do ecossistema **Descubra MS**, rodando 24/7 no servidor da Lovable (depende só do **Publish**, não do seu computador). Duas linhas:
+1. **Descubra MS** — bot turístico institucional (KB + eventos + publicação no canal).
+2. **Viagens MS** — bot de triagem de pacotes (origem/destino/datas/pax/orçamento → protocolo → consultor).
+
+Banco operacional: **Lovable Cloud** (sua conta Lovable, acessível pelo botão "View Backend"). Banco do Descubra: **seu Supabase próprio**, só leitura.
+
+---
+
+## Pergunta antes de eu executar
+
+1. **Reset de senha**: prefere fluxo de e-mail ("Esqueci minha senha" no login) ou link mágico direto que eu gero pra um e-mail específico?
+2. Confirma que posso já abrir o formulário de secrets pedindo os 3 campos da Meta (`META_APP_SECRET`, `META_VERIFY_TOKEN` que você escolher, `META_ACCESS_TOKEN_DESCUBRA`)?
