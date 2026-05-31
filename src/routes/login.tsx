@@ -18,6 +18,7 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
   const check = useServerFn(checkAdminExists);
 
@@ -44,6 +45,25 @@ function LoginPage() {
       toast.error(err instanceof Error ? err.message : "Falha no login");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!email) {
+      toast.error("Digite seu email primeiro");
+      return;
+    }
+    setResetting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/trocar-senha`,
+      });
+      if (error) throw error;
+      toast.success("Enviamos um link de redefinição para seu email.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar email");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -98,9 +118,14 @@ function LoginPage() {
                 </Link>
               </p>
             ) : (
-              <p className="text-xs text-center text-muted-foreground">
-                Esqueceu a senha? Peça ao administrador para redefinir.
-              </p>
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={resetting}
+                className="block w-full text-xs text-center text-primary underline font-medium hover:opacity-80 disabled:opacity-50"
+              >
+                {resetting ? "Enviando..." : "Esqueci minha senha"}
+              </button>
             )}
           </form>
         </CardContent>
