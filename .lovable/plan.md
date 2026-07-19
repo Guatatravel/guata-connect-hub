@@ -1,90 +1,77 @@
+# Plano — Notificações do Guatá Channel + correções na tela de Configurações
 
-# Plano de ação — Ativar Guatá Channel 24/7
+## Parte 1 — Sobre a tela de Configurações (o que você viu)
 
-## O que eu já vejo nas suas credenciais (print da Meta)
+Aqueles campos que aparecem lá **não são para você editar** — são **URLs geradas pelo sistema** que você precisa **copiar e colar** em outros lugares:
 
-Da tela "Configuração da API" do seu App Meta:
-- **Phone Number ID (Descubra)**: `1043833208824290`
-- **WhatsApp Business Account ID**: `3421874141319363`
-- **Número**: `+55 67 9131-7630`
-- **Access Token**: precisa clicar em **"Gerar token de acesso"** e copiar (token temporário de 24h serve para teste; depois trocamos por **token permanente de System User** para 24/7).
+- **Webhook WhatsApp** (`/api/public/webhooks/whatsapp`) → você copia essa URL e cola no painel da **Meta Developers** (Configurations → Webhooks). É por ali que a Meta manda as mensagens dos clientes pro nosso servidor.
+- **Webhook Descubra MS** (`/api/public/webhooks/descubra-ms`) → você copia e cola no **Supabase do Descubra MS** (Database Webhooks). É por ali que novos eventos do Descubra chegam pra aparecer na aba "Canal".
 
-Faltam você me passar (pelo formulário seguro de secrets, não pelo chat):
-- `META_ACCESS_TOKEN_DESCUBRA` (o que aparecer no botão "Gerar token de acesso")
-- `META_APP_SECRET` (em **Configurações do App → Básico → Chave Secreta do App**)
-- `META_VERIFY_TOKEN` (você inventa uma string aleatória, ex.: `guata-verify-2026-xyz`. Vai usar a MESMA na Meta e aqui)
+Os campos são só-leitura de propósito — a URL é fixa e depende do endereço publicado. O que dá para editar é: persona do bot, horário, mensagens automáticas e serviços da agência.
 
-`META_PHONE_NUMBER_ID_DESCUBRA` (`1043833208824290`) eu já preencho direto no secret.
+### Auditoria (falhas encontradas sem rodar código)
 
----
+Analisando o código atual, encontrei estes pontos que precisam de atenção:
 
-## Etapa 1 — Reset da sua senha do painel Guatá Channel
+1. **URL do webhook usa `window.location.origin`** — se você abrir a Configurações no preview (`id-preview--...lovable.app`), ela mostra a URL do preview, não da publicada. Precisa fixar sempre a URL publicada estável (`guata-connect-hub.lovable.app` ou `project--{id}.lovable.app`) para você não colar a errada na Meta.
+2. **Status "Linha Viagens" sempre vai aparecer vermelho** — só está configurado `META_PHONE_NUMBER_ID_DESCUBRA` e `META_ACCESS_TOKEN_DESCUBRA`. Se você só vai usar uma linha por enquanto, isso é normal, mas o painel devia deixar claro "não configurado ainda" ao invés de parecer um erro.
+3. **Falta um botão "Testar webhook"** — hoje só descobre se a Meta está conectada mandando uma mensagem de verdade.
+4. **Falta um painel de "Últimas mensagens recebidas do webhook"** — útil pra debugar se a Meta está entregando. Hoje se algo não chega você fica no escuro.
+5. **Falta indicador visual do que é "só-leitura vs editável"** — os inputs de webhook parecem editáveis mas não são.
 
-Você acabou de chegar em `/login`. Vou:
-1. Garantir que a rota `/trocar-senha` (já existe no projeto) aceite o fluxo `type=recovery` do Supabase.
-2. Adicionar link **"Esqueci minha senha"** na tela de login que dispara `supabase.auth.resetPasswordForEmail(email, { redirectTo: <published_url>/trocar-senha })`.
-3. Você recebe e-mail → clica → define nova senha → entra no painel.
+## Parte 2 — Notificações: comparação e recomendação
 
-Alternativa rápida (se preferir): você me diz o e-mail e eu gero um **link mágico de recuperação** direto via admin API server-side (1 clique, sem e-mail). Me diga qual prefere.
+| Opção | Quando aparece | Precisa navegador aberto? | Custo | Esforço |
+|---|---|---|---|---|
+| 1. Badge no menu lateral | Painel aberto | Sim | 0 | Baixo |
+| 2. Toast + som | Painel aberto (qualquer aba) | Sim | 0 | Baixo |
+| 3. Web Push (notificação do SO) | Sempre, mesmo painel fechado | Não (só precisa ter permitido 1x) | 0 | Médio |
+| 4. E-mail | Sempre | Não | ~grátis (Lovable Email) | Médio |
+| 5. WhatsApp pro seu número | Sempre | Não | Gasta mensagem Meta | Baixo |
 
----
+### Recomendação: opções 1 + 2 + 4
 
-## Etapa 2 — Cadastrar os secrets da Meta
+Cobrem 95% dos casos sem depender do navegador estar aberto:
 
-Vou abrir o formulário seguro pedindo:
-- `META_APP_SECRET`
-- `META_VERIFY_TOKEN` (você escolhe — anote, vai precisar colar na Meta também)
-- `META_ACCESS_TOKEN_DESCUBRA`
-- `META_PHONE_NUMBER_ID_DESCUBRA` → já sei: `1043833208824290`
+- **Badge + toast/som**: quando você está trabalhando no painel, vê chegar em tempo real.
+- **E-mail**: quando você está longe do painel (fim de semana, à noite, celular), recebe aviso e abre quando puder.
 
-Como o token "Gerar token de acesso" expira em 24h, em paralelo te entrego o **guia de System User** (Business Manager → Configurações → Usuários do sistema → criar admin "guata-bot" → gerar token **sem expiração** com permissões `whatsapp_business_messaging` e `whatsapp_business_management` → atribuir o ativo do WhatsApp). Esse vira o token definitivo 24/7.
+Deixaria **Web Push (3)** e **WhatsApp (5)** para uma segunda fase se sentir necessidade. Web Push tem a chatice de o navegador ficar pedindo permissão e às vezes o sistema operacional bloquear.
 
----
+## Parte 3 — O que vou implementar
 
-## Etapa 3 — Configurar o Webhook na Meta
+### A. Corrigir a tela de Configurações
+- Fixar URL publicada estável nos campos de webhook (não usar `window.location.origin`).
+- Adicionar aviso "URL só-leitura — copie e cole no painel externo" acima dos campos.
+- Trocar "Não configurado" (vermelho) por "Linha não usada" (cinza) quando a linha Viagens não tem secret.
+- Adicionar seção "Últimas 10 mensagens recebidas via webhook" (debug) — só admin vê.
+- Botão "Ver logs do webhook Meta" abrindo os logs do servidor.
 
-No mesmo App, na seção **WhatsApp → Configuração** (logo abaixo de "Configuração da API"):
+### B. Notificações in-app (badge + toast + som)
+- Habilitar Realtime nas tabelas `travel_intake` e `sessions`.
+- Badge vermelho na sidebar em "Triagens" e "Conversas" com contador de itens aguardando.
+- Toast + som suave quando chega nova triagem ou cliente pede humano (qualquer aba do painel).
+- Toggle "silenciar som" nas Configurações.
 
-- **URL de callback**:
-  `https://guata-connect-hub.lovable.app/api/public/webhooks/whatsapp`
-- **Token de verificação**: o mesmo `META_VERIFY_TOKEN` que você escolheu.
-- Clicar **Verificar e salvar** → Meta faz GET handshake → nosso código responde 200.
-- **Inscrever campos**: marcar `messages`.
+### C. Notificações por e-mail
+- Trigger: quando `travel_intake.status = 'novo'` é inserida, envia e-mail para todos usuários com role `admin` e `consultor`.
+- Trigger: quando `session.mode` muda para `humano` (cliente pediu atendente), mesmo destino.
+- Corpo do e-mail em português BR com link direto para a triagem/conversa.
+- Configura via Lovable Email (usa domínio padrão até você conectar um custom).
+- Seção nas Configurações: cada usuário liga/desliga suas próprias notificações por e-mail.
 
-Pré-requisito: precisamos clicar em **Publish** no Lovable ANTES desse passo, senão a URL `guata-connect-hub.lovable.app` ainda não está no ar com o código mais recente.
+## Detalhes técnicos (para referência)
 
----
+- **Realtime**: `ALTER PUBLICATION supabase_realtime ADD TABLE travel_intake, sessions, messages;` + subscribe no client em `useEffect`.
+- **Badge**: hook `useUnreadCounts()` que combina query inicial + realtime subscription.
+- **E-mail**: server function acionada por trigger PostgreSQL, chamando Lovable Email (Resend).
+- **URL estável**: usar `project--{project-id}.lovable.app` em vez de `window.location.origin`.
+- **Preferências de notificação**: nova tabela `user_notification_prefs (user_id, email_new_triage bool, email_human_request bool, sound_enabled bool)`.
 
-## Etapa 4 — Publish + teste end-to-end
+## Ordem de execução
 
-1. **Publish** no Lovable (botão no topo).
-2. Cadastrar seu próprio WhatsApp como **destinatário de teste** na Meta (enquanto a verificação Business não termina, só números cadastrados recebem).
-3. Mandar "oi" do seu WhatsApp para `+55 67 9131-7630`.
-4. Conferir no painel `/conversas` em tempo real.
-5. Bot responde com o menu → testar "2" para disparar triagem de viagem → ver protocolo em `/triagens`.
+1. Corrigir tela de Configurações (rápido, 10 min).
+2. Habilitar Realtime + badges + toasts + som (30 min).
+3. Sistema de e-mail com preferências por usuário (45 min).
 
----
-
-## Etapa 5 — Webhook do Descubra MS (paralelo)
-
-Depois do WhatsApp funcionando, te entrego o passo-a-passo de **Database Webhook** no Supabase do Descubra MS apontando para:
-- URL: `https://guata-connect-hub.lovable.app/api/public/webhooks/descubra-ms`
-- Header: `Authorization: Bearer <DESCUBRA_WEBHOOK_SECRET>`
-- Eventos: INSERT/UPDATE em `events`
-
----
-
-## Resumindo o que estamos construindo (recap)
-
-**Guatá Channel** = central operacional de WhatsApp do ecossistema **Descubra MS**, rodando 24/7 no servidor da Lovable (depende só do **Publish**, não do seu computador). Duas linhas:
-1. **Descubra MS** — bot turístico institucional (KB + eventos + publicação no canal).
-2. **Viagens MS** — bot de triagem de pacotes (origem/destino/datas/pax/orçamento → protocolo → consultor).
-
-Banco operacional: **Lovable Cloud** (sua conta Lovable, acessível pelo botão "View Backend"). Banco do Descubra: **seu Supabase próprio**, só leitura.
-
----
-
-## Pergunta antes de eu executar
-
-1. **Reset de senha**: prefere fluxo de e-mail ("Esqueci minha senha" no login) ou link mágico direto que eu gero pra um e-mail específico?
-2. Confirma que posso já abrir o formulário de secrets pedindo os 3 campos da Meta (`META_APP_SECRET`, `META_VERIFY_TOKEN` que você escolher, `META_ACCESS_TOKEN_DESCUBRA`)?
+Se aprovar, começo pela parte 1 (correção da tela) e sigo direto para as 2 e 3.
