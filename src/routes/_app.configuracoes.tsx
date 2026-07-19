@@ -11,8 +11,16 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Trash2, Plus, CheckCircle2, XCircle, Copy } from "lucide-react";
+import { Trash2, Plus, CheckCircle2, XCircle, Copy, Volume2, VolumeX, Info, Lock } from "lucide-react";
 import type { AgencyService } from "@/types/guata";
+import {
+  isSoundEnabled,
+  setSoundEnabled,
+} from "@/hooks/use-realtime-notifications";
+
+// URL pública estável (não muda ao renomear o projeto).
+const STABLE_PUBLIC_URL =
+  "https://project--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app";
 
 export const Route = createFileRoute("/_app/configuracoes")({
   component: ConfigPage,
@@ -75,10 +83,10 @@ function ConfigPage() {
 
   if (isLoading || !settings) return <Skeleton className="h-96 rounded-2xl" />;
 
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "https://guata-connect-hub.lovable.app";
-  const whatsappWebhook = `${origin}/api/public/webhooks/whatsapp`;
-  const descubraWebhook = `${origin}/api/public/webhooks/descubra-ms`;
+  // Sempre a URL publicada estável — não usar window.location.origin
+  // (senão no preview aparece uma URL inválida para colar nos webhooks externos).
+  const whatsappWebhook = `${STABLE_PUBLIC_URL}/api/public/webhooks/whatsapp`;
+  const descubraWebhook = `${STABLE_PUBLIC_URL}/api/public/webhooks/descubra-ms`;
 
   const copy = async (s: string) => {
     try {
@@ -100,23 +108,50 @@ function ConfigPage() {
         </p>
       </div>
 
+      <Card className="rounded-2xl border-primary/20 bg-primary/5">
+        <CardContent className="pt-6 flex gap-3 items-start text-sm">
+          <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-medium text-primary">Como ler esta tela</p>
+            <p className="text-muted-foreground">
+              Os campos com <Lock className="inline h-3 w-3" /> são <strong>só-leitura</strong> —
+              são URLs geradas pelo sistema. Você deve <strong>copiar e colar</strong> essas URLs
+              nos painéis externos (Meta Developers e Supabase do Descubra MS). O que é editável
+              aqui: personas, horário, mensagens automáticas, serviços e notificações.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="font-display flex items-center justify-between gap-2 flex-wrap">
             Integração WhatsApp Business (Meta)
             <div className="flex gap-2">
-              <StatusBadge ok={settings.metaConfiguredDescubra} label="Linha Descubra" />
-              <StatusBadge ok={settings.metaConfiguredViagens} label="Linha Viagens" />
+              <StatusBadge
+                state={settings.metaConfiguredDescubra ? "ok" : "warn"}
+                label="Linha Descubra"
+              />
+              <StatusBadge
+                state={settings.metaConfiguredViagens ? "ok" : "idle"}
+                label={settings.metaConfiguredViagens ? "Linha Viagens" : "Linha Viagens (não usada)"}
+              />
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div>
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Webhook a configurar no Meta App (Configurations → Webhooks → WhatsApp Business)
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+              <Lock className="h-3 w-3" />
+              Webhook para colar no Meta App (Configurations → Webhooks → WhatsApp Business)
             </Label>
             <div className="flex gap-2">
-              <Input readOnly value={whatsappWebhook} className="font-mono text-xs" />
+              <Input
+                readOnly
+                value={whatsappWebhook}
+                className="font-mono text-xs bg-muted cursor-default"
+                onFocus={(e) => e.target.select()}
+              />
               <Button size="sm" variant="outline" onClick={() => copy(whatsappWebhook)}>
                 <Copy className="h-4 w-4" />
               </Button>
@@ -135,11 +170,11 @@ function ConfigPage() {
             Integração Descubra MS
             <div className="flex gap-2">
               <StatusBadge
-                ok={settings.descubraSupabaseConfigured}
+                state={settings.descubraSupabaseConfigured ? "ok" : "warn"}
                 label="Banco Descubra"
               />
               <StatusBadge
-                ok={settings.descubraCanalWebhookReady}
+                state={settings.descubraCanalWebhookReady ? "ok" : "warn"}
                 label="Webhook eventos"
               />
             </div>
@@ -147,11 +182,17 @@ function ConfigPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div>
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+              <Lock className="h-3 w-3" />
               URL para o Database Webhook no Supabase do Descubra MS
             </Label>
             <div className="flex gap-2">
-              <Input readOnly value={descubraWebhook} className="font-mono text-xs" />
+              <Input
+                readOnly
+                value={descubraWebhook}
+                className="font-mono text-xs bg-muted cursor-default"
+                onFocus={(e) => e.target.select()}
+              />
               <Button size="sm" variant="outline" onClick={() => copy(descubraWebhook)}>
                 <Copy className="h-4 w-4" />
               </Button>
@@ -163,6 +204,8 @@ function ConfigPage() {
           </div>
         </CardContent>
       </Card>
+
+      <NotificationSettingsCard />
 
       <Card className="rounded-2xl">
         <CardHeader>
