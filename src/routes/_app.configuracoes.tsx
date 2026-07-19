@@ -303,19 +303,74 @@ function ConfigPage() {
   );
 }
 
-function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
+function StatusBadge({
+  state,
+  label,
+}: {
+  state: "ok" | "warn" | "idle";
+  label: string;
+}) {
+  const cls =
+    state === "ok"
+      ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+      : state === "warn"
+        ? "bg-amber-100 text-amber-900 border-amber-300"
+        : "bg-muted text-muted-foreground border-border";
   return (
-    <Badge
-      variant="outline"
-      className={
-        ok
-          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-          : "bg-amber-100 text-amber-900 border-amber-300"
-      }
-    >
-      {ok ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+    <Badge variant="outline" className={cls}>
+      {state === "ok" ? (
+        <CheckCircle2 className="h-3 w-3 mr-1" />
+      ) : state === "warn" ? (
+        <XCircle className="h-3 w-3 mr-1" />
+      ) : (
+        <Info className="h-3 w-3 mr-1" />
+      )}
       {label}
     </Badge>
+  );
+}
+
+function NotificationSettingsCard() {
+  const [enabled, setEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return isSoundEnabled();
+  });
+  useEffect(() => {
+    setSoundEnabled(enabled);
+  }, [enabled]);
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader>
+        <CardTitle className="font-display">Notificações do painel</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            {enabled ? (
+              <Volume2 className="h-5 w-5 text-primary mt-0.5" />
+            ) : (
+              <VolumeX className="h-5 w-5 text-muted-foreground mt-0.5" />
+            )}
+            <div>
+              <p className="font-medium text-foreground">Som de alerta</p>
+              <p className="text-muted-foreground text-xs">
+                Toca um bip curto quando chega uma nova triagem ou um cliente pede atendimento humano.
+                Preferência salva neste navegador.
+              </p>
+            </div>
+          </div>
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+        <div className="text-xs text-muted-foreground border-t border-border/50 pt-3">
+          <strong className="text-foreground">Como funciona:</strong> mesmo com o painel fechado, o
+          Guatá continua respondendo no WhatsApp e gravando triagens no banco. Ao abrir o painel,
+          os contadores nos menus <em>Triagens</em> e <em>Conversas</em> mostram quantos itens
+          estão aguardando você. Enquanto o painel está aberto, notificações e som aparecem em
+          tempo real.
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
