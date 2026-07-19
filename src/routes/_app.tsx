@@ -8,6 +8,7 @@ import {
 import { AppSidebar } from "@/components/guata/app-sidebar";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeNotifications } from "@/hooks/use-realtime-notifications";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -37,7 +38,17 @@ function AppLayout() {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
+        <AppLayoutInner />
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function AppLayoutInner() {
+  const counts = useRealtimeNotifications();
+  return (
+    <>
+        <AppSidebar counts={counts} />
         <SidebarInset>
           <header className="h-14 flex items-center gap-2 border-b border-border/70 bg-card/50 px-4 sticky top-0 z-10 backdrop-blur">
             <SidebarTrigger />
@@ -49,7 +60,6 @@ function AppLayout() {
             <Outlet />
           </main>
         </SidebarInset>
-      </div>
-    </SidebarProvider>
+    </>
   );
 }

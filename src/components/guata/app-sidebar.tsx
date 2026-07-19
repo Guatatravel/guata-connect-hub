@@ -24,14 +24,16 @@ import { signOut } from "@/lib/auth";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/triagens", label: "Triagens Viagens", icon: Plane },
-  { to: "/conversas", label: "Conversas", icon: MessageSquare },
+  { to: "/triagens", label: "Triagens Viagens", icon: Plane, badgeKey: "triagensAbertas" as const },
+  { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/canal", label: "Canal", icon: Megaphone },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
-export function AppSidebar() {
+type Counts = { triagensAbertas: number; conversasHumano: number };
+
+export function AppSidebar({ counts }: { counts?: Counts }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
 
@@ -62,19 +64,30 @@ export function AppSidebar() {
           <SidebarGroupLabel>Operação</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith(item.to)}
-                  >
-                    <Link to={item.to} className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {items.map((item) => {
+                const badgeCount =
+                  "badgeKey" in item && counts
+                    ? counts[item.badgeKey as keyof Counts]
+                    : 0;
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname.startsWith(item.to)}
+                    >
+                      <Link to={item.to} className="flex items-center gap-2 w-full">
+                        <item.icon className="h-4 w-4" />
+                        <span className="flex-1">{item.label}</span>
+                        {badgeCount > 0 && (
+                          <span className="ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold">
+                            {badgeCount > 99 ? "99+" : badgeCount}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
