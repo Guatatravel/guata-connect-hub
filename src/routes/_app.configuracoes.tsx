@@ -205,6 +205,10 @@ function ConfigPage() {
         </CardContent>
       </Card>
 
+      <DiagnosticsCard />
+
+      <BrandingCard />
+
       <NotificationSettingsCard />
 
       <Card className="rounded-2xl">
