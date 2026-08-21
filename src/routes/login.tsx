@@ -73,9 +73,7 @@ function LoginPage() {
       <Card className="w-full max-w-md rounded-2xl shadow-lg">
         <CardContent className="p-8">
           <div className="flex flex-col items-center gap-3 mb-6">
-            <div className="h-16 w-16 rounded-full bg-accent flex items-center justify-center text-3xl shadow-sm">
-              🦫
-            </div>
+            <BrandLogo className="h-16 w-16 text-3xl" />
             <div className="text-center">
               <h1 className="font-display text-2xl font-semibold text-primary">
                 Guatá Channel
