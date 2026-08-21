@@ -21,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
+import { BrandLogo } from "@/components/guata/brand-logo";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
