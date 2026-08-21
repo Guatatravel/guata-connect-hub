@@ -103,6 +103,7 @@ export type Database = {
           created_at: string
           horario_atendimento: string
           id: string
+          logo_url: string | null
           mensagem_fora_horario: string
           mensagem_humano: string
           persona_descubra: string
@@ -114,6 +115,7 @@ export type Database = {
           created_at?: string
           horario_atendimento?: string
           id?: string
+          logo_url?: string | null
           mensagem_fora_horario?: string
           mensagem_humano?: string
           persona_descubra?: string
@@ -125,6 +127,7 @@ export type Database = {
           created_at?: string
           horario_atendimento?: string
           id?: string
+          logo_url?: string | null
           mensagem_fora_horario?: string
           mensagem_humano?: string
           persona_descubra?: string
