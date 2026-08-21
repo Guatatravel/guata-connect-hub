@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { BrandLogo } from "@/components/guata/brand-logo";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
