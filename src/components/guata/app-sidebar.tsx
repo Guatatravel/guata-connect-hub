@@ -21,6 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
+import { BrandLogo } from "@/components/guata/brand-logo";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -46,9 +47,7 @@ export function AppSidebar({ counts }: { counts?: Counts }) {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-3 px-2 py-3">
-          <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center text-xl shadow-sm">
-            🦫
-          </div>
+          <BrandLogo className="h-10 w-10 text-xl" />
           <div className="flex flex-col">
             <span className="font-semibold text-sidebar-foreground leading-tight">
               Guatá Channel

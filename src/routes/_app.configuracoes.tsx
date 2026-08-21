@@ -205,6 +205,10 @@ function ConfigPage() {
         </CardContent>
       </Card>
 
+      <DiagnosticsCard />
+
+      <BrandingCard />
+
       <NotificationSettingsCard />
 
       <Card className="rounded-2xl">
@@ -300,6 +304,206 @@ function ConfigPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function DiagnosticsCard() {
+  const run = useServerFn(runDescubraDiagnostics);
+  const test = useServerFn(sendTestDescubraEvent);
+  const qc = useQueryClient();
+
+  const diag = useQuery({
+    queryKey: ["diagnostics"],
+    queryFn: () => run({ data: undefined as never }),
+    staleTime: 0,
+  });
+
+  const testEvent = useMutation({
+    mutationFn: () => test({ data: undefined as never }),
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success(r.message);
+        qc.invalidateQueries({ queryKey: ["diagnostics"] });
+        qc.invalidateQueries({ queryKey: ["channel-posts"] });
+      } else {
+        toast.error(r.message);
+      }
+    },
+    onError: () => toast.error("Falha ao enviar evento de teste"),
+  });
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader>
+        <CardTitle className="font-display flex items-center justify-between gap-2 flex-wrap">
+          Teste de conexão — está funcionando?
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => diag.refetch()}
+              disabled={diag.isFetching}
+            >
+              <RefreshCw
+                className={`h-4 w-4 mr-1 ${diag.isFetching ? "animate-spin" : ""}`}
+              />
+              Testar agora
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => testEvent.mutate()}
+              disabled={testEvent.isPending}
+            >
+              <Send className="h-4 w-4 mr-1" />
+              Enviar evento de teste
+            </Button>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {diag.isLoading && <Skeleton className="h-40 rounded-xl" />}
+        {diag.isError && (
+          <p className="text-destructive">
+            Não foi possível rodar o diagnóstico agora.
+          </p>
+        )}
+        {diag.data?.checks.map((c) => (
+          <div
+            key={c.id}
+            className="flex gap-3 items-start border border-border rounded-xl p-3 bg-secondary/30"
+          >
+            {c.state === "ok" ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            ) : c.state === "warn" ? (
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            ) : (
+              <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            )}
+            <div className="space-y-0.5">
+              <p className="font-medium text-foreground">{c.label}</p>
+              <p className="text-muted-foreground">{c.detail}</p>
+              {c.hint && (
+                <p className="text-xs text-muted-foreground/80 italic">{c.hint}</p>
+              )}
+            </div>
+          </div>
+        ))}
+        {diag.data && (
+          <p className="text-xs text-muted-foreground">
+            Última verificação:{" "}
+            {new Date(diag.data.ranAt).toLocaleString("pt-BR")}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BrandingCard() {
+  const qc = useQueryClient();
+  const { data: logoUrl, isLoading } = useLogoUrl();
+  const upload = useServerFn(uploadLogo);
+  const reset = useServerFn(resetLogo);
+  const [busy, setBusy] = useState(false);
+
+  const afterChange = () => {
+    qc.invalidateQueries({ queryKey: logoQueryKey });
+  };
+
+  const onFile = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("A imagem precisa ter no máximo 2 MB.");
+      return;
+    }
+    const allowed = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Formato inválido. Use PNG, JPG, WEBP ou SVG.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]!);
+      await upload({
+        data: { base64: btoa(bin), contentType: file.type as never },
+      });
+      afterChange();
+      toast.success("Logo atualizada");
+    } catch (e) {
+      toast.error(
+        e instanceof Error && e.message.includes("administradores")
+          ? "Apenas administradores podem trocar a logo."
+          : "Falha ao enviar a logo",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onReset = async () => {
+    setBusy(true);
+    try {
+      await reset({ data: undefined as never });
+      afterChange();
+      toast.success("Logo padrão restaurada");
+    } catch {
+      toast.error("Falha ao restaurar a logo");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="rounded-2xl">
+      <CardHeader>
+        <CardTitle className="font-display">Identidade visual</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div className="flex items-center gap-4">
+          {isLoading ? (
+            <Skeleton className="h-16 w-16 rounded-full" />
+          ) : (
+            <BrandLogo className="h-16 w-16 text-3xl" />
+          )}
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Logo do portal</p>
+            <p className="text-muted-foreground text-xs">
+              Aparece na barra lateral e na tela de login. PNG, JPG, WEBP ou SVG
+              de até 2 MB. Só administradores podem alterar.
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {logoUrl ? "Logo personalizada ativa." : "Usando a logo padrão."}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <label>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onFile(f);
+                e.target.value = "";
+              }}
+            />
+            <Button asChild size="sm" disabled={busy}>
+              <span>
+                <ImageIcon className="h-4 w-4 mr-1" />
+                Enviar nova logo
+              </span>
+            </Button>
+          </label>
+          {logoUrl && (
+            <Button size="sm" variant="outline" onClick={onReset} disabled={busy}>
+              Restaurar padrão
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
