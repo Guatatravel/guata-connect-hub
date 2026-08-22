@@ -11,7 +11,14 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Trash2, Plus, CheckCircle2, XCircle, Copy, Volume2, VolumeX, Info, Lock } from "lucide-react";
+import { Trash2, Plus, CheckCircle2, XCircle, Copy, Volume2, VolumeX, Info, Lock, RefreshCw, Send, AlertTriangle, Image as ImageIcon } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import {
+  runDescubraDiagnostics,
+  sendTestDescubraEvent,
+} from "@/lib/diagnostics.functions";
+import { uploadLogo, resetLogo } from "@/lib/branding.functions";
+import { BrandLogo, useLogoUrl, logoQueryKey } from "@/components/guata/brand-logo";
 import type { AgencyService } from "@/types/guata";
 import {
   isSoundEnabled,
