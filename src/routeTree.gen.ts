@@ -16,6 +16,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
 import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
+import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppConversasRouteImport } from './routes/_app.conversas'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
@@ -57,6 +58,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
 const AppTriagensRoute = AppTriagensRouteImport.update({
   id: '/triagens',
   path: '/triagens',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDiagnosticoWhatsappRoute = AppDiagnosticoWhatsappRouteImport.update({
+  id: '/diagnostico-whatsapp',
+  path: '/diagnostico-whatsapp',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
+  '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/triagens': typeof AppTriagensRouteWithChildren
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
+  '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/triagens': typeof AppTriagensRouteWithChildren
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/conversas': typeof AppConversasRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/_app/triagens': typeof AppTriagensRouteWithChildren
   '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/conversas'
     | '/dashboard'
+    | '/diagnostico-whatsapp'
     | '/triagens'
     | '/usuarios'
     | '/conversas/$id'
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/conversas'
     | '/dashboard'
+    | '/diagnostico-whatsapp'
     | '/triagens'
     | '/usuarios'
     | '/conversas/$id'
@@ -196,6 +207,7 @@ export interface FileRouteTypes {
     | '/_app/configuracoes'
     | '/_app/conversas'
     | '/_app/dashboard'
+    | '/_app/diagnostico-whatsapp'
     | '/_app/triagens'
     | '/_app/usuarios'
     | '/_app/conversas/$id'
@@ -263,6 +275,13 @@ declare module '@tanstack/react-router' {
       path: '/triagens'
       fullPath: '/triagens'
       preLoaderRoute: typeof AppTriagensRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/diagnostico-whatsapp': {
+      id: '/_app/diagnostico-whatsapp'
+      path: '/diagnostico-whatsapp'
+      fullPath: '/diagnostico-whatsapp'
+      preLoaderRoute: typeof AppDiagnosticoWhatsappRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -353,6 +372,7 @@ interface AppRouteChildren {
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppConversasRoute: typeof AppConversasRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
+  AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
   AppTriagensRoute: typeof AppTriagensRouteWithChildren
   AppUsuariosRoute: typeof AppUsuariosRoute
 }
@@ -362,6 +382,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppConversasRoute: AppConversasRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
+  AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
   AppTriagensRoute: AppTriagensRouteWithChildren,
   AppUsuariosRoute: AppUsuariosRoute,
 }
