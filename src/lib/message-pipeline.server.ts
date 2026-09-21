@@ -132,18 +132,59 @@ async function continueIntake(
   return `Triagem registrada! Protocolo ${protocol}. Um consultor entrará em contato em breve.`;
 }
 
-async function answerTurismo(userText: string): Promise<string> {
+interface AttendantConfig {
+  persona: string;
+  criatividade: number;
+  modelo: string;
+  usa_base_local: boolean;
+  usa_base_descubra: boolean;
+}
+
+async function loadAttendant(
+  line: "descubra" | "viagens",
+): Promise<AttendantConfig | null> {
+  const { data } = await supabaseAdmin
+    .from("attendants")
+    .select("persona, criatividade, modelo, usa_base_local, usa_base_descubra")
+    .eq("line", line)
+    .eq("ativo", true)
+    .limit(1)
+    .maybeSingle();
+  return (data as unknown as AttendantConfig) ?? null;
+}
+
+async function answerTurismo(
+  userText: string,
+  line: "descubra" | "viagens",
+): Promise<string> {
+  const attendant = await loadAttendant(line);
   const persona =
-    (await getGuataPersona()) ??
+    attendant?.persona ||
+    (await getGuataPersona()) ||
     "Você é o Guatá, assistente turístico oficial de Mato Grosso do Sul. Responda de forma calorosa, objetiva e útil.";
 
-  const kb = await searchGuataKnowledgeBase(userText, 3);
   let context = "";
+
+  // Base de conhecimento própria (documentos, textos e links anexados no painel)
+  if (attendant?.usa_base_local !== false) {
+    const { searchLocalKnowledge } = await import("@/lib/knowledge.server");
+    const local = await searchLocalKnowledge(userText, 3).catch(() => []);
+    if (local.length > 0) {
+      context +=
+        "\n\nDocumentos da empresa (use como fonte principal):\n" +
+        local.map((d) => `### ${d.title}\n${d.excerpt}`).join("\n\n");
+    }
+  }
+
+  const kb =
+    attendant?.usa_base_descubra === false
+      ? []
+      : await searchGuataKnowledgeBase(userText, 3);
   if (kb.length > 0) {
-    context =
-      "\n\nBase de conhecimento:\n" +
+    context +=
+      "\n\nBase de conhecimento Descubra MS:\n" +
       kb.map((k) => `- ${k.question}: ${k.answer}`).join("\n");
-  } else if (isDescubraConfigured()) {
+  } else if (!context && isDescubraConfigured()) {
     const events = await listDescubraEvents(8);
     if (events.length > 0) {
       context =
@@ -163,7 +204,11 @@ async function answerTurismo(userText: string): Promise<string> {
       { role: "system", content: persona + context },
       { role: "user", content: userText },
     ],
-    { maxTokens: 500, temperature: 0.6 },
+    {
+      maxTokens: 500,
+      temperature: attendant?.criatividade ?? 0.6,
+      model: attendant?.modelo || undefined,
+    },
   );
 }
 
@@ -215,7 +260,7 @@ export async function processMessage(
       replies.push(`Olá! ${MENU_TEXT}`);
     } else {
       try {
-        replies.push(await answerTurismo(msg.text));
+        replies.push(await answerTurismo(msg.text, msg.line));
       } catch (err) {
         console.error("[brain] erro:", err);
         replies.push(

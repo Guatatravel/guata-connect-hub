@@ -47,6 +47,60 @@ export type Database = {
         }
         Relationships: []
       }
+      attendants: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          criatividade: number
+          despedida: string
+          id: string
+          line: Database["public"]["Enums"]["channel_line"]
+          modelo: string
+          nome: string
+          palavras_humano: string[]
+          persona: string
+          saudacao: string
+          tom: string
+          updated_at: string
+          usa_base_descubra: boolean
+          usa_base_local: boolean
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          criatividade?: number
+          despedida?: string
+          id?: string
+          line?: Database["public"]["Enums"]["channel_line"]
+          modelo?: string
+          nome: string
+          palavras_humano?: string[]
+          persona?: string
+          saudacao?: string
+          tom?: string
+          updated_at?: string
+          usa_base_descubra?: boolean
+          usa_base_local?: boolean
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          criatividade?: number
+          despedida?: string
+          id?: string
+          line?: Database["public"]["Enums"]["channel_line"]
+          modelo?: string
+          nome?: string
+          palavras_humano?: string[]
+          persona?: string
+          saudacao?: string
+          tom?: string
+          updated_at?: string
+          usa_base_descubra?: boolean
+          usa_base_local?: boolean
+        }
+        Relationships: []
+      }
       channel_posts: {
         Row: {
           approved_at: string | null
@@ -134,6 +188,51 @@ export type Database = {
           persona_viagens?: string
           singleton?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      knowledge_documents: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          file_path: string | null
+          id: string
+          size_bytes: number
+          source_type: string
+          status: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          file_path?: string | null
+          id?: string
+          size_bytes?: number
+          source_type?: string
+          status?: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          file_path?: string | null
+          id?: string
+          size_bytes?: number
+          source_type?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
         }
         Relationships: []
       }
