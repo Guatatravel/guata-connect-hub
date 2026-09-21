@@ -260,7 +260,7 @@ export async function processMessage(
       replies.push(`Olá! ${MENU_TEXT}`);
     } else {
       try {
-        replies.push(await answerTurismo(msg.text));
+        replies.push(await answerTurismo(msg.text, msg.line));
       } catch (err) {
         console.error("[brain] erro:", err);
         replies.push(
