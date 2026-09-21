@@ -204,7 +204,11 @@ async function answerTurismo(
       { role: "system", content: persona + context },
       { role: "user", content: userText },
     ],
-    { maxTokens: 500, temperature: 0.6 },
+    {
+      maxTokens: 500,
+      temperature: attendant?.criatividade ?? 0.6,
+      model: attendant?.modelo || undefined,
+    },
   );
 }
 
