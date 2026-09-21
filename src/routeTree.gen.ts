@@ -19,8 +19,10 @@ import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppConversasRouteImport } from './routes/_app.conversas'
+import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
 import { Route as AppCanalRouteImport } from './routes/_app.canal'
+import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
@@ -75,6 +77,11 @@ const AppConversasRoute = AppConversasRouteImport.update({
   path: '/conversas',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConhecimentoRoute = AppConhecimentoRouteImport.update({
+  id: '/conhecimento',
+  path: '/conhecimento',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
@@ -83,6 +90,11 @@ const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
 const AppCanalRoute = AppCanalRouteImport.update({
   id: '/canal',
   path: '/canal',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAtendentesRoute = AppAtendentesRouteImport.update({
+  id: '/atendentes',
+  path: '/atendentes',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
@@ -113,8 +125,10 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
+  '/atendentes': typeof AppAtendentesRoute
   '/canal': typeof AppCanalRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/conhecimento': typeof AppConhecimentoRoute
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
@@ -130,8 +144,10 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
+  '/atendentes': typeof AppAtendentesRoute
   '/canal': typeof AppCanalRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/conhecimento': typeof AppConhecimentoRoute
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
@@ -149,8 +165,10 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
+  '/_app/atendentes': typeof AppAtendentesRoute
   '/_app/canal': typeof AppCanalRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
+  '/_app/conhecimento': typeof AppConhecimentoRoute
   '/_app/conversas': typeof AppConversasRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
@@ -168,8 +186,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/trocar-senha'
+    | '/atendentes'
     | '/canal'
     | '/configuracoes'
+    | '/conhecimento'
     | '/conversas'
     | '/dashboard'
     | '/diagnostico-whatsapp'
@@ -185,8 +205,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/trocar-senha'
+    | '/atendentes'
     | '/canal'
     | '/configuracoes'
+    | '/conhecimento'
     | '/conversas'
     | '/dashboard'
     | '/diagnostico-whatsapp'
@@ -203,8 +225,10 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/trocar-senha'
+    | '/_app/atendentes'
     | '/_app/canal'
     | '/_app/configuracoes'
+    | '/_app/conhecimento'
     | '/_app/conversas'
     | '/_app/dashboard'
     | '/_app/diagnostico-whatsapp'
@@ -298,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConversasRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/conhecimento': {
+      id: '/_app/conhecimento'
+      path: '/conhecimento'
+      fullPath: '/conhecimento'
+      preLoaderRoute: typeof AppConhecimentoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/configuracoes': {
       id: '/_app/configuracoes'
       path: '/configuracoes'
@@ -310,6 +341,13 @@ declare module '@tanstack/react-router' {
       path: '/canal'
       fullPath: '/canal'
       preLoaderRoute: typeof AppCanalRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/atendentes': {
+      id: '/_app/atendentes'
+      path: '/atendentes'
+      fullPath: '/atendentes'
+      preLoaderRoute: typeof AppAtendentesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/triagens/$id': {
@@ -368,8 +406,10 @@ const AppTriagensRouteWithChildren = AppTriagensRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAtendentesRoute: typeof AppAtendentesRoute
   AppCanalRoute: typeof AppCanalRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
+  AppConhecimentoRoute: typeof AppConhecimentoRoute
   AppConversasRoute: typeof AppConversasRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
@@ -378,8 +418,10 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAtendentesRoute: AppAtendentesRoute,
   AppCanalRoute: AppCanalRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
+  AppConhecimentoRoute: AppConhecimentoRoute,
   AppConversasRoute: AppConversasRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
