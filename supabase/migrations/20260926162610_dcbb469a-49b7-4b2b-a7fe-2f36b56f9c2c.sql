@@ -1,0 +1,1 @@
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS dossie jsonb, ADD COLUMN IF NOT EXISTS dossie_at timestamptz;

@@ -306,6 +306,8 @@ export type Database = {
           assigned_to: string | null
           contact_name: string | null
           created_at: string
+          dossie: Json | null
+          dossie_at: string | null
           id: string
           intake_data: Json
           intake_state: string | null
@@ -319,6 +321,8 @@ export type Database = {
           assigned_to?: string | null
           contact_name?: string | null
           created_at?: string
+          dossie?: Json | null
+          dossie_at?: string | null
           id?: string
           intake_data?: Json
           intake_state?: string | null
@@ -332,6 +336,8 @@ export type Database = {
           assigned_to?: string | null
           contact_name?: string | null
           created_at?: string
+          dossie?: Json | null
+          dossie_at?: string | null
           id?: string
           intake_data?: Json
           intake_state?: string | null
