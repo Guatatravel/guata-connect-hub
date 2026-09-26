@@ -11,14 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Plane,
-  UserCog,
-  Users,
-  MessageSquare,
-  Megaphone,
-} from "lucide-react";
+import { Plane, UserCog, Users, MessageSquare } from "lucide-react";
 import { timeAgo } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/dashboard")({

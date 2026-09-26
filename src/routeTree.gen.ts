@@ -21,7 +21,6 @@ import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppConversasRouteImport } from './routes/_app.conversas'
 import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
-import { Route as AppCanalRouteImport } from './routes/_app.canal'
 import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
@@ -87,11 +86,6 @@ const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCanalRoute = AppCanalRouteImport.update({
-  id: '/canal',
-  path: '/canal',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAtendentesRoute = AppAtendentesRouteImport.update({
   id: '/atendentes',
   path: '/atendentes',
@@ -126,7 +120,6 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/atendentes': typeof AppAtendentesRoute
-  '/canal': typeof AppCanalRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conhecimento': typeof AppConhecimentoRoute
   '/conversas': typeof AppConversasRouteWithChildren
@@ -145,7 +138,6 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/atendentes': typeof AppAtendentesRoute
-  '/canal': typeof AppCanalRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conhecimento': typeof AppConhecimentoRoute
   '/conversas': typeof AppConversasRouteWithChildren
@@ -166,7 +158,6 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/_app/atendentes': typeof AppAtendentesRoute
-  '/_app/canal': typeof AppCanalRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/conhecimento': typeof AppConhecimentoRoute
   '/_app/conversas': typeof AppConversasRouteWithChildren
@@ -187,7 +178,6 @@ export interface FileRouteTypes {
     | '/setup'
     | '/trocar-senha'
     | '/atendentes'
-    | '/canal'
     | '/configuracoes'
     | '/conhecimento'
     | '/conversas'
@@ -206,7 +196,6 @@ export interface FileRouteTypes {
     | '/setup'
     | '/trocar-senha'
     | '/atendentes'
-    | '/canal'
     | '/configuracoes'
     | '/conhecimento'
     | '/conversas'
@@ -226,7 +215,6 @@ export interface FileRouteTypes {
     | '/setup'
     | '/trocar-senha'
     | '/_app/atendentes'
-    | '/_app/canal'
     | '/_app/configuracoes'
     | '/_app/conhecimento'
     | '/_app/conversas'
@@ -336,13 +324,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConfiguracoesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/canal': {
-      id: '/_app/canal'
-      path: '/canal'
-      fullPath: '/canal'
-      preLoaderRoute: typeof AppCanalRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/atendentes': {
       id: '/_app/atendentes'
       path: '/atendentes'
@@ -407,7 +388,6 @@ const AppTriagensRouteWithChildren = AppTriagensRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAtendentesRoute: typeof AppAtendentesRoute
-  AppCanalRoute: typeof AppCanalRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppConhecimentoRoute: typeof AppConhecimentoRoute
   AppConversasRoute: typeof AppConversasRouteWithChildren
@@ -419,7 +399,6 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAtendentesRoute: AppAtendentesRoute,
-  AppCanalRoute: AppCanalRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppConhecimentoRoute: AppConhecimentoRoute,
   AppConversasRoute: AppConversasRouteWithChildren,
