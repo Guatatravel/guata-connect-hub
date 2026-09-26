@@ -231,7 +231,7 @@ export async function sendTestEvent(): Promise<{
     }
     return {
       ok: true,
-      message: "Evento de teste criado — confira a aba Canal.",
+      message: "Evento de teste recebido pelo painel com sucesso.",
     };
   } catch (e) {
     return {
