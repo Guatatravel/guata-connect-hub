@@ -270,12 +270,23 @@ export async function processMessage(
     }
   }
 
+  // Dossiê de fechamento quando a conversa passa para humano/consultor
+  const { data: after } = await supabaseAdmin
+    .from("sessions").select("mode").eq("id", session.id).maybeSingle();
+  const handoff =
+    (after?.mode === "humano" || after?.mode === "aguardando") && after?.mode !== session.mode;
+
   // Persiste e envia
   for (const text of replies) {
     await persistMessage(session.id, "out", "bot", text);
     await sendWhatsAppText(msg.line, msg.phone, text).catch((e) =>
       console.error("[meta] send falhou:", e),
     );
+  }
+
+  if (handoff) {
+    const { generateDossie } = await import("@/lib/dossie.server");
+    await generateDossie(session.id).catch((e) => console.error("[dossie] falhou:", e));
   }
 
   return { replies, sessionId: session.id };

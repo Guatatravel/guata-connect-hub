@@ -27,7 +27,6 @@ export async function chatCompletion(
     body: JSON.stringify({
       model: opts.model ?? "google/gemini-2.5-flash",
       messages,
-      max_tokens: opts.maxTokens ?? 800,
       temperature: opts.temperature ?? 0.5,
     }),
   });

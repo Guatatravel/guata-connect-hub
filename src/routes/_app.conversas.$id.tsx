@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, MessageCircle, Send } from "lucide-react";
 import { formatPhone, waLink } from "@/lib/format";
+import { DossieCard } from "@/components/guata/dossie-card";
 
 export const Route = createFileRoute("/_app/conversas/$id")({
   component: ConversaDetail,
@@ -48,6 +49,8 @@ function ConversaDetail() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
         </Link>
       </Button>
+
+      <DossieCard sessionId={conv.id} onUseMessage={setReply} />
 
       <Card className="rounded-2xl">
         <CardHeader>
