@@ -5,6 +5,7 @@ import { api } from "@/lib/api/client";
 import { TriagemStatusBadge } from "@/components/guata/status-badge";
 import { LineBadge } from "@/components/guata/line-badge";
 import { ChatTimeline } from "@/components/guata/chat-timeline";
+import { DossieCard } from "@/components/guata/dossie-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -136,6 +137,10 @@ function TriagemDetailPage() {
           </a>
         </div>
       </div>
+
+      {triage.sessionId && (
+        <DossieCard sessionId={triage.sessionId} onUseMessage={conv ? setReply : undefined} />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Form coletado */}
