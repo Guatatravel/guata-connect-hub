@@ -141,7 +141,7 @@ export async function runDiagnostics(): Promise<DiagnosticCheck[]> {
     .maybeSingle();
   checks.push({
     id: "webhook",
-    label: "Webhook de eventos (Descubra → Canal)",
+    label: "Webhook de eventos (Descubra → Painel)",
     state: !secretOk ? "fail" : lastPost ? "ok" : "warn",
     detail: !secretOk
       ? "Secret DESCUBRA_WEBHOOK_SECRET ausente."
