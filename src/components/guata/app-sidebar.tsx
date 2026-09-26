@@ -15,13 +15,11 @@ import {
   LayoutDashboard,
   Plane,
   MessageSquare,
-  Megaphone,
   Settings,
   LogOut,
   Users,
   BookOpen,
   Bot,
-  Stethoscope,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
@@ -30,12 +28,10 @@ const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/triagens", label: "Triagens Viagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
-  { to: "/canal", label: "Canal", icon: Megaphone },
   { to: "/conhecimento", label: "Base de Conhecimento", icon: BookOpen },
   { to: "/atendentes", label: "Atendentes", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
-  { to: "/diagnostico-whatsapp", label: "Diagnóstico WhatsApp", icon: Stethoscope },
 ] as const;
 
 type Counts = { triagensAbertas: number; conversasHumano: number };

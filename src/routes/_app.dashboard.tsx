@@ -42,19 +42,6 @@ function DashboardPage() {
         </p>
       </div>
 
-      {data && data.postsPendentes > 0 && (
-        <Alert className="border-accent bg-accent/20">
-          <Megaphone className="h-4 w-4" />
-          <AlertTitle>Posts pendentes no Canal</AlertTitle>
-          <AlertDescription>
-            {data.postsPendentes} post(s) gerados a partir de eventos do
-            Descubra MS aguardando publicação manual.{" "}
-            <Link to="/canal" className="underline font-medium">
-              Abrir Canal →
-            </Link>
-          </AlertDescription>
-        </Alert>
-      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {isLoading || !data ? (
