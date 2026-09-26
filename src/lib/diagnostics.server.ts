@@ -141,7 +141,7 @@ export async function runDiagnostics(): Promise<DiagnosticCheck[]> {
     .maybeSingle();
   checks.push({
     id: "webhook",
-    label: "Webhook de eventos (Descubra → Canal)",
+    label: "Webhook de eventos (Descubra → Painel)",
     state: !secretOk ? "fail" : lastPost ? "ok" : "warn",
     detail: !secretOk
       ? "Secret DESCUBRA_WEBHOOK_SECRET ausente."
@@ -231,7 +231,7 @@ export async function sendTestEvent(): Promise<{
     }
     return {
       ok: true,
-      message: "Evento de teste criado — confira a aba Canal.",
+      message: "Evento de teste recebido pelo painel com sucesso.",
     };
   } catch (e) {
     return {

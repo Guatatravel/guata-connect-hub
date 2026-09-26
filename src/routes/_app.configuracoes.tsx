@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
@@ -166,6 +166,11 @@ function ConfigPage() {
             <p className="text-xs text-muted-foreground mt-1">
               Verify Token: use o valor que você definiu como secret <code className="text-[10px]">META_VERIFY_TOKEN</code>.
               Subscreva o campo <code className="text-[10px]">messages</code>.
+            </p>
+            <p className="text-xs mt-2">
+              <Link to="/diagnostico-whatsapp" className="underline font-medium">
+                Abrir verificação técnica do WhatsApp →
+              </Link>
             </p>
           </div>
         </CardContent>
