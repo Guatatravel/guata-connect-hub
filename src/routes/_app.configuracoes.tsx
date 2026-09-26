@@ -167,6 +167,11 @@ function ConfigPage() {
               Verify Token: use o valor que você definiu como secret <code className="text-[10px]">META_VERIFY_TOKEN</code>.
               Subscreva o campo <code className="text-[10px]">messages</code>.
             </p>
+            <p className="text-xs mt-2">
+              <Link to="/diagnostico-whatsapp" className="underline font-medium">
+                Abrir verificação técnica do WhatsApp →
+              </Link>
+            </p>
           </div>
         </CardContent>
       </Card>
