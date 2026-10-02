@@ -20,17 +20,19 @@ import {
   Users,
   BookOpen,
   Bot,
+  Inbox,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/triagens", label: "Triagens Viagens", icon: Plane, badgeKey: "triagensAbertas" as const },
+  { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/conhecimento", label: "Base de Conhecimento", icon: BookOpen },
   { to: "/atendentes", label: "Atendentes", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },
+  { to: "/solicitacoes", label: "Solicitações de acesso", icon: Inbox },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
