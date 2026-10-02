@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApresentacaoRouteImport } from './routes/apresentacao'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
 import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
+import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppConversasRouteImport } from './routes/_app.conversas'
@@ -42,6 +44,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApresentacaoRoute = ApresentacaoRouteImport.update({
+  id: '/apresentacao',
+  path: '/apresentacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
@@ -59,6 +66,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
 const AppTriagensRoute = AppTriagensRouteImport.update({
   id: '/triagens',
   path: '/triagens',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSolicitacoesRoute = AppSolicitacoesRouteImport.update({
+  id: '/solicitacoes',
+  path: '/solicitacoes',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDiagnosticoWhatsappRoute = AppDiagnosticoWhatsappRouteImport.update({
@@ -116,6 +128,7 @@ const ApiPublicWebhooksDescubraMsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
@@ -125,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/solicitacoes': typeof AppSolicitacoesRoute
   '/triagens': typeof AppTriagensRouteWithChildren
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -134,6 +148,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
@@ -143,6 +158,7 @@ export interface FileRoutesByTo {
   '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/solicitacoes': typeof AppSolicitacoesRoute
   '/triagens': typeof AppTriagensRouteWithChildren
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -154,6 +170,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
@@ -163,6 +180,7 @@ export interface FileRoutesById {
   '/_app/conversas': typeof AppConversasRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/_app/solicitacoes': typeof AppSolicitacoesRoute
   '/_app/triagens': typeof AppTriagensRouteWithChildren
   '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
@@ -174,6 +192,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/apresentacao'
     | '/login'
     | '/setup'
     | '/trocar-senha'
@@ -183,6 +202,7 @@ export interface FileRouteTypes {
     | '/conversas'
     | '/dashboard'
     | '/diagnostico-whatsapp'
+    | '/solicitacoes'
     | '/triagens'
     | '/usuarios'
     | '/conversas/$id'
@@ -192,6 +212,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/apresentacao'
     | '/login'
     | '/setup'
     | '/trocar-senha'
@@ -201,6 +222,7 @@ export interface FileRouteTypes {
     | '/conversas'
     | '/dashboard'
     | '/diagnostico-whatsapp'
+    | '/solicitacoes'
     | '/triagens'
     | '/usuarios'
     | '/conversas/$id'
@@ -211,6 +233,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/apresentacao'
     | '/login'
     | '/setup'
     | '/trocar-senha'
@@ -220,6 +243,7 @@ export interface FileRouteTypes {
     | '/_app/conversas'
     | '/_app/dashboard'
     | '/_app/diagnostico-whatsapp'
+    | '/_app/solicitacoes'
     | '/_app/triagens'
     | '/_app/usuarios'
     | '/_app/conversas/$id'
@@ -231,6 +255,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  ApresentacaoRoute: typeof ApresentacaoRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
   TrocarSenhaRoute: typeof TrocarSenhaRoute
@@ -261,6 +286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apresentacao': {
+      id: '/apresentacao'
+      path: '/apresentacao'
+      fullPath: '/apresentacao'
+      preLoaderRoute: typeof ApresentacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app': {
       id: '/_app'
       path: ''
@@ -287,6 +319,13 @@ declare module '@tanstack/react-router' {
       path: '/triagens'
       fullPath: '/triagens'
       preLoaderRoute: typeof AppTriagensRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/solicitacoes': {
+      id: '/_app/solicitacoes'
+      path: '/solicitacoes'
+      fullPath: '/solicitacoes'
+      preLoaderRoute: typeof AppSolicitacoesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/diagnostico-whatsapp': {
@@ -393,6 +432,7 @@ interface AppRouteChildren {
   AppConversasRoute: typeof AppConversasRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
+  AppSolicitacoesRoute: typeof AppSolicitacoesRoute
   AppTriagensRoute: typeof AppTriagensRouteWithChildren
   AppUsuariosRoute: typeof AppUsuariosRoute
 }
@@ -404,6 +444,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConversasRoute: AppConversasRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
+  AppSolicitacoesRoute: AppSolicitacoesRoute,
   AppTriagensRoute: AppTriagensRouteWithChildren,
   AppUsuariosRoute: AppUsuariosRoute,
 }
@@ -413,6 +454,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  ApresentacaoRoute: ApresentacaoRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
   TrocarSenhaRoute: TrocarSenhaRoute,

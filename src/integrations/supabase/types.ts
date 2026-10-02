@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_requests: {
+        Row: {
+          cidade: string | null
+          created_at: string
+          email: string
+          empresa: string
+          id: string
+          mensagem: string | null
+          nome: string
+          notas: string | null
+          status: string
+          updated_at: string
+          whatsapp: string
+        }
+        Insert: {
+          cidade?: string | null
+          created_at?: string
+          email: string
+          empresa: string
+          id?: string
+          mensagem?: string | null
+          nome: string
+          notas?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp: string
+        }
+        Update: {
+          cidade?: string | null
+          created_at?: string
+          email?: string
+          empresa?: string
+          id?: string
+          mensagem?: string | null
+          nome?: string
+          notas?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp?: string
+        }
+        Relationships: []
+      }
       agency_services: {
         Row: {
           ativo: boolean

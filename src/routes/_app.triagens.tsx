@@ -62,10 +62,10 @@ function TriagensPage() {
     <div className="space-y-6 max-w-7xl">
       <div>
         <h1 className="font-display text-3xl font-semibold text-primary">
-          Triagens — Guatá Viagens
+          Triagens das Mensagens
         </h1>
         <p className="text-muted-foreground">
-          Fila de leads coletados pelo bot e prontos para o consultor humano.
+          Clientes organizados pela IA e prontos para o atendimento humano.
         </p>
       </div>
 
