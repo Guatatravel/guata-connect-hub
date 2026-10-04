@@ -1,0 +1,1 @@
+DELETE FROM public.access_requests WHERE email = 'teste@exemplo.com';
