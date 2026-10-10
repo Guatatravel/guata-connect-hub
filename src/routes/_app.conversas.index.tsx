@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatPhone, timeAgo } from "@/lib/format";
 
-export const Route = createFileRoute("/_app/conversas")({
+export const Route = createFileRoute("/_app/conversas/")({
   component: ConversasPage,
 });
 

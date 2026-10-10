@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { type TriagemStatus } from "@/types/guata";
 import { formatDate } from "@/lib/format";
 
-export const Route = createFileRoute("/_app/triagens")({
+export const Route = createFileRoute("/_app/triagens/")({
   component: TriagensPage,
 });
 

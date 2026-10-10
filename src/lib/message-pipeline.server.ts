@@ -158,9 +158,10 @@ async function answerTurismo(
   line: "descubra" | "viagens",
 ): Promise<string> {
   const attendant = await loadAttendant(line);
+  const official = line === "descubra" ? await getGuataPersona() : null;
   const persona =
+    official ||
     attendant?.persona ||
-    (await getGuataPersona()) ||
     "Você é o Guatá, assistente turístico oficial de Mato Grosso do Sul. Responda de forma calorosa, objetiva e útil.";
 
   let context = "";

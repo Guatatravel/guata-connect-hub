@@ -18,13 +18,13 @@ import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
 import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
 import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
-import { Route as AppConversasRouteImport } from './routes/_app.conversas'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
-import { Route as AppTriagensRouteImport } from './routes/_app.triagens'
 import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
+import { Route as AppConversasIndexRouteImport } from './routes/_app.conversas.index'
 import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
+import { Route as AppTriagensIndexRouteImport } from './routes/_app.triagens.index'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
 import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
@@ -73,11 +73,6 @@ const AppConhecimentoRoute = AppConhecimentoRouteImport.update({
   path: '/conhecimento',
   getParentRoute: () => AppRoute,
 } as any)
-const AppConversasRoute = AppConversasRouteImport.update({
-  id: '/conversas',
-  path: '/conversas',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -93,25 +88,30 @@ const AppSolicitacoesRoute = AppSolicitacoesRouteImport.update({
   path: '/solicitacoes',
   getParentRoute: () => AppRoute,
 } as any)
-const AppTriagensRoute = AppTriagensRouteImport.update({
-  id: '/triagens',
-  path: '/triagens',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppUsuariosRoute = AppUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConversasIndexRoute = AppConversasIndexRouteImport.update({
+  id: '/conversas/',
+  path: '/conversas/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppConversasIdRoute = AppConversasIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppConversasRoute,
+  id: '/conversas/$id',
+  path: '/conversas/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTriagensIndexRoute = AppTriagensIndexRouteImport.update({
+  id: '/triagens/',
+  path: '/triagens/',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppTriagensRoute,
+  id: '/triagens/$id',
+  path: '/triagens/$id',
+  getParentRoute: () => AppRoute,
 } as any)
 const ApiPublicWebhooksDescubraMsRoute =
   ApiPublicWebhooksDescubraMsRouteImport.update({
@@ -135,14 +135,14 @@ export interface FileRoutesByFullPath {
   '/atendentes': typeof AppAtendentesRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conhecimento': typeof AppConhecimentoRoute
-  '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
-  '/triagens': typeof AppTriagensRouteWithChildren
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
+  '/conversas/': typeof AppConversasIndexRoute
+  '/triagens/': typeof AppTriagensIndexRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -155,14 +155,14 @@ export interface FileRoutesByTo {
   '/atendentes': typeof AppAtendentesRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conhecimento': typeof AppConhecimentoRoute
-  '/conversas': typeof AppConversasRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
-  '/triagens': typeof AppTriagensRouteWithChildren
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
   '/triagens/$id': typeof AppTriagensIdRoute
+  '/conversas': typeof AppConversasIndexRoute
+  '/triagens': typeof AppTriagensIndexRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -177,14 +177,14 @@ export interface FileRoutesById {
   '/_app/atendentes': typeof AppAtendentesRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/conhecimento': typeof AppConhecimentoRoute
-  '/_app/conversas': typeof AppConversasRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/_app/solicitacoes': typeof AppSolicitacoesRoute
-  '/_app/triagens': typeof AppTriagensRouteWithChildren
   '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
   '/_app/triagens/$id': typeof AppTriagensIdRoute
+  '/_app/conversas/': typeof AppConversasIndexRoute
+  '/_app/triagens/': typeof AppTriagensIndexRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -199,14 +199,14 @@ export interface FileRouteTypes {
     | '/atendentes'
     | '/configuracoes'
     | '/conhecimento'
-    | '/conversas'
     | '/dashboard'
     | '/diagnostico-whatsapp'
     | '/solicitacoes'
-    | '/triagens'
     | '/usuarios'
     | '/conversas/$id'
     | '/triagens/$id'
+    | '/conversas/'
+    | '/triagens/'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/whatsapp'
   fileRoutesByTo: FileRoutesByTo
@@ -219,14 +219,14 @@ export interface FileRouteTypes {
     | '/atendentes'
     | '/configuracoes'
     | '/conhecimento'
-    | '/conversas'
     | '/dashboard'
     | '/diagnostico-whatsapp'
     | '/solicitacoes'
-    | '/triagens'
     | '/usuarios'
     | '/conversas/$id'
     | '/triagens/$id'
+    | '/conversas'
+    | '/triagens'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/whatsapp'
   id:
@@ -240,14 +240,14 @@ export interface FileRouteTypes {
     | '/_app/atendentes'
     | '/_app/configuracoes'
     | '/_app/conhecimento'
-    | '/_app/conversas'
     | '/_app/dashboard'
     | '/_app/diagnostico-whatsapp'
     | '/_app/solicitacoes'
-    | '/_app/triagens'
     | '/_app/usuarios'
     | '/_app/conversas/$id'
     | '/_app/triagens/$id'
+    | '/_app/conversas/'
+    | '/_app/triagens/'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/whatsapp'
   fileRoutesById: FileRoutesById
@@ -328,13 +328,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConhecimentoRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/conversas': {
-      id: '/_app/conversas'
-      path: '/conversas'
-      fullPath: '/conversas'
-      preLoaderRoute: typeof AppConversasRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
@@ -356,13 +349,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSolicitacoesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/triagens': {
-      id: '/_app/triagens'
-      path: '/triagens'
-      fullPath: '/triagens'
-      preLoaderRoute: typeof AppTriagensRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/usuarios': {
       id: '/_app/usuarios'
       path: '/usuarios'
@@ -370,19 +356,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppUsuariosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/conversas/': {
+      id: '/_app/conversas/'
+      path: '/conversas'
+      fullPath: '/conversas/'
+      preLoaderRoute: typeof AppConversasIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/conversas/$id': {
       id: '/_app/conversas/$id'
-      path: '/$id'
+      path: '/conversas/$id'
       fullPath: '/conversas/$id'
       preLoaderRoute: typeof AppConversasIdRouteImport
-      parentRoute: typeof AppConversasRoute
+      parentRoute: typeof AppRoute
+    }
+    '/_app/triagens/': {
+      id: '/_app/triagens/'
+      path: '/triagens'
+      fullPath: '/triagens/'
+      preLoaderRoute: typeof AppTriagensIndexRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/triagens/$id': {
       id: '/_app/triagens/$id'
-      path: '/$id'
+      path: '/triagens/$id'
       fullPath: '/triagens/$id'
       preLoaderRoute: typeof AppTriagensIdRouteImport
-      parentRoute: typeof AppTriagensRoute
+      parentRoute: typeof AppRoute
     }
     '/api/public/webhooks/descubra-ms': {
       id: '/api/public/webhooks/descubra-ms'
@@ -401,52 +401,32 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AppConversasRouteChildren {
-  AppConversasIdRoute: typeof AppConversasIdRoute
-}
-
-const AppConversasRouteChildren: AppConversasRouteChildren = {
-  AppConversasIdRoute: AppConversasIdRoute,
-}
-
-const AppConversasRouteWithChildren = AppConversasRoute._addFileChildren(
-  AppConversasRouteChildren,
-)
-
-interface AppTriagensRouteChildren {
-  AppTriagensIdRoute: typeof AppTriagensIdRoute
-}
-
-const AppTriagensRouteChildren: AppTriagensRouteChildren = {
-  AppTriagensIdRoute: AppTriagensIdRoute,
-}
-
-const AppTriagensRouteWithChildren = AppTriagensRoute._addFileChildren(
-  AppTriagensRouteChildren,
-)
-
 interface AppRouteChildren {
   AppAtendentesRoute: typeof AppAtendentesRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppConhecimentoRoute: typeof AppConhecimentoRoute
-  AppConversasRoute: typeof AppConversasRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
   AppSolicitacoesRoute: typeof AppSolicitacoesRoute
-  AppTriagensRoute: typeof AppTriagensRouteWithChildren
   AppUsuariosRoute: typeof AppUsuariosRoute
+  AppConversasIdRoute: typeof AppConversasIdRoute
+  AppTriagensIdRoute: typeof AppTriagensIdRoute
+  AppConversasIndexRoute: typeof AppConversasIndexRoute
+  AppTriagensIndexRoute: typeof AppTriagensIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAtendentesRoute: AppAtendentesRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppConhecimentoRoute: AppConhecimentoRoute,
-  AppConversasRoute: AppConversasRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
   AppSolicitacoesRoute: AppSolicitacoesRoute,
-  AppTriagensRoute: AppTriagensRouteWithChildren,
   AppUsuariosRoute: AppUsuariosRoute,
+  AppConversasIdRoute: AppConversasIdRoute,
+  AppTriagensIdRoute: AppTriagensIdRoute,
+  AppConversasIndexRoute: AppConversasIndexRoute,
+  AppTriagensIndexRoute: AppTriagensIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
