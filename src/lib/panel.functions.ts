@@ -228,13 +228,15 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!s) throw new Error("Sessão não encontrada");
 
+    const now = new Date().toISOString();
     // Marca em humano + atribui consultor
     await supabaseAdmin
       .from("sessions")
       .update({
         mode: "humano",
         assigned_to: context.userId,
-        last_message_at: new Date().toISOString(),
+        last_message_at: now,
+        staff_seen_at: now,
       })
       .eq("id", s.id);
 
@@ -270,7 +272,31 @@ export const releaseBot = createServerFn({ method: "POST" })
     await requireStaff(context.userId);
     await supabaseAdmin
       .from("sessions")
-      .update({ mode: "bot", assigned_to: null })
+      .update({ mode: "bot", assigned_to: null, staff_seen_at: new Date().toISOString() })
+      .eq("id", data.id);
+    return { ok: true };
+  });
+
+export const assumeConversation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => idSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await supabaseAdmin
+      .from("sessions")
+      .update({ mode: "humano", assigned_to: context.userId, staff_seen_at: new Date().toISOString() })
+      .eq("id", data.id);
+    return { ok: true };
+  });
+
+export const markConversationSeen = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => idSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await supabaseAdmin
+      .from("sessions")
+      .update({ staff_seen_at: new Date().toISOString() })
       .eq("id", data.id);
     return { ok: true };
   });

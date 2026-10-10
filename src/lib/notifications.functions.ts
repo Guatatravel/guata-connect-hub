@@ -27,11 +27,13 @@ export const fetchUnreadCounts = createServerFn({ method: "GET" })
         .in("status", ["aberta", "novo"]),
       supabaseAdmin
         .from("sessions")
-        .select("id", { count: "exact", head: true })
+        .select("last_message_at, staff_seen_at")
         .eq("mode", "humano"),
     ]);
     return {
       triagensAbertas: triagensRes.count ?? 0,
-      conversasHumano: humanoRes.count ?? 0,
+      conversasHumano: (humanoRes.data ?? []).filter(
+        (s) => !s.staff_seen_at || new Date(s.staff_seen_at) < new Date(s.last_message_at),
+      ).length,
     };
   });
