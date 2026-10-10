@@ -6,6 +6,7 @@ import { TriagemStatusBadge } from "@/components/guata/status-badge";
 import { LineBadge } from "@/components/guata/line-badge";
 import { ChatTimeline } from "@/components/guata/chat-timeline";
 import { DossieCard } from "@/components/guata/dossie-card";
+import { HandoffControls } from "@/components/guata/handoff-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,7 +68,7 @@ function TriagemDetailPage() {
   });
 
   const releaseMut = useMutation({
-    mutationFn: () => api.releaseBot(id),
+    mutationFn: () => (conv ? api.releaseBot(conv.id) : Promise.reject("sem conversa")),
     onSuccess: () => {
       toast.success("Bot reativado para este contato");
       qc.invalidateQueries({ queryKey: ["triage", id] });
@@ -250,6 +251,7 @@ function TriagemDetailPage() {
             </div>
 
             <div className="max-h-[420px] overflow-y-auto rounded-xl bg-secondary/30 p-4">
+              {conv && <div className="mb-3"><HandoffControls sessionId={conv.id} mode={conv.mode} /></div>}
               {conv ? (
                 <ChatTimeline messages={conv.messages} />
               ) : (

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { ArrowLeft, MessageCircle, Send } from "lucide-react";
 import { formatPhone, waLink } from "@/lib/format";
 import { DossieCard } from "@/components/guata/dossie-card";
+import { HandoffControls } from "@/components/guata/handoff-controls";
 
 export const Route = createFileRoute("/_app/conversas/$id")({
   component: ConversaDetail,
@@ -35,7 +36,9 @@ function ConversaDetail() {
       setReply("");
       qc.invalidateQueries({ queryKey: ["conversation", id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
+      qc.invalidateQueries({ queryKey: ["unread-counts"] });
     },
+    onError: () => toast.error("Falha ao enviar"),
   });
 
   if (isLoading || !conv) {
@@ -74,6 +77,7 @@ function ConversaDetail() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <HandoffControls sessionId={conv.id} mode={conv.mode} />
           <div className="max-h-[500px] overflow-y-auto rounded-xl bg-secondary/30 p-4">
             <ChatTimeline messages={conv.messages} />
           </div>

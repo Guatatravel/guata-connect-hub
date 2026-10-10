@@ -19,6 +19,8 @@ import {
   upsertService,
   deleteService,
   fetchStaff,
+  assumeConversation,
+  markConversationSeen,
 } from "@/lib/panel.functions";
 import type {
   AgencyService,
@@ -51,6 +53,14 @@ export const api = {
 
   async releaseBot(id: string) {
     return releaseBot({ data: { id } });
+  },
+
+  async assumeConversation(id: string) {
+    return assumeConversation({ data: { id } });
+  },
+
+  async markConversationSeen(id: string) {
+    return markConversationSeen({ data: { id } });
   },
 
   async listTriages(filters?: {
