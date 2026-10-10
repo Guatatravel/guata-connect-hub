@@ -153,9 +153,32 @@ async function loadAttendant(
   return (data as unknown as AttendantConfig) ?? null;
 }
 
+async function loadHistory(
+  sessionId: string | undefined,
+  userText: string,
+): Promise<{ role: "user" | "assistant"; content: string }[]> {
+  if (!sessionId) return [{ role: "user", content: userText }];
+  const { data } = await supabaseAdmin
+    .from("messages")
+    .select("author, text")
+    .eq("session_id", sessionId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  const hist = (data ?? []).reverse().map((m) => ({
+    role: (m.author === "user" ? "user" : "assistant") as "user" | "assistant",
+    content: m.text,
+  }));
+  const last = hist[hist.length - 1];
+  if (!last || last.role !== "user" || last.content !== userText) {
+    hist.push({ role: "user", content: userText });
+  }
+  return hist;
+}
+
 async function answerTurismo(
   userText: string,
   line: "descubra" | "viagens",
+  sessionId?: string,
 ): Promise<string> {
   const attendant = await loadAttendant(line);
   const official = line === "descubra" ? await getGuataPersona() : null;
@@ -203,7 +226,7 @@ async function answerTurismo(
   return chatCompletion(
     [
       { role: "system", content: persona + context },
-      { role: "user", content: userText },
+      ...(await loadHistory(sessionId, userText)),
     ],
     {
       maxTokens: 500,
@@ -261,7 +284,7 @@ export async function processMessage(
       replies.push(`Olá! ${MENU_TEXT}`);
     } else {
       try {
-        replies.push(await answerTurismo(msg.text, msg.line));
+        replies.push(await answerTurismo(msg.text, msg.line, session.id));
       } catch (err) {
         console.error("[brain] erro:", err);
         replies.push(
