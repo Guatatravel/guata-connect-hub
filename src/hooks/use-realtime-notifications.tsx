@@ -83,6 +83,7 @@ export function useRealtimeNotifications() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "sessions" },
         (payload) => {
+          qc.invalidateQueries({ queryKey: ["unread-counts"] });
           const newMode = (payload.new as { mode?: string })?.mode;
           const oldMode = (payload.old as { mode?: string })?.mode;
           if (newMode === "humano" && oldMode !== "humano") {
