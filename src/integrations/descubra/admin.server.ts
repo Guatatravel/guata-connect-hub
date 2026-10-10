@@ -80,21 +80,37 @@ export async function searchGuataKnowledgeBase(
   return (data ?? []) as KbEntry[];
 }
 
-/** Busca persona/prompt config do Guatá. */
+/** Busca e une TODOS os blocos ativos do prompt do Guatá (system, personality, instructions, rules, disclaimer). */
 export async function getGuataPersona(): Promise<string | null> {
   const client = getDescubraAdminClient();
   if (!client) return null;
   const { data } = await client
     .from("ai_prompt_configs")
-    .select("system_prompt,prompt,content")
-    .eq("chatbot_name", "guata")
-    .maybeSingle();
-  if (!data) return null;
-  const d = data as Record<string, unknown>;
-  return (
-    (d.system_prompt as string | undefined) ??
-    (d.prompt as string | undefined) ??
-    (d.content as string | undefined) ??
-    null
+    .select("*")
+    .eq("chatbot_name", "guata");
+  if (!data || data.length === 0) return null;
+  const order = ["system", "personality", "instructions", "rules", "disclaimer"];
+  const rows = (data as Record<string, unknown>[]).filter(
+    (r) => r.is_active !== false,
   );
+  const typeOf = (r: Record<string, unknown>) =>
+    String(r.prompt_type ?? r.type ?? r.config_type ?? r.section ?? "").toLowerCase();
+  rows.sort((a, b) => {
+    const ia = order.indexOf(typeOf(a));
+    const ib = order.indexOf(typeOf(b));
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const parts = rows
+    .map((r) => {
+      const text =
+        (r.system_prompt as string | undefined) ??
+        (r.prompt as string | undefined) ??
+        (r.content as string | undefined) ??
+        "";
+      if (!text.trim()) return "";
+      const t = typeOf(r);
+      return t ? `## ${t.toUpperCase()}\n${text.trim()}` : text.trim();
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join("\n\n") : null;
 }
