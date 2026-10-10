@@ -357,6 +357,7 @@ export type Database = {
           line: Database["public"]["Enums"]["channel_line"]
           mode: Database["public"]["Enums"]["session_mode"]
           phone: string
+          staff_seen_at: string | null
           updated_at: string
         }
         Insert: {
@@ -372,6 +373,7 @@ export type Database = {
           line: Database["public"]["Enums"]["channel_line"]
           mode?: Database["public"]["Enums"]["session_mode"]
           phone: string
+          staff_seen_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -387,6 +389,7 @@ export type Database = {
           line?: Database["public"]["Enums"]["channel_line"]
           mode?: Database["public"]["Enums"]["session_mode"]
           phone?: string
+          staff_seen_at?: string | null
           updated_at?: string
         }
         Relationships: []
