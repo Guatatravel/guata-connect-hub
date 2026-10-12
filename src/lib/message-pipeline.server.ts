@@ -10,13 +10,14 @@ import {
   isDescubraConfigured,
 } from "@/integrations/descubra/admin.server";
 import { chatCompletion, classifyIntent } from "@/lib/ai-gateway.server";
-import { sendWhatsAppText } from "@/lib/meta-send.server";
+import { sendWhatsAppText, markReadAndTyping, typingDelayMs } from "@/lib/meta-send.server";
 
 export interface IncomingMessage {
   line: "descubra" | "viagens";
   phone: string;
   contactName?: string;
   text: string;
+  messageId?: string;
 }
 
 interface SessionRow {
@@ -258,11 +259,33 @@ const MENU_TEXT =
 /**
  * Processa uma mensagem recebida. Persiste e retorna o(s) texto(s) a enviar.
  */
+async function notifyOwner(msg: IncomingMessage, sessionId: string) {
+  const owner = process.env["OWNER_ALERT_PHONE"] || "5567992123617";
+  const { data } = await supabaseAdmin
+    .from("sessions").select("dossie").eq("id", sessionId).maybeSingle();
+  const d = (data?.dossie ?? {}) as Record<string, unknown>;
+  const resumo = String(d["resumo"] ?? d["resumo_executivo"] ?? d["intencao"] ?? msg.text).slice(0, 400);
+  const phone = msg.phone.replace(/\D/g, "");
+  const text =
+    `🔔 *Cliente aguardando consultor*\n` +
+    `Nome: ${msg.contactName ?? "Sem nome"}\nContato: +${phone}\n` +
+    `Resumo: ${resumo}\n\n` +
+    `Responder pelo painel: https://guata-connect-hub.lovable.app/conversas/${sessionId}\n` +
+    `Chamar pelo seu WhatsApp: https://wa.me/${phone}`;
+  const res = await sendWhatsAppText(msg.line, owner, text);
+  if (!res.ok) console.error("[alerta] envio falhou:", res.reason);
+}
+
 export async function processMessage(
   msg: IncomingMessage,
 ): Promise<{ replies: string[]; sessionId: string }> {
+  if (msg.messageId) void markReadAndTyping(msg.line, msg.messageId);
   const session = await loadOrCreateSession(msg.line, msg.phone, msg.contactName);
   await persistMessage(session.id, "in", "user", msg.text);
+  const firstName = msg.contactName?.trim().split(/\s+/)[0];
+  const handoffText = firstName
+    ? `Perfeito, ${firstName}! Já avisei nosso consultor, ele vai falar com você por aqui em instantes. 😊`
+    : "Perfeito! Já avisei nosso consultor, ele vai falar com você por aqui em instantes. 😊";
 
   const lower = msg.text.trim().toLowerCase();
   const replies: string[] = [];
@@ -319,6 +342,7 @@ export async function processMessage(
   // Persiste e envia
   for (const text of replies) {
     await persistMessage(session.id, "out", "bot", text);
+    await new Promise((r) => setTimeout(r, typingDelayMs(text)));
     const res = await sendWhatsAppText(msg.line, msg.phone, text).catch(
       (e) => ({ ok: false, reason: String(e) }) as const,
     );
@@ -329,6 +353,7 @@ export async function processMessage(
   if (handoff) {
     const { generateDossie } = await import("@/lib/dossie.server");
     await generateDossie(session.id).catch((e) => console.error("[dossie] falhou:", e));
+    await notifyOwner(msg, session.id).catch((e) => console.error("[alerta] falhou:", e));
   }
 
   return { replies, sessionId: session.id };
