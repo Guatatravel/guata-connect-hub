@@ -124,6 +124,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               phone,
               contactName,
               text,
+              messageId: msgId || undefined,
             });
           } catch (err) {
             const m = err instanceof Error ? err.message : String(err);

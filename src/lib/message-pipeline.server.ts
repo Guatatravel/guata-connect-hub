@@ -10,13 +10,14 @@ import {
   isDescubraConfigured,
 } from "@/integrations/descubra/admin.server";
 import { chatCompletion, classifyIntent } from "@/lib/ai-gateway.server";
-import { sendWhatsAppText } from "@/lib/meta-send.server";
+import { sendWhatsAppText, markReadAndTyping, typingDelayMs } from "@/lib/meta-send.server";
 
 export interface IncomingMessage {
   line: "descubra" | "viagens";
   phone: string;
   contactName?: string;
   text: string;
+  messageId?: string;
 }
 
 interface SessionRow {
@@ -179,6 +180,7 @@ async function answerTurismo(
   userText: string,
   line: "descubra" | "viagens",
   sessionId?: string,
+  firstName?: string,
 ): Promise<string> {
   const attendant = await loadAttendant(line);
   const official = line === "descubra" ? await getGuataPersona() : null;
@@ -229,6 +231,9 @@ async function answerTurismo(
     "\n\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
+      : "") +
+    (firstName
+      ? `- O cliente se chama ${firstName}. Use o primeiro nome de forma natural, no máximo uma vez, sem repetir em toda mensagem.\n`
       : "");
 
   const raw = await chatCompletion(
@@ -258,11 +263,33 @@ const MENU_TEXT =
 /**
  * Processa uma mensagem recebida. Persiste e retorna o(s) texto(s) a enviar.
  */
+async function notifyOwner(msg: IncomingMessage, sessionId: string) {
+  const owner = process.env["OWNER_ALERT_PHONE"] || "5567992123617";
+  const { data } = await supabaseAdmin
+    .from("sessions").select("dossie").eq("id", sessionId).maybeSingle();
+  const d = (data?.dossie ?? {}) as Record<string, unknown>;
+  const resumo = String(d["resumo"] ?? d["resumo_executivo"] ?? d["intencao"] ?? msg.text).slice(0, 400);
+  const phone = msg.phone.replace(/\D/g, "");
+  const text =
+    `🔔 *Cliente aguardando consultor*\n` +
+    `Nome: ${msg.contactName ?? "Sem nome"}\nContato: +${phone}\n` +
+    `Resumo: ${resumo}\n\n` +
+    `Responder pelo painel: https://guata-connect-hub.lovable.app/conversas/${sessionId}\n` +
+    `Chamar pelo seu WhatsApp: https://wa.me/${phone}`;
+  const res = await sendWhatsAppText(msg.line, owner, text);
+  if (!res.ok) console.error("[alerta] envio falhou:", res.reason);
+}
+
 export async function processMessage(
   msg: IncomingMessage,
 ): Promise<{ replies: string[]; sessionId: string }> {
+  if (msg.messageId) void markReadAndTyping(msg.line, msg.messageId);
   const session = await loadOrCreateSession(msg.line, msg.phone, msg.contactName);
   await persistMessage(session.id, "in", "user", msg.text);
+  const firstName = msg.contactName?.trim().split(/\s+/)[0];
+  const handoffText = firstName
+    ? `Perfeito, ${firstName}! Já avisei nosso consultor, ele vai falar com você por aqui em instantes. 😊`
+    : "Perfeito! Já avisei nosso consultor, ele vai falar com você por aqui em instantes. 😊";
 
   const lower = msg.text.trim().toLowerCase();
   const replies: string[] = [];
@@ -279,7 +306,7 @@ export async function processMessage(
       .from("sessions")
       .update({ mode: "humano" })
       .eq("id", session.id);
-    replies.push("Ok! Um consultor humano vai assumir esta conversa em instantes.");
+    replies.push(handoffText);
   } else if (session.mode === "humano") {
     // Não responde — consultor responde no painel
   } else if (session.mode === "triagem") {
@@ -293,14 +320,14 @@ export async function processMessage(
         .from("sessions")
         .update({ mode: "humano" })
         .eq("id", session.id);
-      replies.push("Ok! Um consultor humano vai assumir esta conversa em instantes.");
+      replies.push(handoffText);
     } else if (intent === "agencia") {
       replies.push(await startIntake(session.id));
     } else if (intent === "saudacao") {
-      replies.push(`Olá! ${MENU_TEXT}`);
+      replies.push(`Olá${firstName ? ", " + firstName : ""}! ${MENU_TEXT}`);
     } else {
       try {
-        replies.push(await answerTurismo(msg.text, msg.line, session.id));
+        replies.push(await answerTurismo(msg.text, msg.line, session.id, firstName));
       } catch (err) {
         console.error("[brain] erro:", err);
         replies.push(
@@ -319,6 +346,7 @@ export async function processMessage(
   // Persiste e envia
   for (const text of replies) {
     await persistMessage(session.id, "out", "bot", text);
+    await new Promise((r) => setTimeout(r, typingDelayMs(text)));
     const res = await sendWhatsAppText(msg.line, msg.phone, text).catch(
       (e) => ({ ok: false, reason: String(e) }) as const,
     );
@@ -329,6 +357,7 @@ export async function processMessage(
   if (handoff) {
     const { generateDossie } = await import("@/lib/dossie.server");
     await generateDossie(session.id).catch((e) => console.error("[dossie] falhou:", e));
+    await notifyOwner(msg, session.id).catch((e) => console.error("[alerta] falhou:", e));
   }
 
   return { replies, sessionId: session.id };
