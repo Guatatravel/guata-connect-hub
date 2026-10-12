@@ -180,6 +180,7 @@ async function answerTurismo(
   userText: string,
   line: "descubra" | "viagens",
   sessionId?: string,
+  firstName?: string,
 ): Promise<string> {
   const attendant = await loadAttendant(line);
   const official = line === "descubra" ? await getGuataPersona() : null;
@@ -230,6 +231,9 @@ async function answerTurismo(
     "\n\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
+      : "") +
+    (firstName
+      ? `- O cliente se chama ${firstName}. Use o primeiro nome de forma natural, no máximo uma vez, sem repetir em toda mensagem.\n`
       : "");
 
   const raw = await chatCompletion(
@@ -302,7 +306,7 @@ export async function processMessage(
       .from("sessions")
       .update({ mode: "humano" })
       .eq("id", session.id);
-    replies.push("Ok! Um consultor humano vai assumir esta conversa em instantes.");
+    replies.push(handoffText);
   } else if (session.mode === "humano") {
     // Não responde — consultor responde no painel
   } else if (session.mode === "triagem") {
@@ -316,14 +320,14 @@ export async function processMessage(
         .from("sessions")
         .update({ mode: "humano" })
         .eq("id", session.id);
-      replies.push("Ok! Um consultor humano vai assumir esta conversa em instantes.");
+      replies.push(handoffText);
     } else if (intent === "agencia") {
       replies.push(await startIntake(session.id));
     } else if (intent === "saudacao") {
-      replies.push(`Olá! ${MENU_TEXT}`);
+      replies.push(`Olá${firstName ? ", " + firstName : ""}! ${MENU_TEXT}`);
     } else {
       try {
-        replies.push(await answerTurismo(msg.text, msg.line, session.id));
+        replies.push(await answerTurismo(msg.text, msg.line, session.id, firstName));
       } catch (err) {
         console.error("[brain] erro:", err);
         replies.push(
