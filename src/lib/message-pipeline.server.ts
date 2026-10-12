@@ -223,17 +223,33 @@ async function answerTurismo(
     }
   }
 
-  return chatCompletion(
-    [
-      { role: "system", content: persona + context },
-      ...(await loadHistory(sessionId, userText)),
-    ],
+  const history = await loadHistory(sessionId, userText);
+  const ongoing = history.length > 1;
+  const whatsappRules =
+    "\n\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n" +
+    (ongoing
+      ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
+      : "");
+
+  const raw = await chatCompletion(
+    [{ role: "system", content: persona + context + whatsappRules }, ...history],
     {
       maxTokens: 500,
       temperature: attendant?.criatividade ?? 0.6,
       model: attendant?.modelo || undefined,
     },
   );
+  return formatForWhatsApp(raw);
+}
+
+export function formatForWhatsApp(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^\s*[*-]\s+/gm, "• ")
+    .replace(/\*\*(.+?)\*\*/g, "*$1*")
+    .replace(/__(.+?)__/g, "_$1_")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 const MENU_TEXT =
@@ -303,9 +319,11 @@ export async function processMessage(
   // Persiste e envia
   for (const text of replies) {
     await persistMessage(session.id, "out", "bot", text);
-    await sendWhatsAppText(msg.line, msg.phone, text).catch((e) =>
-      console.error("[meta] send falhou:", e),
+    const res = await sendWhatsAppText(msg.line, msg.phone, text).catch(
+      (e) => ({ ok: false, reason: String(e) }) as const,
     );
+    if (!res.ok) console.error("[meta] send falhou:", res.reason);
+    else console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
   }
 
   if (handoff) {
