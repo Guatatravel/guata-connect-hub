@@ -57,6 +57,32 @@ export async function sendWhatsAppText(
   return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
+/**
+ * Marca a mensagem recebida como lida (tique azul) e mostra
+ * "digitando..." no WhatsApp do cliente (até 25s ou até a resposta chegar).
+ */
+export async function markReadAndTyping(line: Line, messageId: string): Promise<void> {
+  const token = lineEnv(line, "ACCESS_TOKEN");
+  const phoneId = lineEnv(line, "PHONE_NUMBER_ID");
+  if (!token || !phoneId || !messageId) return;
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      status: "read",
+      message_id: messageId,
+      typing_indicator: { type: "text" },
+    }),
+  }).catch(() => null);
+  if (res && !res.ok) console.error("[meta] read/typing falhou:", res.status, await res.text().catch(() => ""));
+}
+
+/** Atraso humanizado: ~2s a 4s, proporcional ao tamanho da resposta. */
+export function typingDelayMs(text: string): number {
+  return Math.round(Math.min(4000, 2000 + text.length * 8));
+}
+
 export function isMetaConfigured(line: Line = "descubra"): boolean {
   return Boolean(lineEnv(line, "ACCESS_TOKEN") && lineEnv(line, "PHONE_NUMBER_ID"));
 }
