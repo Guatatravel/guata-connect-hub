@@ -228,10 +228,10 @@ async function answerTurismo(
   const history = await loadHistory(sessionId, userText);
   const ongoing = history.length > 1;
   const whatsappRules =
-    "\n\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n" +
+    "\n\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa natural.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n- NUNCA mostre menus numerados nem peça para o cliente digitar números.\n- Se o cliente quiser agência, pacote, orçamento ou reserva: converse naturalmente, tire dúvidas e diga que, quando quiser, é só pedir para falar com um consultor que você chama a equipe.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
-      : "") +
+      : "- Se for só um cumprimento, cumprimente uma vez de forma calorosa e pergunte como pode ajudar, sem listas.\n") +
     (firstName
       ? `- O cliente se chama ${firstName}. Use o primeiro nome de forma natural, no máximo uma vez, sem repetir em toda mensagem.\n`
       : "");
@@ -295,13 +295,14 @@ export async function processMessage(
   const replies: string[] = [];
 
   // Comandos globais
-  if (lower === "menu" || lower === "voltar") {
+  if (session.mode === "triagem" || session.mode === "aguardando") {
+    // Destrava sessões presas no fluxo antigo de menu/triagem
     await supabaseAdmin
       .from("sessions")
       .update({ mode: "bot", intake_state: null })
       .eq("id", session.id);
-    replies.push(MENU_TEXT);
-  } else if (lower === "humano" || lower === "atendente") {
+  }
+  if (lower === "humano" || lower === "atendente") {
     await supabaseAdmin
       .from("sessions")
       .update({ mode: "humano" })
@@ -309,10 +310,6 @@ export async function processMessage(
     replies.push(handoffText);
   } else if (session.mode === "humano") {
     // Não responde — consultor responde no painel
-  } else if (session.mode === "triagem") {
-    replies.push(await continueIntake(session, msg.text));
-  } else if (lower === "2" || /pacote|or[çc]amento|reserva/.test(lower)) {
-    replies.push(await startIntake(session.id));
   } else {
     const intent = await classifyIntent(msg.text).catch(() => "turismo_geral" as const);
     if (intent === "humano") {
@@ -321,10 +318,6 @@ export async function processMessage(
         .update({ mode: "humano" })
         .eq("id", session.id);
       replies.push(handoffText);
-    } else if (intent === "agencia") {
-      replies.push(await startIntake(session.id));
-    } else if (intent === "saudacao") {
-      replies.push(`Olá${firstName ? ", " + firstName : ""}! ${MENU_TEXT}`);
     } else {
       try {
         replies.push(await answerTurismo(msg.text, msg.line, session.id, firstName));
