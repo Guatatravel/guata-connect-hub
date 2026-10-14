@@ -50,6 +50,8 @@ export interface Conversation {
   lastMessageAt: string;
   lastMessage: string;
   unread?: number;
+  archived?: boolean;
+  unseen?: boolean;
   messages: ChatMessage[];
 }
 

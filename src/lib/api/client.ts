@@ -21,6 +21,7 @@ import {
   fetchStaff,
   assumeConversation,
   markConversationSeen,
+  setConversationArchived,
 } from "@/lib/panel.functions";
 import type {
   AgencyService,
@@ -57,6 +58,10 @@ export const api = {
 
   async assumeConversation(id: string) {
     return assumeConversation({ data: { id } });
+  },
+
+  async setArchived(id: string, archived: boolean) {
+    return setConversationArchived({ data: { id, archived } });
   },
 
   async markConversationSeen(id: string) {

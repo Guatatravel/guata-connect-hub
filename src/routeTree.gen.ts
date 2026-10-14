@@ -20,6 +20,7 @@ import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoe
 import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
+import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
 import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
 import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
 import { Route as AppConversasIndexRouteImport } from './routes/_app.conversas.index'
@@ -83,6 +84,11 @@ const AppDiagnosticoWhatsappRoute = AppDiagnosticoWhatsappRouteImport.update({
   path: '/diagnostico-whatsapp',
   getParentRoute: () => AppRoute,
 } as any)
+const AppExtensaoRoute = AppExtensaoRouteImport.update({
+  id: '/extensao',
+  path: '/extensao',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSolicitacoesRoute = AppSolicitacoesRouteImport.update({
   id: '/solicitacoes',
   path: '/solicitacoes',
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/conhecimento': typeof AppConhecimentoRoute
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/extensao': typeof AppExtensaoRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/conhecimento': typeof AppConhecimentoRoute
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/extensao': typeof AppExtensaoRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/_app/conhecimento': typeof AppConhecimentoRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/_app/extensao': typeof AppExtensaoRoute
   '/_app/solicitacoes': typeof AppSolicitacoesRoute
   '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/conhecimento'
     | '/dashboard'
     | '/diagnostico-whatsapp'
+    | '/extensao'
     | '/solicitacoes'
     | '/usuarios'
     | '/conversas/$id'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/conhecimento'
     | '/dashboard'
     | '/diagnostico-whatsapp'
+    | '/extensao'
     | '/solicitacoes'
     | '/usuarios'
     | '/conversas/$id'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/_app/conhecimento'
     | '/_app/dashboard'
     | '/_app/diagnostico-whatsapp'
+    | '/_app/extensao'
     | '/_app/solicitacoes'
     | '/_app/usuarios'
     | '/_app/conversas/$id'
@@ -342,6 +354,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDiagnosticoWhatsappRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/extensao': {
+      id: '/_app/extensao'
+      path: '/extensao'
+      fullPath: '/extensao'
+      preLoaderRoute: typeof AppExtensaoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/solicitacoes': {
       id: '/_app/solicitacoes'
       path: '/solicitacoes'
@@ -407,6 +426,7 @@ interface AppRouteChildren {
   AppConhecimentoRoute: typeof AppConhecimentoRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
+  AppExtensaoRoute: typeof AppExtensaoRoute
   AppSolicitacoesRoute: typeof AppSolicitacoesRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
   AppConversasIdRoute: typeof AppConversasIdRoute
@@ -421,6 +441,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppConhecimentoRoute: AppConhecimentoRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
+  AppExtensaoRoute: AppExtensaoRoute,
   AppSolicitacoesRoute: AppSolicitacoesRoute,
   AppUsuariosRoute: AppUsuariosRoute,
   AppConversasIdRoute: AppConversasIdRoute,

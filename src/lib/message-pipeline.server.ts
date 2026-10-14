@@ -9,7 +9,7 @@ import {
   listDescubraEvents,
   isDescubraConfigured,
 } from "@/integrations/descubra/admin.server";
-import { chatCompletion, classifyIntent } from "@/lib/ai-gateway.server";
+import { chatCompletion } from "@/lib/ai-gateway.server";
 import { sendWhatsAppText, markReadAndTyping, typingDelayMs } from "@/lib/meta-send.server";
 
 export interface IncomingMessage {
@@ -228,7 +228,10 @@ async function answerTurismo(
   const history = await loadHistory(sessionId, userText);
   const ongoing = history.length > 1;
   const whatsappRules =
-    "\n\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa natural.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n- NUNCA mostre menus numerados nem peça para o cliente digitar números.\n- Se o cliente quiser agência, pacote, orçamento ou reserva: converse naturalmente, tire dúvidas e diga que, quando quiser, é só pedir para falar com um consultor que você chama a equipe.\n" +
+    "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
+    "\n## AGÊNCIA E PARCEIROS\n- Você responde tudo sobre turismo em MS: dicas, roteiros, atrativos, eventos, perguntas gerais e sobre o próprio cliente (use o histórico).\n- Pode montar roteiros completos. Quando o cliente pedir roteiro, pacote, agência, hospedagem ou orçamento, ajude e sugira naturalmente a *Guatá Viagens e Turismo*, nossa agência, que pode organizar tudo.\n- Parceiros cadastrados do Descubra MS (quando aparecerem no contexto) podem ser recomendados normalmente.\n" +
+    "\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE diretamente (ex.: 'Quer que eu chame um consultor da Guatá Viagens para falar com você?') e termine a mensagem com o marcador [[OFERTA_HUMANO]].\n" +
+    "\n## CANAL WHATSAPP\n- Responda curto (até ~8 linhas), tom de conversa natural.\n- NÃO use markdown: nada de ** ou ##. Para destacar use no máximo *uma palavra* com um asterisco.\n- Listas com '• ' no início da linha.\n- NUNCA mostre menus numerados nem peça para o cliente digitar números.\n- Se o cliente quiser agência, pacote, orçamento ou reserva: converse naturalmente, tire dúvidas e ofereça o consultor conforme as regras acima.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
       : "- Se for só um cumprimento, cumprimente uma vez de forma calorosa e pergunte como pode ajudar, sem listas.\n") +
@@ -293,40 +296,55 @@ export async function processMessage(
 
   const lower = msg.text.trim().toLowerCase();
   const replies: string[] = [];
+  const offered = session.intake_state === "oferta_humano";
 
-  // Comandos globais
-  if (session.mode === "triagem" || session.mode === "aguardando") {
-    // Destrava sessões presas no fluxo antigo de menu/triagem
+  // Destrava sessões antigas e desarquiva quando o cliente volta a falar
+  await supabaseAdmin
+    .from("sessions")
+    .update({
+      archived_at: null,
+      ...(session.mode === "triagem" || session.mode === "aguardando"
+        ? { mode: "bot" as const, intake_state: null }
+        : {}),
+    })
+    .eq("id", session.id);
+
+  const explicitHuman =
+    /\b(humano|atendente|consultor|falar com (uma )?pessoa|pessoa real|human agent|speak to (a )?human|hablar con (una )?persona|agente humano)\b/i.test(lower);
+  const affirmative =
+    /^(sim|s|quero|pode|pode sim|claro|ok|okay|por favor|bora|isso|yes|yeah|sure|sí|si|vale)\b/i.test(lower);
+
+  const goHuman = async () => {
     await supabaseAdmin
       .from("sessions")
-      .update({ mode: "bot", intake_state: null })
-      .eq("id", session.id);
-  }
-  if (lower === "humano" || lower === "atendente") {
-    await supabaseAdmin
-      .from("sessions")
-      .update({ mode: "humano" })
+      .update({ mode: "humano", intake_state: null })
       .eq("id", session.id);
     replies.push(handoffText);
-  } else if (session.mode === "humano") {
+  };
+
+  if (session.mode === "humano") {
     // Não responde — consultor responde no painel
+  } else if (explicitHuman || (offered && affirmative)) {
+    await goHuman();
   } else {
-    const intent = await classifyIntent(msg.text).catch(() => "turismo_geral" as const);
-    if (intent === "humano") {
-      await supabaseAdmin
-        .from("sessions")
-        .update({ mode: "humano" })
-        .eq("id", session.id);
-      replies.push(handoffText);
-    } else {
-      try {
-        replies.push(await answerTurismo(msg.text, msg.line, session.id, firstName));
-      } catch (err) {
-        console.error("[brain] erro:", err);
-        replies.push(
-          "Tive um problema momentâneo. Pode reformular ou digitar 'humano' para falar com um consultor?",
-        );
+    if (offered) {
+      await supabaseAdmin.from("sessions").update({ intake_state: null }).eq("id", session.id);
+    }
+    try {
+      const raw = await answerTurismo(msg.text, msg.line, session.id, firstName);
+      const offer = raw.includes("[[OFERTA_HUMANO]]");
+      if (offer) {
+        await supabaseAdmin
+          .from("sessions")
+          .update({ intake_state: "oferta_humano" })
+          .eq("id", session.id);
       }
+      replies.push(raw.replace(/\[\[OFERTA_HUMANO\]\]/g, "").trim());
+    } catch (err) {
+      console.error("[brain] erro:", err);
+      replies.push(
+        "Tive um problema momentâneo. Pode repetir? Se preferir, escreva 'consultor' que chamo nossa equipe.",
+      );
     }
   }
 

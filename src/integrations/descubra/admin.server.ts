@@ -72,12 +72,35 @@ export async function searchGuataKnowledgeBase(
 ): Promise<KbEntry[]> {
   const client = getDescubraAdminClient();
   if (!client || !query.trim()) return [];
-  const { data } = await client
+  const words = query
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length >= 4)
+    .slice(0, 6);
+  if (words.length === 0) return [];
+  const { data, error } = await client
     .from("guata_knowledge_base")
-    .select("id,question,answer,category")
-    .or(`question.ilike.%${query}%,answer.ilike.%${query}%`)
-    .limit(limit);
-  return (data ?? []) as KbEntry[];
+    .select("*")
+    .limit(200);
+  if (error || !data) return [];
+  const norm = (s: unknown) =>
+    String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const scored = (data as Record<string, unknown>[])
+    .filter((r) => r.ativo !== false && r.is_active !== false)
+    .map((r) => {
+      const q = String(r.pergunta ?? r.question ?? r.titulo ?? "");
+      const a = String(r.resposta ?? r.answer ?? r.conteudo ?? "");
+      const hay = norm(q + " " + a + " " + (r.palavras_chave ?? r.keywords ?? ""));
+      const score = words.reduce((s, w) => s + (hay.includes(w) ? 1 : 0), 0);
+      return { score, e: { id: String(r.id), question: q, answer: a, category: (r.categoria ?? r.category ?? null) as string | null } };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+  return scored.map((x) => x.e);
 }
 
 /** Busca e une TODOS os blocos ativos do prompt do Guatá (system, personality, instructions, rules, disclaimer). */
