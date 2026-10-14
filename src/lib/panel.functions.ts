@@ -142,7 +142,7 @@ export const fetchConversations = createServerFn({ method: "GET" })
     await requireStaff(context.userId);
     const { data } = await supabaseAdmin
       .from("sessions")
-      .select("id, line, mode, phone, contact_name, last_message_at, created_at")
+      .select("id, line, mode, phone, contact_name, last_message_at, created_at, archived_at, staff_seen_at")
       .order("last_message_at", { ascending: false })
       .limit(200);
 
@@ -168,8 +168,22 @@ export const fetchConversations = createServerFn({ method: "GET" })
       mode: dbToUiMode(s.mode),
       lastMessageAt: s.last_message_at,
       lastMessage: lastMsgByConv.get(s.id) ?? "",
+      archived: Boolean(s.archived_at),
+      unseen: !s.staff_seen_at || s.staff_seen_at < s.last_message_at,
       messages: [],
     }));
+  });
+
+export const setConversationArchived = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ id: z.string().uuid(), archived: z.boolean() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await supabaseAdmin
+      .from("sessions")
+      .update({ archived_at: data.archived ? new Date().toISOString() : null })
+      .eq("id", data.id);
+    return { ok: true };
   });
 
 const idSchema = z.object({ id: z.string().uuid() });
