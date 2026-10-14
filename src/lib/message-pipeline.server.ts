@@ -293,40 +293,55 @@ export async function processMessage(
 
   const lower = msg.text.trim().toLowerCase();
   const replies: string[] = [];
+  const offered = session.intake_state === "oferta_humano";
 
-  // Comandos globais
-  if (session.mode === "triagem" || session.mode === "aguardando") {
-    // Destrava sessões presas no fluxo antigo de menu/triagem
+  // Destrava sessões antigas e desarquiva quando o cliente volta a falar
+  await supabaseAdmin
+    .from("sessions")
+    .update({
+      archived_at: null,
+      ...(session.mode === "triagem" || session.mode === "aguardando"
+        ? { mode: "bot" as const, intake_state: null }
+        : {}),
+    })
+    .eq("id", session.id);
+
+  const explicitHuman =
+    /\b(humano|atendente|consultor|falar com (uma )?pessoa|pessoa real|human agent|speak to (a )?human|hablar con (una )?persona|agente humano)\b/i.test(lower);
+  const affirmative =
+    /^(sim|s|quero|pode|pode sim|claro|ok|okay|por favor|bora|isso|yes|yeah|sure|sí|si|vale)\b/i.test(lower);
+
+  const goHuman = async () => {
     await supabaseAdmin
       .from("sessions")
-      .update({ mode: "bot", intake_state: null })
-      .eq("id", session.id);
-  }
-  if (lower === "humano" || lower === "atendente") {
-    await supabaseAdmin
-      .from("sessions")
-      .update({ mode: "humano" })
+      .update({ mode: "humano", intake_state: null })
       .eq("id", session.id);
     replies.push(handoffText);
-  } else if (session.mode === "humano") {
+  };
+
+  if (session.mode === "humano") {
     // Não responde — consultor responde no painel
+  } else if (explicitHuman || (offered && affirmative)) {
+    await goHuman();
   } else {
-    const intent = await classifyIntent(msg.text).catch(() => "turismo_geral" as const);
-    if (intent === "humano") {
-      await supabaseAdmin
-        .from("sessions")
-        .update({ mode: "humano" })
-        .eq("id", session.id);
-      replies.push(handoffText);
-    } else {
-      try {
-        replies.push(await answerTurismo(msg.text, msg.line, session.id, firstName));
-      } catch (err) {
-        console.error("[brain] erro:", err);
-        replies.push(
-          "Tive um problema momentâneo. Pode reformular ou digitar 'humano' para falar com um consultor?",
-        );
+    if (offered) {
+      await supabaseAdmin.from("sessions").update({ intake_state: null }).eq("id", session.id);
+    }
+    try {
+      const raw = await answerTurismo(msg.text, msg.line, session.id, firstName);
+      const offer = raw.includes("[[OFERTA_HUMANO]]");
+      if (offer) {
+        await supabaseAdmin
+          .from("sessions")
+          .update({ intake_state: "oferta_humano" })
+          .eq("id", session.id);
       }
+      replies.push(raw.replace(/\[\[OFERTA_HUMANO\]\]/g, "").trim());
+    } catch (err) {
+      console.error("[brain] erro:", err);
+      replies.push(
+        "Tive um problema momentâneo. Pode repetir? Se preferir, escreva 'consultor' que chamo nossa equipe.",
+      );
     }
   }
 
