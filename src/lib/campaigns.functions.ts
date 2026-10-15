@@ -8,7 +8,7 @@ const audienceSchema = z.enum([
   "active_30d",
   "all_sessions",
 ]);
-const lineSchema = z.enum(["descubra", "viagens"]);
+const lineSchema = z.enum(["descubra", "viagens", "both"]);
 
 const createSchema = z.object({
   title: z.string().min(2).max(160),
@@ -41,17 +41,26 @@ export const previewCampaignAudienceFn = createServerFn({ method: "POST" })
     return { count };
   });
 
-export const createCampaignFn = createServerFn({ method: "POST" })
+export const campaignMetaStatusFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { getCampaignMetaStatus } = await import("@/lib/campaigns.server");
+    await requireStaffUser(context.userId);
+    return getCampaignMetaStatus();
+  });
+
+export const createAndLaunchCampaignFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => createSchema.parse(i))
   .handler(async ({ data, context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
-    const { createCampaignDraft } = await import("@/lib/campaigns.server");
+    const { createAndLaunchCampaigns } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
     if (!data.body.trim() && !data.imageBase64) {
       throw new Error("Informe o texto ou anexe um cartaz.");
     }
-    return createCampaignDraft(context.userId, data);
+    return createAndLaunchCampaigns(context.userId, data);
   });
 
 export const launchCampaignFn = createServerFn({ method: "POST" })

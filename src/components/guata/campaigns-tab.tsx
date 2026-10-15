@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -16,20 +17,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ImageIcon, Megaphone, Send } from "lucide-react";
+import { AlertCircle, ImageIcon, Megaphone, Send } from "lucide-react";
 import {
-  createCampaignFn,
+  campaignMetaStatusFn,
+  createAndLaunchCampaignFn,
   launchCampaignFn,
   listCampaignsFn,
   previewCampaignAudienceFn,
 } from "@/lib/campaigns.functions";
-import type { CampaignAudience, CampaignLine } from "@/lib/campaigns.types";
+import type {
+  CampaignAudience,
+  CampaignLine,
+  CampaignLineSelect,
+} from "@/lib/campaigns.types";
 
 const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
-  active_24h: "Falaram nas últimas 24h",
+  active_24h: "Falaram nas últimas 24h (podem receber agora)",
   active_7d: "Falaram nos últimos 7 dias",
   active_30d: "Falaram nos últimos 30 dias",
   all_sessions: "Todas as conversas da linha",
+};
+
+const LINE_LABEL: Record<CampaignLine, string> = {
+  descubra: "Descubra MS — Me Consulte",
+  viagens: "Guatá Viagens e Turismo",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -53,16 +64,28 @@ function fileToBase64(file: File): Promise<{ base64: string; type: string }> {
   });
 }
 
+function sumStats(rows: { sent_ok: number; sent_fail: number; sent_skip: number }[]) {
+  return rows.reduce(
+    (a, r) => ({
+      ok: a.ok + r.sent_ok,
+      fail: a.fail + r.sent_fail,
+      skip: a.skip + r.sent_skip,
+    }),
+    { ok: 0, fail: 0, skip: 0 },
+  );
+}
+
 export function CampaignsTab() {
   const qc = useQueryClient();
   const listFn = useServerFn(listCampaignsFn);
   const previewFn = useServerFn(previewCampaignAudienceFn);
-  const createFn = useServerFn(createCampaignFn);
+  const metaFn = useServerFn(campaignMetaStatusFn);
+  const createLaunchFn = useServerFn(createAndLaunchCampaignFn);
   const launchFn = useServerFn(launchCampaignFn);
   const imageRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
-  const [line, setLine] = useState<CampaignLine>("descubra");
+  const [line, setLine] = useState<CampaignLineSelect>("descubra");
   const [audience, setAudience] = useState<CampaignAudience>("active_7d");
   const [body, setBody] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -72,12 +95,26 @@ export function CampaignsTab() {
     queryFn: () => listFn(),
   });
 
+  const { data: meta } = useQuery({
+    queryKey: ["campaign-meta-status"],
+    queryFn: () => metaFn(),
+  });
+
   const { data: preview } = useQuery({
     queryKey: ["campaign-audience", line, audience],
     queryFn: () => previewFn({ data: { line, audience } }),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["campaigns"] });
+  const lineReady =
+    line === "both"
+      ? Boolean(meta?.descubra && meta?.viagens)
+      : line === "descubra"
+        ? Boolean(meta?.descubra)
+        : Boolean(meta?.viagens);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["campaigns"] });
+  };
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -88,7 +125,7 @@ export function CampaignsTab() {
         imageBase64 = img.base64;
         imageContentType = img.type;
       }
-      const row = await createFn({
+      return createLaunchFn({
         data: {
           title: title.trim() || "Campanha",
           line,
@@ -98,11 +135,12 @@ export function CampaignsTab() {
           imageContentType,
         },
       });
-      return launchFn({ data: { id: row.id } });
     },
-    onSuccess: (row) => {
+    onSuccess: ({ results }) => {
+      const s = sumStats(results);
       toast.success(
-        `Envio: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} fora da janela 24h`,
+        `Envio: ${s.ok} ok, ${s.fail} falha, ${s.skip} fora da janela 24h` +
+          (results.length > 1 ? ` (${results.length} campanhas)` : ""),
       );
       setTitle("");
       setBody("");
@@ -128,19 +166,39 @@ export function CampaignsTab() {
   return (
     <div className="space-y-6">
       <Card className="rounded-2xl border-dashed">
-        <CardContent className="p-4 text-sm text-muted-foreground space-y-1">
+        <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
           <p>
-            Envio proativo no WhatsApp para quem já conversou com o número. A Meta só
-            entrega mensagem livre (texto/cartaz) se o cliente falou nas{" "}
-            <strong>últimas 24 horas</strong>; os demais entram como ignorados (templates
-            virão depois).
+            Envio para quem já tem conversa no número escolhido. A Meta só entrega texto/cartaz
+            livre se o cliente falou nas <strong>últimas 24h</strong>; fora disso aparece como
+            ignorado (templates virão depois).
           </p>
           <p>
-            Use a aba <strong>Base</strong> para ensinar o Guatá a responder sobre a
-            promoção quando alguém perguntar.
+            <strong>Para funcionar:</strong> secrets no Lovable —{" "}
+            <code className="text-xs">META_ACCESS_TOKEN</code> +{" "}
+            <code className="text-xs">META_PHONE_NUMBER_ID</code> (Descubra) e/ou sufixos{" "}
+            <code className="text-xs">_VIAGENS</code> para Guatá Viagens; bucket{" "}
+            <code className="text-xs">campaigns</code> público no Supabase se usar cartaz.
           </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Badge variant={meta?.descubra ? "secondary" : "destructive"}>
+              Descubra MS: {meta?.descubra ? "Meta OK" : "Meta pendente"}
+            </Badge>
+            <Badge variant={meta?.viagens ? "secondary" : "destructive"}>
+              Guatá Viagens: {meta?.viagens ? "Meta OK" : "Meta pendente"}
+            </Badge>
+          </div>
         </CardContent>
       </Card>
+
+      {!lineReady && meta && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            A linha selecionada não tem WhatsApp configurado no servidor. Ajuste as variáveis Meta
+            em Lovable (Configurações do projeto → Secrets) e publique de novo.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card className="rounded-2xl">
         <CardHeader>
@@ -156,18 +214,19 @@ export function CampaignsTab() {
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex.: Promo Bonito março"
+                placeholder="Ex.: Promo site agência"
               />
             </div>
             <div className="space-y-2">
               <Label>Linha WhatsApp</Label>
-              <Select value={line} onValueChange={(v) => setLine(v as CampaignLine)}>
+              <Select value={line} onValueChange={(v) => setLine(v as CampaignLineSelect)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="descubra">Descubra MS</SelectItem>
-                  <SelectItem value="viagens">Guatá Viagens</SelectItem>
+                  <SelectItem value="descubra">{LINE_LABEL.descubra}</SelectItem>
+                  <SelectItem value="viagens">{LINE_LABEL.viagens}</SelectItem>
+                  <SelectItem value="both">Ambas as linhas (2 disparos)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -191,7 +250,9 @@ export function CampaignsTab() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              ~{preview?.count ?? "…"} contatos no filtro (máx. 80 por clique de envio).
+              ~{preview?.count ?? "…"} contatos no filtro (máx. 80 por linha por clique).
+              {(preview?.count ?? 0) === 0 &&
+                " Nenhuma sessão com mensagem do cliente nesse período — teste “Todas as conversas” ou converse pelo WhatsApp antes."}
             </p>
           </div>
 
@@ -229,7 +290,9 @@ export function CampaignsTab() {
 
           <Button
             onClick={() => createMut.mutate()}
-            disabled={createMut.isPending || (!body.trim() && !imageFile)}
+            disabled={
+              createMut.isPending || !lineReady || (!body.trim() && !imageFile)
+            }
           >
             <Send className="h-4 w-4 mr-2" />
             {createMut.isPending ? "Enviando lote…" : "Criar e enviar lote"}
@@ -253,7 +316,10 @@ export function CampaignsTab() {
                 <p className="text-xs text-muted-foreground line-clamp-2">{c.body || "—"}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Badge variant="outline">{STATUS_LABEL[c.status] ?? c.status}</Badge>
-                  <Badge variant="secondary">{AUDIENCE_LABEL[c.audience as CampaignAudience]}</Badge>
+                  <Badge variant="outline">{LINE_LABEL[c.line as CampaignLine]}</Badge>
+                  <Badge variant="secondary">
+                    {AUDIENCE_LABEL[c.audience as CampaignAudience]}
+                  </Badge>
                   <span className="text-xs text-muted-foreground">
                     ✓ {c.sent_ok} · ✗ {c.sent_fail} · ⊘ {c.sent_skip}
                   </span>

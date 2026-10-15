@@ -69,12 +69,59 @@ export async function listCampaigns(): Promise<CampaignRow[]> {
   return (data ?? []) as CampaignRow[];
 }
 
+function linesForSelect(line: CampaignLine | "both"): CampaignLine[] {
+  return line === "both" ? ["descubra", "viagens"] : [line];
+}
+
+export function getCampaignMetaStatus(): {
+  descubra: boolean;
+  viagens: boolean;
+} {
+  return {
+    descubra: isMetaConfigured("descubra"),
+    viagens: isMetaConfigured("viagens"),
+  };
+}
+
+export function assertMetaConfiguredForLine(line: CampaignLine | "both"): void {
+  const status = getCampaignMetaStatus();
+  if (line === "both") {
+    if (!status.descubra && !status.viagens) {
+      throw new Error(
+        "WhatsApp (Meta) não configurado. No Lovable/servidor, defina META_ACCESS_TOKEN e META_PHONE_NUMBER_ID (e opcionalmente sufixos _DESCUBRA e _VIAGENS para cada linha).",
+      );
+    }
+    if (!status.descubra) {
+      throw new Error(
+        "Descubra MS: Meta não configurada. Defina META_ACCESS_TOKEN_DESCUBRA e META_PHONE_NUMBER_ID_DESCUBRA (ou as variáveis sem sufixo).",
+      );
+    }
+    if (!status.viagens) {
+      throw new Error(
+        "Guatá Viagens: Meta não configurada. Defina META_ACCESS_TOKEN_VIAGENS e META_PHONE_NUMBER_ID_VIAGENS.",
+      );
+    }
+    return;
+  }
+  if (!isMetaConfigured(line)) {
+    const label = line === "descubra" ? "Descubra MS" : "Guatá Viagens";
+    const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
+    throw new Error(
+      `${label}: WhatsApp (Meta) não configurado. Defina META_ACCESS_TOKEN${suffix} e META_PHONE_NUMBER_ID${suffix} no ambiente de produção (Lovable → Secrets).`,
+    );
+  }
+}
+
 export async function previewAudienceCount(
-  line: CampaignLine,
+  line: CampaignLine | "both",
   audience: CampaignAudience,
 ): Promise<number> {
-  const targets = await resolveAudience(line, audience);
-  return targets.length;
+  let total = 0;
+  for (const l of linesForSelect(line)) {
+    const targets = await resolveAudience(l, audience);
+    total += targets.length;
+  }
+  return total;
 }
 
 async function resolveAudience(
@@ -112,10 +159,12 @@ export async function createCampaignDraft(
     audience: CampaignAudience;
     imageBase64?: string;
     imageContentType?: string;
+    imagePathReuse?: string | null;
+    titleSuffix?: string;
   },
 ): Promise<CampaignRow> {
-  let imagePath: string | null = null;
-  if (input.imageBase64) {
+  let imagePath: string | null = input.imagePathReuse ?? null;
+  if (input.imageBase64 && !imagePath) {
     const ext =
       input.imageContentType === "image/png"
         ? "png"
@@ -134,10 +183,11 @@ export async function createCampaignDraft(
     if (upErr) throw new Error(upErr.message);
   }
 
+  const title = (input.title + (input.titleSuffix ?? "")).slice(0, 160);
   const { data, error } = await supabaseAdmin
     .from("broadcast_campaigns")
     .insert({
-      title: input.title.slice(0, 160),
+      title,
       line: input.line,
       body: input.body.slice(0, 4000),
       audience: input.audience,
@@ -180,15 +230,15 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
   if (campaign.status === "concluida") throw new Error("Campanha já foi enviada.");
 
   const line = campaign.line as CampaignLine;
-  if (!isMetaConfigured(line)) {
-    throw new Error("WhatsApp (Meta) não configurado para esta linha.");
-  }
+  assertMetaConfiguredForLine(line);
   const audience = campaign.audience as CampaignAudience;
 
   if (campaign.status === "rascunho") {
     const targets = await resolveAudience(line, audience);
     if (targets.length === 0) {
-      throw new Error("Nenhum contato no público selecionado.");
+      throw new Error(
+        "Nenhum contato no público selecionado. Escolha “Todas as conversas da linha” ou garanta que clientes já falaram com esse número (sessões no painel Conversas).",
+      );
     }
     await supabaseAdmin
       .from("broadcast_campaigns")
@@ -345,4 +395,60 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     .single();
   if (uErr) throw new Error(uErr.message);
   return updated as CampaignRow;
+}
+
+export interface CreateCampaignInput {
+  title: string;
+  line: CampaignLine | "both";
+  body: string;
+  audience: CampaignAudience;
+  imageBase64?: string;
+  imageContentType?: string;
+}
+
+/** Cria e envia (1 ou 2 campanhas quando line === both). */
+export async function createAndLaunchCampaigns(
+  userId: string,
+  input: CreateCampaignInput,
+): Promise<{ results: CampaignRow[] }> {
+  assertMetaConfiguredForLine(input.line);
+  const lines = linesForSelect(input.line);
+  const results: CampaignRow[] = [];
+  let sharedImagePath: string | null = null;
+  const errors: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const suffix =
+      input.line === "both"
+        ? ln === "descubra"
+          ? " · Descubra"
+          : " · Viagens"
+        : "";
+    try {
+      const draft = await createCampaignDraft(userId, {
+        title: input.title,
+        titleSuffix: suffix,
+        line: ln,
+        body: input.body,
+        audience: input.audience,
+        imageBase64: i === 0 ? input.imageBase64 : undefined,
+        imageContentType: i === 0 ? input.imageContentType : undefined,
+        imagePathReuse: i > 0 ? sharedImagePath : undefined,
+      });
+      if (draft.image_path) sharedImagePath = draft.image_path;
+      results.push(await launchCampaign(draft.id));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`${ln}: ${msg}`);
+    }
+  }
+
+  if (results.length === 0) {
+    throw new Error(errors.join(" | ") || "Não foi possível enviar a campanha.");
+  }
+  if (errors.length > 0) {
+    console.warn("[campaigns] disparo parcial:", errors.join(" | "));
+  }
+  return { results };
 }

@@ -6,6 +6,9 @@ export type CampaignAudience =
 
 export type CampaignLine = "descubra" | "viagens";
 
+/** Linha única ou disparo nas duas contas WhatsApp. */
+export type CampaignLineSelect = CampaignLine | "both";
+
 export interface CampaignRow {
   id: string;
   title: string;
