@@ -37,8 +37,7 @@ export const previewCampaignAudienceFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { previewAudienceCount } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    const count = await previewAudienceCount(data.line, data.audience);
-    return { count };
+    return previewAudienceCount(data.line, data.audience);
   });
 
 export const campaignMetaStatusFn = createServerFn({ method: "POST" })

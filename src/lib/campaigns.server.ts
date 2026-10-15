@@ -28,7 +28,13 @@ const AUDIENCE_MS: Record<CampaignAudience, number | null> = {
   all_sessions: null,
 };
 
-function publicImageUrl(path: string): string | null {
+/** URL que a Meta consegue baixar (assinada; não depende de bucket público). */
+async function campaignImageUrl(path: string): Promise<string | null> {
+  const { data: signed, error } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24 * 7);
+  if (!error && signed?.signedUrl) return signed.signedUrl;
+
   const base = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
   if (!base) return null;
   return `${base.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`;
@@ -115,13 +121,18 @@ export function assertMetaConfiguredForLine(line: CampaignLine | "both"): void {
 export async function previewAudienceCount(
   line: CampaignLine | "both",
   audience: CampaignAudience,
-): Promise<number> {
-  let total = 0;
+): Promise<{ filterCount: number; eligible24h: number }> {
+  let filterCount = 0;
+  let eligible24h = 0;
   for (const l of linesForSelect(line)) {
     const targets = await resolveAudience(l, audience);
-    total += targets.length;
+    filterCount += targets.length;
+    for (const t of targets) {
+      const lastIn = await lastUserMessageAt(t.session_id);
+      if (withinMetaSessionWindow(lastIn)) eligible24h += 1;
+    }
   }
-  return total;
+  return { filterCount, eligible24h };
 }
 
 async function resolveAudience(
@@ -258,7 +269,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
   }
 
   const imageUrl = campaign.image_path
-    ? publicImageUrl(campaign.image_path as string)
+    ? await campaignImageUrl(campaign.image_path as string)
     : null;
   const body = String(campaign.body ?? "").trim();
 
@@ -292,27 +303,41 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     }
 
     try {
+      let delivered = false;
       if (imageUrl) {
         const imgRes = await sendWhatsAppImage(line, phone, imageUrl, body || undefined);
-        if (!imgRes.ok) {
+        if (imgRes.ok) {
+          delivered = true;
+          await persistOutbound(
+            sessionId,
+            body ? `[cartaz] ${body}` : "[cartaz]",
+            { campaign_id: campaignId, kind: "campaign_image" },
+          );
+          if (body && body.length > 0) {
+            await new Promise((r) => setTimeout(r, typingDelayMs(body)));
+          }
+        } else if (body) {
+          const txtRes = await sendWhatsAppText(line, phone, body);
+          if (txtRes.ok) {
+            delivered = true;
+            await persistOutbound(sessionId, body, {
+              campaign_id: campaignId,
+              kind: "campaign_text_fallback",
+              image_error: imgRes.reason,
+            });
+          }
+        }
+        if (!delivered) {
           sentFail += 1;
           await supabaseAdmin
             .from("broadcast_recipients")
             .update({
               status: "falhou",
-              error: imgRes.reason ?? "image_failed",
+              error: "image_failed",
               sent_at: new Date().toISOString(),
             })
             .eq("id", rec.id);
           continue;
-        }
-        await persistOutbound(
-          sessionId,
-          body ? `[cartaz] ${body}` : "[cartaz]",
-          { campaign_id: campaignId, kind: "campaign_image" },
-        );
-        if (body && body.length > 0) {
-          await new Promise((r) => setTimeout(r, typingDelayMs(body)));
         }
       }
 
@@ -334,6 +359,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
           campaign_id: campaignId,
           kind: "campaign_text",
         });
+        delivered = true;
       }
       if (!body && !imageUrl) {
         sentSkip += 1;
@@ -394,7 +420,18 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     .select("*")
     .single();
   if (uErr) throw new Error(uErr.message);
-  return updated as CampaignRow;
+  const row = updated as CampaignRow;
+  if (
+    row.status === "concluida" &&
+    row.sent_ok === 0 &&
+    (row.sent_skip ?? 0) > 0 &&
+    (row.sent_fail ?? 0) === 0
+  ) {
+    throw new Error(
+      `Nenhuma mensagem entregue: ${row.sent_skip} contato(s) fora da janela de 24h da Meta. Peça para o cliente mandar um oi no WhatsApp hoje e tente de novo.`,
+    );
+  }
+  return row;
 }
 
 export interface CreateCampaignInput {

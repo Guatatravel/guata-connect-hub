@@ -138,10 +138,11 @@ export function CampaignsTab() {
     },
     onSuccess: ({ results }) => {
       const s = sumStats(results);
-      toast.success(
+      const msg =
         `Envio: ${s.ok} ok, ${s.fail} falha, ${s.skip} fora da janela 24h` +
-          (results.length > 1 ? ` (${results.length} campanhas)` : ""),
-      );
+        (results.length > 1 ? ` (${results.length} campanhas)` : "");
+      if (s.ok === 0) toast.warning(msg + " — veja a mensagem de erro ou a janela de 24h.");
+      else toast.success(msg);
       setTitle("");
       setBody("");
       setImageFile(null);
@@ -250,9 +251,13 @@ export function CampaignsTab() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              ~{preview?.count ?? "…"} contatos no filtro (máx. 80 por linha por clique).
-              {(preview?.count ?? 0) === 0 &&
-                " Nenhuma sessão com mensagem do cliente nesse período — teste “Todas as conversas” ou converse pelo WhatsApp antes."}
+              ~{preview?.filterCount ?? "…"} no filtro ·{" "}
+              <strong>{preview?.eligible24h ?? "…"} podem receber agora</strong> (falaram nas
+              últimas 24h). Máx. 80 por linha por clique.
+              {(preview?.filterCount ?? 0) === 0 &&
+                " Nenhuma sessão nessa linha — use Descubra MS se suas conversas estão lá, ou “Todas as conversas”."}
+              {(preview?.filterCount ?? 0) > 0 && (preview?.eligible24h ?? 0) === 0 &&
+                " Ninguém na janela de 24h: mande um oi no WhatsApp hoje e dispare de novo."}
             </p>
           </div>
 
