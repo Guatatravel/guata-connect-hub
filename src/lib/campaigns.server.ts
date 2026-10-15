@@ -284,6 +284,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
           campaign_id: campaignId,
           kind: "campaign_text",
         });
+      }
       if (!body && !imageUrl) {
         sentSkip += 1;
         await supabaseAdmin
