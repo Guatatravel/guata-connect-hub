@@ -32,6 +32,11 @@ create index if not exists broadcast_recipients_campaign_id_idx
 alter table public.broadcast_campaigns enable row level security;
 alter table public.broadcast_recipients enable row level security;
 
+drop policy if exists "staff read broadcast_campaigns" on public.broadcast_campaigns;
+drop policy if exists "staff write broadcast_campaigns" on public.broadcast_campaigns;
+drop policy if exists "staff read broadcast_recipients" on public.broadcast_recipients;
+drop policy if exists "staff write broadcast_recipients" on public.broadcast_recipients;
+
 create policy "staff read broadcast_campaigns"
   on public.broadcast_campaigns for select
   using (public.is_staff (auth.uid ()));
@@ -53,6 +58,10 @@ create policy "staff write broadcast_recipients"
 insert into storage.buckets (id, name, public)
 values ('campaigns', 'campaigns', true)
 on conflict (id) do update set public = true;
+
+drop policy if exists "staff upload campaigns bucket" on storage.objects;
+drop policy if exists "public read campaigns bucket" on storage.objects;
+drop policy if exists "staff delete campaigns bucket" on storage.objects;
 
 create policy "staff upload campaigns bucket"
   on storage.objects for insert

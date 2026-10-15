@@ -8,11 +8,21 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "input_audio"; input_audio: { data: string; format: string } };
+
+export interface ChatMessageParts {
+  role: "system" | "user" | "assistant";
+  content: string | ContentPart[];
+}
+
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
-export async function chatCompletion(
-  messages: ChatMessage[],
-  opts: { model?: string; maxTokens?: number; temperature?: number } = {},
+async function gatewayRequest(
+  messages: ChatMessage[] | ChatMessageParts[],
+  opts: { model?: string; maxTokens?: number; temperature?: number },
 ): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY não configurada");
@@ -27,6 +37,7 @@ export async function chatCompletion(
     body: JSON.stringify({
       model: opts.model ?? "google/gemini-2.5-flash",
       messages,
+      max_tokens: opts.maxTokens,
       temperature: opts.temperature ?? 0.5,
     }),
   });
@@ -41,7 +52,29 @@ export async function chatCompletion(
   const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
-  return json.choices?.[0]?.message?.content?.trim() ?? "";
+  const content = json.choices?.[0]?.message?.content;
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((p) => (typeof p === "object" && p && "text" in p ? String(p.text) : ""))
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+export async function chatCompletion(
+  messages: ChatMessage[],
+  opts: { model?: string; maxTokens?: number; temperature?: number } = {},
+): Promise<string> {
+  return gatewayRequest(messages, opts);
+}
+
+export async function chatCompletionParts(
+  messages: ChatMessageParts[],
+  opts: { model?: string; maxTokens?: number; temperature?: number } = {},
+): Promise<string> {
+  return gatewayRequest(messages, opts);
 }
 
 /** Classifica intent em uma palavra. */

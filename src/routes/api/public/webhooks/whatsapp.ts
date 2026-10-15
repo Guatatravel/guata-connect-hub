@@ -100,6 +100,9 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const { processMessage } = await import(
           "@/lib/message-pipeline.server"
         );
+        const { normalizeWhatsAppInbound } = await import(
+          "@/lib/whatsapp-inbound.server"
+        );
 
         for (const msg of messages) {
           const msgId = String(msg?.id ?? "");
@@ -109,22 +112,31 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               .insert({ message_id: msgId });
             if (dupErr) continue; // já processada
           }
-          if (msg?.type !== "text") {
-            errors.push(`tipo não suportado: ${msg?.type}`);
-            continue;
-          }
-          const text: string = msg.text?.body ?? "";
           const phone: string = msg.from ?? "";
           const contactName: string | undefined =
             value.contacts?.[0]?.profile?.name;
-          if (!text || !phone) continue;
+          if (!phone) continue;
+
+          const line = lineFromPhoneId(phoneNumberId);
+          let normalized;
+          try {
+            normalized = await normalizeWhatsAppInbound(line, msg as Record<string, unknown>);
+          } catch (err) {
+            const m = err instanceof Error ? err.message : String(err);
+            errors.push(`mídia: ${m}`);
+            console.error("[whatsapp-webhook] inbound:", err);
+            continue;
+          }
+          if (!normalized?.text) continue;
+
           try {
             await processMessage({
-              line: lineFromPhoneId(phoneNumberId),
+              line,
               phone,
               contactName,
-              text,
+              text: normalized.text,
               messageId: msgId || undefined,
+              inboundKind: normalized.inboundKind,
             });
           } catch (err) {
             const m = err instanceof Error ? err.message : String(err);

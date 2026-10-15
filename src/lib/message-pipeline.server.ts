@@ -18,6 +18,7 @@ export interface IncomingMessage {
   contactName?: string;
   text: string;
   messageId?: string;
+  inboundKind?: "text" | "image" | "audio" | "unsupported";
 }
 
 interface SessionRow {
@@ -53,12 +54,14 @@ async function persistMessage(
   direction: "in" | "out",
   author: "user" | "bot" | "agent" | "system",
   text: string,
+  metadata?: Record<string, unknown>,
 ) {
   await supabaseAdmin.from("messages").insert({
     session_id: sessionId,
     direction,
     author,
     text,
+    ...(metadata ? { metadata: metadata as never } : {}),
   });
   await supabaseAdmin
     .from("sessions")
@@ -355,7 +358,9 @@ export async function processMessage(
 ): Promise<{ replies: string[]; sessionId: string }> {
   if (msg.messageId) void markReadAndTyping(msg.line, msg.messageId);
   const session = await loadOrCreateSession(msg.line, msg.phone, msg.contactName);
-  await persistMessage(session.id, "in", "user", msg.text);
+  await persistMessage(session.id, "in", "user", msg.text, {
+    inbound_kind: msg.inboundKind ?? "text",
+  });
   const firstName = msg.contactName?.trim().split(/\s+/)[0];
   const handoffText = firstName
     ? `Perfeito, ${firstName}! Já avisei nosso consultor, ele vai falar com você por aqui em instantes. 😊`

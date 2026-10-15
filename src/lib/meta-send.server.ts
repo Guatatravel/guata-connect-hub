@@ -4,7 +4,7 @@
  * Retorna { ok:false, reason:'not_configured' } quando os secrets faltam.
  */
 
-type Line = "descubra" | "viagens";
+export type Line = "descubra" | "viagens";
 
 function lineEnv(line: Line, key: "ACCESS_TOKEN" | "PHONE_NUMBER_ID"): string | undefined {
   const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
