@@ -19,7 +19,12 @@ function ExtensaoPage() {
       <div>
         <h1 className="font-display text-3xl font-semibold text-primary">Modo Atendimento</h1>
         <p className="text-muted-foreground">
-          Tudo que a extensão faria já funciona aqui dentro do painel — sem instalar nada.
+          Use o painel como central de atendimento: alertas, conversas ao vivo e assumir o chat com um clique.
+          A extensão para o navegador virá depois; por enquanto fixe esta aba ou abra{" "}
+          <Link to="/conversas" className="text-primary underline-offset-2 hover:underline">
+            Conversas
+          </Link>
+          .
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">

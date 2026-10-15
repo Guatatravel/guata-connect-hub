@@ -31,7 +31,7 @@ const items = [
   { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/extensao", label: "Modo Atendimento", icon: PanelRight },
-  { to: "/conhecimento", label: "Base de Conhecimento", icon: BookOpen },
+  { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/atendentes", label: "Atendentes", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/solicitacoes", label: "Solicitações de acesso", icon: Inbox },

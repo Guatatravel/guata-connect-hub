@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { FileText, Link2, Trash2, Upload, Type } from "lucide-react";
+import { BookOpen, FileText, Link2, Megaphone, Trash2, Upload, Type } from "lucide-react";
+import { CampaignsTab } from "@/components/guata/campaigns-tab";
 import {
   listKnowledge,
   addKnowledgeTextDoc,
@@ -24,16 +25,16 @@ export const Route = createFileRoute("/_app/conhecimento")({
   component: Conhecimento,
   head: () => ({
     meta: [
-      { title: "Base de Conhecimento | Guatá Channel" },
+      { title: "Conhecimento e disparos | Guatá Channel" },
       {
         name: "description",
         content:
-          "Anexe documentos, textos e links para alimentar as respostas da inteligência artificial.",
+          "Base de conhecimento para a IA e campanhas de disparo no WhatsApp.",
       },
-      { property: "og:title", content: "Base de Conhecimento | Guatá Channel" },
+      { property: "og:title", content: "Conhecimento e disparos | Guatá Channel" },
       {
         property: "og:description",
-        content: "Documentos, textos e links que ensinam o atendente virtual.",
+        content: "Ensine o Guatá e envie promoções para sua base de conversas.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -62,7 +63,7 @@ function formatSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function Conhecimento() {
+function KnowledgeBasePanel() {
   const qc = useQueryClient();
   const fetchDocs = useServerFn(listKnowledge);
   const addText = useServerFn(addKnowledgeTextDoc);
@@ -131,14 +132,6 @@ function Conhecimento() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Base de Conhecimento</h1>
-        <p className="text-muted-foreground text-sm">
-          Tudo que você anexar aqui passa a ser usado pelo atendente virtual nas
-          respostas do WhatsApp.
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Adicionar conteúdo</CardTitle>
@@ -296,6 +289,39 @@ function Conhecimento() {
           ))}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function Conhecimento() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Conhecimento e disparos</h1>
+        <p className="text-muted-foreground text-sm">
+          Na aba Base, ensine o Guatá. Na aba Disparos, envie promoções para quem já
+          conversou no WhatsApp.
+        </p>
+      </div>
+
+      <Tabs defaultValue="base" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="base">
+            <BookOpen className="h-4 w-4 mr-2" />
+            Base
+          </TabsTrigger>
+          <TabsTrigger value="disparos">
+            <Megaphone className="h-4 w-4 mr-2" />
+            Disparos
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="base">
+          <KnowledgeBasePanel />
+        </TabsContent>
+        <TabsContent value="disparos">
+          <CampaignsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

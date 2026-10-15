@@ -9,44 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppRouteImport } from './routes/_app'
-import { Route as ApresentacaoRouteImport } from './routes/apresentacao'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as SetupRouteImport } from './routes/setup'
 import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
-import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
-import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
-import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
-import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
-import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
-import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
-import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApresentacaoRouteImport } from './routes/apresentacao'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
-import { Route as AppConversasIndexRouteImport } from './routes/_app.conversas.index'
-import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
+import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
+import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
+import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
+import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
+import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
+import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
 import { Route as AppTriagensIndexRouteImport } from './routes/_app.triagens.index'
+import { Route as AppConversasIndexRouteImport } from './routes/_app.conversas.index'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
-import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
+import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
+import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApresentacaoRoute = ApresentacaoRouteImport.update({
-  id: '/apresentacao',
-  path: '/apresentacao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const TrocarSenhaRoute = TrocarSenhaRouteImport.update({
+  id: '/trocar-senha',
+  path: '/trocar-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -54,39 +40,28 @@ const SetupRoute = SetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TrocarSenhaRoute = TrocarSenhaRouteImport.update({
-  id: '/trocar-senha',
-  path: '/trocar-senha',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppAtendentesRoute = AppAtendentesRouteImport.update({
-  id: '/atendentes',
-  path: '/atendentes',
-  getParentRoute: () => AppRoute,
+const ApresentacaoRoute = ApresentacaoRouteImport.update({
+  id: '/apresentacao',
+  path: '/apresentacao',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => AppRoute,
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppConhecimentoRoute = AppConhecimentoRouteImport.update({
-  id: '/conhecimento',
-  path: '/conhecimento',
-  getParentRoute: () => AppRoute,
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppDashboardRoute = AppDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDiagnosticoWhatsappRoute = AppDiagnosticoWhatsappRouteImport.update({
-  id: '/diagnostico-whatsapp',
-  path: '/diagnostico-whatsapp',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppExtensaoRoute = AppExtensaoRouteImport.update({
-  id: '/extensao',
-  path: '/extensao',
+const AppUsuariosRoute = AppUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSolicitacoesRoute = AppSolicitacoesRouteImport.update({
@@ -94,19 +69,34 @@ const AppSolicitacoesRoute = AppSolicitacoesRouteImport.update({
   path: '/solicitacoes',
   getParentRoute: () => AppRoute,
 } as any)
-const AppUsuariosRoute = AppUsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
+const AppExtensaoRoute = AppExtensaoRouteImport.update({
+  id: '/extensao',
+  path: '/extensao',
   getParentRoute: () => AppRoute,
 } as any)
-const AppConversasIndexRoute = AppConversasIndexRouteImport.update({
-  id: '/conversas/',
-  path: '/conversas/',
+const AppDiagnosticoWhatsappRoute = AppDiagnosticoWhatsappRouteImport.update({
+  id: '/diagnostico-whatsapp',
+  path: '/diagnostico-whatsapp',
   getParentRoute: () => AppRoute,
 } as any)
-const AppConversasIdRoute = AppConversasIdRouteImport.update({
-  id: '/conversas/$id',
-  path: '/conversas/$id',
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConhecimentoRoute = AppConhecimentoRouteImport.update({
+  id: '/conhecimento',
+  path: '/conhecimento',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAtendentesRoute = AppAtendentesRouteImport.update({
+  id: '/atendentes',
+  path: '/atendentes',
   getParentRoute: () => AppRoute,
 } as any)
 const AppTriagensIndexRoute = AppTriagensIndexRouteImport.update({
@@ -114,21 +104,31 @@ const AppTriagensIndexRoute = AppTriagensIndexRouteImport.update({
   path: '/triagens/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConversasIndexRoute = AppConversasIndexRouteImport.update({
+  id: '/conversas/',
+  path: '/conversas/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
   id: '/triagens/$id',
   path: '/triagens/$id',
   getParentRoute: () => AppRoute,
 } as any)
-const ApiPublicWebhooksDescubraMsRoute =
-  ApiPublicWebhooksDescubraMsRouteImport.update({
-    id: '/api/public/webhooks/descubra-ms',
-    path: '/api/public/webhooks/descubra-ms',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const AppConversasIdRoute = AppConversasIdRouteImport.update({
+  id: '/conversas/$id',
+  path: '/conversas/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiPublicWebhooksWhatsappRoute =
   ApiPublicWebhooksWhatsappRouteImport.update({
     id: '/api/public/webhooks/whatsapp',
     path: '/api/public/webhooks/whatsapp',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWebhooksDescubraMsRoute =
+  ApiPublicWebhooksDescubraMsRouteImport.update({
+    id: '/api/public/webhooks/descubra-ms',
+    path: '/api/public/webhooks/descubra-ms',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -277,32 +277,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_app': {
-      id: '/_app'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/apresentacao': {
-      id: '/apresentacao'
-      path: '/apresentacao'
-      fullPath: '/apresentacao'
-      preLoaderRoute: typeof ApresentacaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/trocar-senha': {
+      id: '/trocar-senha'
+      path: '/trocar-senha'
+      fullPath: '/trocar-senha'
+      preLoaderRoute: typeof TrocarSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -312,53 +291,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/trocar-senha': {
-      id: '/trocar-senha'
-      path: '/trocar-senha'
-      fullPath: '/trocar-senha'
-      preLoaderRoute: typeof TrocarSenhaRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/atendentes': {
-      id: '/_app/atendentes'
-      path: '/atendentes'
-      fullPath: '/atendentes'
-      preLoaderRoute: typeof AppAtendentesRouteImport
-      parentRoute: typeof AppRoute
+    '/apresentacao': {
+      id: '/apresentacao'
+      path: '/apresentacao'
+      fullPath: '/apresentacao'
+      preLoaderRoute: typeof ApresentacaoRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/configuracoes': {
-      id: '/_app/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof AppConfiguracoesRouteImport
-      parentRoute: typeof AppRoute
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/conhecimento': {
-      id: '/_app/conhecimento'
-      path: '/conhecimento'
-      fullPath: '/conhecimento'
-      preLoaderRoute: typeof AppConhecimentoRouteImport
-      parentRoute: typeof AppRoute
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/dashboard': {
-      id: '/_app/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AppDashboardRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/diagnostico-whatsapp': {
-      id: '/_app/diagnostico-whatsapp'
-      path: '/diagnostico-whatsapp'
-      fullPath: '/diagnostico-whatsapp'
-      preLoaderRoute: typeof AppDiagnosticoWhatsappRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/extensao': {
-      id: '/_app/extensao'
-      path: '/extensao'
-      fullPath: '/extensao'
-      preLoaderRoute: typeof AppExtensaoRouteImport
+    '/_app/usuarios': {
+      id: '/_app/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof AppUsuariosRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/solicitacoes': {
@@ -368,25 +333,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSolicitacoesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/usuarios': {
-      id: '/_app/usuarios'
-      path: '/usuarios'
-      fullPath: '/usuarios'
-      preLoaderRoute: typeof AppUsuariosRouteImport
+    '/_app/extensao': {
+      id: '/_app/extensao'
+      path: '/extensao'
+      fullPath: '/extensao'
+      preLoaderRoute: typeof AppExtensaoRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/conversas/': {
-      id: '/_app/conversas/'
-      path: '/conversas'
-      fullPath: '/conversas/'
-      preLoaderRoute: typeof AppConversasIndexRouteImport
+    '/_app/diagnostico-whatsapp': {
+      id: '/_app/diagnostico-whatsapp'
+      path: '/diagnostico-whatsapp'
+      fullPath: '/diagnostico-whatsapp'
+      preLoaderRoute: typeof AppDiagnosticoWhatsappRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/conversas/$id': {
-      id: '/_app/conversas/$id'
-      path: '/conversas/$id'
-      fullPath: '/conversas/$id'
-      preLoaderRoute: typeof AppConversasIdRouteImport
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/conhecimento': {
+      id: '/_app/conhecimento'
+      path: '/conhecimento'
+      fullPath: '/conhecimento'
+      preLoaderRoute: typeof AppConhecimentoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/configuracoes': {
+      id: '/_app/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AppConfiguracoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/atendentes': {
+      id: '/_app/atendentes'
+      path: '/atendentes'
+      fullPath: '/atendentes'
+      preLoaderRoute: typeof AppAtendentesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/triagens/': {
@@ -396,6 +382,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTriagensIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/conversas/': {
+      id: '/_app/conversas/'
+      path: '/conversas'
+      fullPath: '/conversas/'
+      preLoaderRoute: typeof AppConversasIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/triagens/$id': {
       id: '/_app/triagens/$id'
       path: '/triagens/$id'
@@ -403,18 +396,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTriagensIdRouteImport
       parentRoute: typeof AppRoute
     }
-    '/api/public/webhooks/descubra-ms': {
-      id: '/api/public/webhooks/descubra-ms'
-      path: '/api/public/webhooks/descubra-ms'
-      fullPath: '/api/public/webhooks/descubra-ms'
-      preLoaderRoute: typeof ApiPublicWebhooksDescubraMsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_app/conversas/$id': {
+      id: '/_app/conversas/$id'
+      path: '/conversas/$id'
+      fullPath: '/conversas/$id'
+      preLoaderRoute: typeof AppConversasIdRouteImport
+      parentRoute: typeof AppRoute
     }
     '/api/public/webhooks/whatsapp': {
       id: '/api/public/webhooks/whatsapp'
       path: '/api/public/webhooks/whatsapp'
       fullPath: '/api/public/webhooks/whatsapp'
       preLoaderRoute: typeof ApiPublicWebhooksWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/webhooks/descubra-ms': {
+      id: '/api/public/webhooks/descubra-ms'
+      path: '/api/public/webhooks/descubra-ms'
+      fullPath: '/api/public/webhooks/descubra-ms'
+      preLoaderRoute: typeof ApiPublicWebhooksDescubraMsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
