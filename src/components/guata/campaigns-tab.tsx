@@ -17,18 +17,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, ImageIcon, Megaphone, Send } from "lucide-react";
+import {
+  AlertCircle,
+  Copy,
+  ImageIcon,
+  Megaphone,
+  Pencil,
+  Send,
+  Trash2,
+} from "lucide-react";
 import {
   campaignMetaStatusFn,
   createAndLaunchCampaignFn,
+  deleteCampaignFn,
+  duplicateAndLaunchCampaignFn,
   launchCampaignFn,
   listCampaignsFn,
   previewCampaignAudienceFn,
+  saveCampaignDraftFn,
 } from "@/lib/campaigns.functions";
 import type {
   CampaignAudience,
   CampaignLine,
   CampaignLineSelect,
+  CampaignRow,
 } from "@/lib/campaigns.types";
 
 const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
@@ -82,13 +94,39 @@ export function CampaignsTab() {
   const metaFn = useServerFn(campaignMetaStatusFn);
   const createLaunchFn = useServerFn(createAndLaunchCampaignFn);
   const launchFn = useServerFn(launchCampaignFn);
+  const saveDraftFn = useServerFn(saveCampaignDraftFn);
+  const deleteFn = useServerFn(deleteCampaignFn);
+  const duplicateFn = useServerFn(duplicateAndLaunchCampaignFn);
   const imageRef = useRef<HTMLInputElement>(null);
 
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [savedImagePath, setSavedImagePath] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [line, setLine] = useState<CampaignLineSelect>("descubra");
   const [audience, setAudience] = useState<CampaignAudience>("active_7d");
   const [body, setBody] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+
+  const resetForm = () => {
+    setEditingDraftId(null);
+    setSavedImagePath(null);
+    setTitle("");
+    setBody("");
+    setImageFile(null);
+    setLine("descubra");
+    setAudience("active_7d");
+  };
+
+  const loadCampaignIntoForm = (c: CampaignRow) => {
+    setEditingDraftId(c.status === "rascunho" ? c.id : null);
+    setSavedImagePath(c.image_path);
+    setTitle(c.title.replace(/\s*·\s*(Descubra|Viagens)\s*$/i, "").trim());
+    setLine(c.line as CampaignLine);
+    setAudience(c.audience as CampaignAudience);
+    setBody(c.body ?? "");
+    setImageFile(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ["campaigns"],
@@ -116,40 +154,111 @@ export function CampaignsTab() {
     qc.invalidateQueries({ queryKey: ["campaigns"] });
   };
 
+  const imagePayload = async () => {
+    if (!imageFile) return {};
+    const img = await fileToBase64(imageFile);
+    return { imageBase64: img.base64, imageContentType: img.type };
+  };
+
   const createMut = useMutation({
     mutationFn: async () => {
-      let imageBase64: string | undefined;
-      let imageContentType: string | undefined;
-      if (imageFile) {
-        const img = await fileToBase64(imageFile);
-        imageBase64 = img.base64;
-        imageContentType = img.type;
+      const images = await imagePayload();
+      const payload = {
+        title: title.trim() || "Campanha",
+        line,
+        body,
+        audience,
+        ...images,
+      };
+      if (editingDraftId) {
+        if (line === "both") {
+          throw new Error("Edição de rascunho só em uma linha (Descubra ou Viagens).");
+        }
+        await saveDraftFn({
+          data: { id: editingDraftId, ...payload, line: line as CampaignLine },
+        });
+        return launchFn({ data: { id: editingDraftId } });
       }
-      return createLaunchFn({
-        data: {
-          title: title.trim() || "Campanha",
-          line,
-          body,
-          audience,
-          imageBase64,
-          imageContentType,
-        },
-      });
+      return createLaunchFn({ data: payload });
     },
-    onSuccess: ({ results }) => {
-      const s = sumStats(results);
-      const msg =
-        `Envio: ${s.ok} ok, ${s.fail} falha, ${s.skip} fora da janela 24h` +
-        (results.length > 1 ? ` (${results.length} campanhas)` : "");
-      if (s.ok === 0) toast.warning(msg + " — veja a mensagem de erro ou a janela de 24h.");
-      else toast.success(msg);
-      setTitle("");
-      setBody("");
-      setImageFile(null);
+    onSuccess: (result) => {
+      if (result && "results" in result && result.results) {
+        const s = sumStats(result.results);
+        const msg =
+          `Envio: ${s.ok} ok, ${s.fail} falha, ${s.skip} fora da janela 24h` +
+          (result.results.length > 1 ? ` (${result.results.length} campanhas)` : "");
+        if (s.ok === 0) toast.warning(msg + " — veja a mensagem de erro ou a janela de 24h.");
+        else toast.success(msg);
+      } else {
+        const row = result as CampaignRow;
+        toast.success(
+          `Envio: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} fora da janela 24h`,
+        );
+      }
+      resetForm();
       invalidate();
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Não foi possível enviar"),
+  });
+
+  const launchDraftMut = useMutation({
+    mutationFn: (id: string) => launchFn({ data: { id } }),
+    onSuccess: (row) => {
+      toast.success(
+        `Envio: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} fora da janela 24h`,
+      );
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Não foi possível enviar"),
+  });
+
+  const saveDraftMut = useMutation({
+    mutationFn: async () => {
+      const images = await imagePayload();
+      return saveDraftFn({
+        data: {
+          id: editingDraftId ?? undefined,
+          title: title.trim() || "Campanha",
+          line: line === "both" ? "descubra" : line,
+          body,
+          audience,
+          ...images,
+        },
+      });
+    },
+    onSuccess: (row) => {
+      setEditingDraftId(row.id);
+      setSavedImagePath(row.image_path);
+      setImageFile(null);
+      toast.success("Rascunho salvo.");
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar"),
+  });
+
+  const duplicateMut = useMutation({
+    mutationFn: (id: string) => duplicateFn({ data: { id } }),
+    onSuccess: (row) => {
+      toast.success(
+        `Reenvio: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} fora da janela 24h`,
+      );
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Não foi possível reenviar"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Campanha excluída.");
+      invalidate();
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Não foi possível excluir"),
   });
 
   const continueMut = useMutation({
@@ -202,11 +311,16 @@ export function CampaignsTab() {
       )}
 
       <Card className="rounded-2xl">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Megaphone className="h-4 w-4" />
-            Nova campanha
+            {editingDraftId ? "Editar rascunho" : "Nova campanha"}
           </CardTitle>
+          {editingDraftId && (
+            <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
+              Cancelar edição
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
@@ -290,18 +404,37 @@ export function CampaignsTab() {
                   Remover
                 </Button>
               )}
+              {savedImagePath && !imageFile && (
+                <span className="text-xs text-muted-foreground">Cartaz salvo no rascunho</span>
+              )}
             </div>
           </div>
 
-          <Button
-            onClick={() => createMut.mutate()}
-            disabled={
-              createMut.isPending || !lineReady || (!body.trim() && !imageFile)
-            }
-          >
-            <Send className="h-4 w-4 mr-2" />
-            {createMut.isPending ? "Enviando lote…" : "Criar e enviar lote"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => createMut.mutate()}
+              disabled={
+                createMut.isPending ||
+                !lineReady ||
+                (!body.trim() && !imageFile && !savedImagePath)
+              }
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {createMut.isPending ? "Enviando lote…" : editingDraftId ? "Salvar e enviar" : "Criar e enviar lote"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveDraftMut.mutate()}
+              disabled={
+                saveDraftMut.isPending ||
+                line === "both" ||
+                (!body.trim() && !imageFile && !savedImagePath)
+              }
+            >
+              Salvar rascunho
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -330,16 +463,74 @@ export function CampaignsTab() {
                   </span>
                 </div>
               </div>
-              {c.status === "enviando" && (
+              <div className="flex flex-wrap gap-2 items-start">
+                {c.status === "rascunho" && (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => launchDraftMut.mutate(c.id)}
+                      disabled={launchDraftMut.isPending}
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1" />
+                      Enviar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => loadCampaignIntoForm(c)}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      Editar
+                    </Button>
+                  </>
+                )}
+                {c.status === "enviando" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => continueMut.mutate(c.id)}
+                    disabled={continueMut.isPending}
+                  >
+                    Continuar envio
+                  </Button>
+                )}
+                {c.status === "concluida" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => duplicateMut.mutate(c.id)}
+                    disabled={duplicateMut.isPending}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    Enviar de novo
+                  </Button>
+                )}
+                {c.status !== "rascunho" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => loadCampaignIntoForm(c)}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    Usar no formulário
+                  </Button>
+                )}
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={() => continueMut.mutate(c.id)}
-                  disabled={continueMut.isPending}
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => {
+                    if (window.confirm(`Excluir a campanha "${c.title}"?`)) {
+                      deleteMut.mutate(c.id);
+                      if (editingDraftId === c.id) resetForm();
+                    }
+                  }}
+                  disabled={deleteMut.isPending}
                 >
-                  Continuar envio
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Excluir
                 </Button>
-              )}
+              </div>
             </div>
           ))}
         </CardContent>

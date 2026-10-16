@@ -75,6 +75,150 @@ export async function listCampaigns(): Promise<CampaignRow[]> {
   return (data ?? []) as CampaignRow[];
 }
 
+export async function getCampaign(id: string): Promise<CampaignRow> {
+  const { data, error } = await supabaseAdmin
+    .from("broadcast_campaigns")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Campanha não encontrada");
+  return data as CampaignRow;
+}
+
+async function uploadCampaignImage(
+  userId: string,
+  imageBase64: string,
+  imageContentType?: string,
+): Promise<string> {
+  const ext =
+    imageContentType === "image/png"
+      ? "png"
+      : imageContentType === "image/webp"
+        ? "webp"
+        : "jpg";
+  const bytes = Uint8Array.from(atob(imageBase64), (c) => c.charCodeAt(0));
+  if (bytes.length > 5 * 1024 * 1024) throw new Error("Imagem maior que 5 MB");
+  const imagePath = `${userId}/${Date.now()}-cartaz.${ext}`;
+  const { error: upErr } = await supabaseAdmin.storage
+    .from(BUCKET)
+    .upload(imagePath, bytes, {
+      contentType: imageContentType ?? "image/jpeg",
+      upsert: true,
+    });
+  if (upErr) throw new Error(upErr.message);
+  return imagePath;
+}
+
+export async function updateCampaignDraft(
+  id: string,
+  userId: string,
+  input: {
+    title: string;
+    line: CampaignLine;
+    body: string;
+    audience: CampaignAudience;
+    imageBase64?: string;
+    imageContentType?: string;
+    removeImage?: boolean;
+  },
+): Promise<CampaignRow> {
+  const existing = await getCampaign(id);
+  if (existing.status !== "rascunho") {
+    throw new Error("Só é possível editar campanhas em rascunho.");
+  }
+
+  let imagePath: string | null = existing.image_path;
+  if (input.removeImage) imagePath = null;
+  if (input.imageBase64) {
+    imagePath = await uploadCampaignImage(
+      userId,
+      input.imageBase64,
+      input.imageContentType,
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("broadcast_campaigns")
+    .update({
+      title: input.title.slice(0, 160),
+      line: input.line,
+      body: input.body.slice(0, 4000),
+      audience: input.audience,
+      image_path: imagePath,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+  return data as CampaignRow;
+}
+
+export async function deleteCampaign(id: string): Promise<void> {
+  const row = await getCampaign(id);
+  if (row.status === "enviando") {
+    throw new Error("Campanha em envio — use “Continuar envio” ou aguarde terminar antes de excluir.");
+  }
+  const { error } = await supabaseAdmin.from("broadcast_campaigns").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Nova campanha com mesmo conteúdo e disparo imediato (público atual). */
+export async function duplicateAndLaunchCampaign(
+  userId: string,
+  sourceId: string,
+): Promise<CampaignRow> {
+  const src = await getCampaign(sourceId);
+  const line = src.line as CampaignLine;
+  assertMetaConfiguredForLine(line);
+  const baseTitle = src.title.replace(/\s*·\s*(Descubra|Viagens)\s*$/i, "").trim();
+  const title = `${baseTitle} (reenvio)`.slice(0, 160);
+  const draft = await createCampaignDraft(userId, {
+    title,
+    line,
+    body: String(src.body ?? ""),
+    audience: src.audience as CampaignAudience,
+    imagePathReuse: src.image_path,
+  });
+  return launchCampaign(draft.id);
+}
+
+export async function saveCampaignDraft(
+  userId: string,
+  input: CreateCampaignInput & { id?: string },
+): Promise<CampaignRow> {
+  if (input.line === "both") {
+    throw new Error("Rascunho só para uma linha — escolha Descubra ou Viagens.");
+  }
+  if (input.id) {
+    const existing = await getCampaign(input.id);
+    if (!input.body.trim() && !input.imageBase64 && !existing.image_path) {
+      throw new Error("Informe o texto ou anexe um cartaz.");
+    }
+    return updateCampaignDraft(input.id, userId, {
+      title: input.title.trim() || "Campanha",
+      line: input.line,
+      body: input.body,
+      audience: input.audience,
+      imageBase64: input.imageBase64,
+      imageContentType: input.imageContentType,
+      removeImage: false,
+    });
+  }
+  if (!input.body.trim() && !input.imageBase64) {
+    throw new Error("Informe o texto ou anexe um cartaz.");
+  }
+  return createCampaignDraft(userId, {
+    title: input.title.trim() || "Campanha",
+    line: input.line,
+    body: input.body,
+    audience: input.audience,
+    imageBase64: input.imageBase64,
+    imageContentType: input.imageContentType,
+  });
+}
+
 function linesForSelect(line: CampaignLine | "both"): CampaignLine[] {
   return line === "both" ? ["descubra", "viagens"] : [line];
 }
@@ -176,22 +320,11 @@ export async function createCampaignDraft(
 ): Promise<CampaignRow> {
   let imagePath: string | null = input.imagePathReuse ?? null;
   if (input.imageBase64 && !imagePath) {
-    const ext =
-      input.imageContentType === "image/png"
-        ? "png"
-        : input.imageContentType === "image/webp"
-          ? "webp"
-          : "jpg";
-    const bytes = Uint8Array.from(atob(input.imageBase64), (c) => c.charCodeAt(0));
-    if (bytes.length > 5 * 1024 * 1024) throw new Error("Imagem maior que 5 MB");
-    imagePath = `${userId}/${Date.now()}-cartaz.${ext}`;
-    const { error: upErr } = await supabaseAdmin.storage
-      .from(BUCKET)
-      .upload(imagePath, bytes, {
-        contentType: input.imageContentType ?? "image/jpeg",
-        upsert: true,
-      });
-    if (upErr) throw new Error(upErr.message);
+    imagePath = await uploadCampaignImage(
+      userId,
+      input.imageBase64,
+      input.imageContentType,
+    );
   }
 
   const title = (input.title + (input.titleSuffix ?? "")).slice(0, 160);

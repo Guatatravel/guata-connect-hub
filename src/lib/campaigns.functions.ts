@@ -71,3 +71,36 @@ export const launchCampaignFn = createServerFn({ method: "POST" })
     await requireStaffUser(context.userId);
     return launchCampaign(data.id);
   });
+
+export const saveCampaignDraftFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) =>
+    createSchema.extend({ id: z.string().uuid().optional() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { saveCampaignDraft } = await import("@/lib/campaigns.server");
+    await requireStaffUser(context.userId);
+    return saveCampaignDraft(context.userId, data);
+  });
+
+export const deleteCampaignFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { deleteCampaign } = await import("@/lib/campaigns.server");
+    await requireStaffUser(context.userId);
+    await deleteCampaign(data.id);
+    return { ok: true };
+  });
+
+export const duplicateAndLaunchCampaignFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { duplicateAndLaunchCampaign } = await import("@/lib/campaigns.server");
+    await requireStaffUser(context.userId);
+    return duplicateAndLaunchCampaign(context.userId, data.id);
+  });
