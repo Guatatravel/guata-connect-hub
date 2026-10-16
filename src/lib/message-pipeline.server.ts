@@ -157,6 +157,45 @@ async function loadAttendant(
   return (data as unknown as AttendantConfig) ?? null;
 }
 
+const AGENCY_NAME = "Guatá viagens e turismo";
+
+const GUATA_CORE_PERSONA = `Você é o Guatá: natural de Mato Grosso do Sul (MS é sua casa), espírito de aventureiro, caloroso e direto.
+- Priorize MS (destinos, cultura, gastronomia, eventos, roteiros) quando couber no assunto.
+- Pode orientar sobre turismo em outros lugares do mundo com informação útil; MS continua sendo sua referência e orgulho.
+- Pacotes, reservas, orçamentos e viagens sob medida: cite a agência ${AGENCY_NAME} (nome completo).
+- NUNCA diga que não pode ajudar com viagem personalizada ou destino fora de MS — acolha e convide a ${AGENCY_NAME} a montar.`;
+
+/** Remove scripts de menu/apresentação do Me Consulte; mantém fatos úteis da persona oficial. */
+function refineOfficialPersona(official: string): string {
+  let t = official;
+  t = t.replace(/🦦[\s\S]*?(?:Mato Grosso do Sul|MS)\s*\?/gi, "");
+  t = t.replace(
+    /Posso te ajudar com informações sobre destinos, atrações, gastronomia[\s\S]*?roteiros turísticos em MS\.?/gi,
+    "",
+  );
+  t = t.replace(
+    /O que você gostaria de saber sobre turismo em Mato Grosso do Sul\s*\??/gi,
+    "",
+  );
+  t = t.replace(/Eu sou o Guatá,?\s*seu guia inteligente[\s\S]*?MS\.?/gi, "");
+  return t.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function buildSystemPersona(
+  line: "descubra" | "viagens",
+  official: string | null,
+  attendant: AttendantConfig | null,
+): string {
+  const fallback =
+    attendant?.persona ||
+    `Você é o Guatá, assistente turístico com coração em MS. Respostas curtas e úteis. Viagens sob medida: ${AGENCY_NAME}.`;
+  const institutional =
+    line === "descubra" && official
+      ? `\n\n## Referência institucional (fatos e tom MS — não copie menus nem apresentações fixas):\n${refineOfficialPersona(official)}`
+      : "";
+  return GUATA_CORE_PERSONA + institutional + (attendant?.persona ? `\n\n## Atendente:\n${attendant.persona}` : `\n\n${fallback}`);
+}
+
 async function loadHistory(
   sessionId: string | undefined,
   userText: string,
@@ -187,10 +226,7 @@ async function answerTurismo(
 ): Promise<string> {
   const attendant = await loadAttendant(line);
   const official = line === "descubra" ? await getGuataPersona() : null;
-  const persona =
-    official ||
-    attendant?.persona ||
-    "Você é o Guatá, assistente turístico de Mato Grosso do Sul. Respostas curtas, calorosas e úteis. Viagens e pacotes personalizados: Guatá Viagens e Turismo.";
+  const persona = buildSystemPersona(line, official, attendant);
 
   let context = "";
 
@@ -232,12 +268,12 @@ async function answerTurismo(
   const ongoing = history.length > 1;
   const whatsappRules =
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
-    "\n## MS E AGÊNCIA\n- Você é o Guatá: foco e carinho por Mato Grosso do Sul (dicas, roteiros, atrativos, eventos, cultura).\n- NUNCA diga que não pode ajudar com passeio personalizado, pacote, viagem sob medida, hospedagem, orçamento ou destino fora de MS. Isso é com a *Guatá Viagens e Turismo* — acolha, oriente e convide a agência a montar o que o cliente quiser.\n- Pode sugerir roteiros em MS com entusiasmo. Para fechar, reservar ou personalizar: Guatá Viagens.\n- Parceiros do Descubra MS no contexto podem ser recomendados.\n" +
-    "\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE diretamente (ex.: 'Quer que eu chame um consultor da Guatá Viagens para falar com você?') e termine a mensagem com o marcador [[OFERTA_HUMANO]].\n" +
-    "\n## CANAL WHATSAPP\n- Uma ideia por mensagem: no máximo ~4 linhas curtas (~300 caracteres no total).\n- Se faltar espaço, priorize o essencial e convide a pessoa a pedir mais detalhe na sequência.\n- Tom de conversa natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco.\n- Listas curtas com '• ' (máx. 3 itens). Sem menus numerados.\n" +
+    `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- MS é sua casa — destaque MS quando relevante; em assuntos internacionais, seja útil e breve e só então ligue à ${AGENCY_NAME} se for viagem sob medida.\n- Parceiros Descubra MS no contexto podem ser recomendados.\n` +
+    `\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE (ex.: 'Quer que eu chame um consultor da ${AGENCY_NAME}?') e termine com [[OFERTA_HUMANO]].\n` +
+    "\n## CANAL WHATSAPP\n- Mensagens curtas mas completas: até ~6 linhas ou ~500 caracteres no total da resposta (pode usar dois parágrafos).\n- Se faltar espaço, priorize o essencial e convide a pedir mais detalhe.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco.\n- Listas curtas com '• ' (máx. 4 itens). Sem menus numerados.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
-      : "- Se for só um cumprimento, cumprimente uma vez de forma calorosa e pergunte como pode ajudar, sem listas.\n") +
+      : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
     (firstName
       ? `- O cliente se chama ${firstName}. Use o primeiro nome de forma natural, no máximo uma vez, sem repetir em toda mensagem.\n`
       : "");
@@ -245,7 +281,7 @@ async function answerTurismo(
   const raw = await chatCompletion(
     [{ role: "system", content: persona + context + whatsappRules }, ...history],
     {
-      maxTokens: 320,
+      maxTokens: 520,
       temperature: attendant?.criatividade ?? 0.6,
       model: attendant?.modelo || undefined,
     },
@@ -264,8 +300,8 @@ export function formatForWhatsApp(text: string): string {
 }
 
 /** Limite por balão no WhatsApp (várias mensagens seguidas). */
-const WHATSAPP_BUBBLE_MAX = 380;
-const WHATSAPP_BUBBLE_MAX_COUNT = 4;
+const WHATSAPP_BUBBLE_MAX = 450;
+const WHATSAPP_BUBBLE_MAX_COUNT = 5;
 
 /**
  * Divide texto longo em vários balões curtos (parágrafos / linhas).

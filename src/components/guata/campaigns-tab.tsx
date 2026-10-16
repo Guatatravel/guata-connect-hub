@@ -40,7 +40,7 @@ const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
 
 const LINE_LABEL: Record<CampaignLine, string> = {
   descubra: "Descubra MS — Me Consulte",
-  viagens: "Guatá Viagens e Turismo",
+  viagens: "Guatá viagens e turismo",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -185,7 +185,7 @@ export function CampaignsTab() {
               Descubra MS: {meta?.descubra ? "Meta OK" : "Meta pendente"}
             </Badge>
             <Badge variant={meta?.viagens ? "secondary" : "destructive"}>
-              Guatá Viagens: {meta?.viagens ? "Meta OK" : "Meta pendente"}
+              Guatá viagens e turismo: {meta?.viagens ? "Meta OK" : "Meta pendente"}
             </Badge>
           </div>
         </CardContent>
