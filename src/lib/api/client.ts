@@ -51,14 +51,24 @@ export const api = {
   async replyConversation(
     id: string,
     text: string,
-    image?: { base64: string; contentType: string },
+    attachment?: {
+      base64: string;
+      contentType: string;
+      filename?: string;
+      kind: "image" | "document";
+    },
   ) {
     return replyAsAgent({
       data: {
         id,
         text: text || undefined,
-        imageBase64: image?.base64,
-        imageContentType: image?.contentType,
+        imageBase64: attachment?.kind === "image" ? attachment.base64 : undefined,
+        imageContentType:
+          attachment?.kind === "image" ? attachment.contentType : undefined,
+        documentBase64: attachment?.kind === "document" ? attachment.base64 : undefined,
+        documentContentType:
+          attachment?.kind === "document" ? attachment.contentType : undefined,
+        documentFilename: attachment?.filename,
       },
     });
   },

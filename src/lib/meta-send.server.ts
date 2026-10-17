@@ -57,6 +57,52 @@ export async function sendWhatsAppText(
   return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
+export async function sendWhatsAppDocument(
+  line: Line,
+  to: string,
+  documentUrl: string,
+  filename = "documento.pdf",
+  caption?: string,
+): Promise<SendResult> {
+  const token = lineEnv(line, "ACCESS_TOKEN");
+  const phoneId = lineEnv(line, "PHONE_NUMBER_ID");
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const document: { link: string; filename: string; caption?: string } = {
+    link: documentUrl,
+    filename: filename.slice(0, 240),
+  };
+  if (caption?.trim()) document.caption = caption.trim().slice(0, 1024);
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: to.replace(/\D/g, ""),
+        type: "document",
+        document,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as {
+    messages?: Array<{ id?: string }>;
+  };
+  return { ok: true, messageId: json.messages?.[0]?.id };
+}
+
 export async function sendWhatsAppImage(
   line: Line,
   to: string,

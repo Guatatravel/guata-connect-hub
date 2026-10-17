@@ -1,6 +1,5 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { LineBadge } from "@/components/guata/line-badge";
 import { SessionModeBadge } from "@/components/guata/status-badge";
 import { formatPhone, timeAgo, waLink } from "@/lib/format";
 import type { Conversation } from "@/types/guata";
@@ -21,7 +20,6 @@ export function ConversationProfileCard({ conv }: { conv: Conversation }) {
         <div className="flex-1 min-w-[200px] space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-display font-semibold text-lg">{display}</span>
-            <LineBadge line={conv.line} />
             <SessionModeBadge mode={conv.mode} />
           </div>
           <p className="text-sm text-muted-foreground flex items-center gap-1">

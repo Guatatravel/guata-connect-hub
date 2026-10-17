@@ -25,7 +25,7 @@ function DashboardPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 w-full max-w-6xl mx-auto">
       <div>
         <h1 className="font-display text-3xl font-semibold text-primary">
           Dashboard

@@ -20,7 +20,6 @@ import {
   Users,
   BookOpen,
   Bot,
-  Inbox,
   PanelRight,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
@@ -34,7 +33,6 @@ const items = [
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/atendentes", label: "Atendentes", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },
-  { to: "/solicitacoes", label: "Solicitações de acesso", icon: Inbox },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
@@ -59,7 +57,7 @@ export function AppSidebar({ counts }: { counts?: Counts }) {
               Guatá Channel
             </span>
             <span className="text-xs text-sidebar-foreground/70">
-              Descubra MS · Viagens
+              Guatá viagens e turismo
             </span>
           </div>
         </div>

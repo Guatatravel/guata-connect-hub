@@ -153,26 +153,29 @@ export async function normalizeWhatsAppInbound(
         };
       }
     }
-    if (mime === "application/pdf" || cap) {
+    const attachment = await attachStored(phone, media, "document");
+    const filename =
+      (doc as { filename?: string }).filename?.trim() || "documento.pdf";
+    let text = cap || `Documento: ${filename}`;
+    if (mime === "application/pdf") {
       try {
         const { extractFromFile } = await import("@/lib/knowledge.server");
         const extracted = await extractFromFile("doc.pdf", media.bytes);
-        const snippet = extracted.slice(0, 3000);
-        if (snippet) {
-          return {
-            text: cap
-              ? `${cap}\n\n(Conteúdo do documento: ${snippet})`
-              : `(Cliente enviou um documento: ${snippet})`,
-            inboundKind: "text",
-          };
-        }
+        const snippet = extracted.slice(0, 800);
+        if (snippet) text = cap ? `${cap}\n\n${snippet}` : snippet;
       } catch (e) {
         console.error("[inbound] documento:", e);
       }
+      return {
+        text,
+        inboundKind: "unsupported",
+        attachment: { ...attachment, mediaKind: "document" as const },
+      };
     }
     return {
-      text: cap || UNSUPPORTED_REPLY,
+      text: cap || "(Cliente enviou um documento.)",
       inboundKind: "unsupported",
+      attachment,
     };
   }
 

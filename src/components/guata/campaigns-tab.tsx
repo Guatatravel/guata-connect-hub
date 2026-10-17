@@ -51,8 +51,8 @@ const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
 };
 
 const LINE_LABEL: Record<CampaignLine, string> = {
-  descubra: "Descubra MS — Me Consulte",
-  viagens: "Guatá viagens e turismo",
+  descubra: "Guatá",
+  viagens: "Guatá",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -291,10 +291,10 @@ export function CampaignsTab() {
           </p>
           <div className="flex flex-wrap gap-2 pt-1">
             <Badge variant={meta?.descubra ? "secondary" : "destructive"}>
-              Descubra MS: {meta?.descubra ? "Meta OK" : "Meta pendente"}
+              WhatsApp (principal): {meta?.descubra ? "Meta OK" : "Meta pendente"}
             </Badge>
             <Badge variant={meta?.viagens ? "secondary" : "destructive"}>
-              Guatá viagens e turismo: {meta?.viagens ? "Meta OK" : "Meta pendente"}
+              WhatsApp (linha 2): {meta?.viagens ? "Meta OK" : "Meta pendente"}
             </Badge>
           </div>
         </CardContent>

@@ -44,6 +44,7 @@ export interface ChatMessage {
   mediaKind?: ChatMediaKind;
   mediaUrl?: string;
   mediaMime?: string;
+  mediaFilename?: string;
 }
 
 export interface Conversation {

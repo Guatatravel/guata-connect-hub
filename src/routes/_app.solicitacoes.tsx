@@ -56,12 +56,9 @@ function SolicitacoesPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold text-primary">Solicitações de acesso</h1>
           <p className="text-muted-foreground">
-            Pessoas que pediram acesso pela página de apresentação. Após o pagamento, crie o acesso em Usuários.
+            Pedidos feitos em “Solicitar cadastro” no login. Após aprovar, crie o usuário em Usuários.
           </p>
         </div>
-        <Button variant="outline" asChild>
-          <a href="/apresentacao" target="_blank" rel="noreferrer">Ver página de apresentação</a>
-        </Button>
       </div>
 
       {isLoading && <Skeleton className="h-40 rounded-2xl" />}

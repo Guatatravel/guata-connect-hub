@@ -1,6 +1,7 @@
 import type { ChatMessage } from "@/types/guata";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
+import { FileText } from "lucide-react";
 
 export function ChatTimeline({ messages }: { messages: ChatMessage[] }) {
   return (
@@ -39,6 +40,17 @@ export function ChatTimeline({ messages }: { messages: ChatMessage[] }) {
                 <audio controls preload="metadata" className="w-full max-w-xs">
                   <source src={m.mediaUrl} type={m.mediaMime ?? "audio/ogg"} />
                 </audio>
+              )}
+              {m.mediaKind === "document" && m.mediaUrl && (
+                <a
+                  href={m.mediaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-primary underline underline-offset-2"
+                >
+                  <FileText className="h-4 w-4 shrink-0" />
+                  {m.mediaFilename ?? "Abrir PDF / documento"}
+                </a>
               )}
               {showText && (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed">{m.text}</div>

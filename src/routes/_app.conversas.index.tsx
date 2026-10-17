@@ -77,7 +77,7 @@ function ConversasPage() {
   );
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full max-w-3xl mx-auto">
       <div>
         <h1 className="font-display text-3xl font-semibold text-primary">Conversas</h1>
         <p className="text-muted-foreground">

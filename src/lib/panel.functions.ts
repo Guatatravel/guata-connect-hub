@@ -7,7 +7,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { sendWhatsAppImage, sendWhatsAppText } from "@/lib/meta-send.server";
+import {
+  sendWhatsAppDocument,
+  sendWhatsAppImage,
+  sendWhatsAppText,
+} from "@/lib/meta-send.server";
 import {
   signedChatMediaUrl,
   storeChatMediaFromBase64,
@@ -141,6 +145,7 @@ type MessageMeta = {
   media_path?: string;
   media_mime?: string;
   media_kind?: string;
+  filename?: string;
 };
 
 async function mapMessagesForPanel(
@@ -169,6 +174,7 @@ async function mapMessagesForPanel(
         mediaKind,
         mediaUrl: mediaUrl ?? undefined,
         mediaMime: meta.media_mime,
+        mediaFilename: meta.filename,
       };
     }),
   );
@@ -267,10 +273,15 @@ const replySchema = z
     text: z.string().max(4000).optional(),
     imageBase64: z.string().optional(),
     imageContentType: z.string().optional(),
+    documentBase64: z.string().optional(),
+    documentContentType: z.string().optional(),
+    documentFilename: z.string().max(240).optional(),
   })
-  .refine((d) => Boolean(d.text?.trim()) || Boolean(d.imageBase64), {
-    message: "Informe texto ou imagem.",
-  });
+  .refine(
+    (d) =>
+      Boolean(d.text?.trim()) || Boolean(d.imageBase64) || Boolean(d.documentBase64),
+    { message: "Informe texto, imagem ou documento." },
+  );
 
 export const replyAsAgent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -328,6 +339,32 @@ export const replyAsAgent = createServerFn({ method: "POST" })
           metadata: { error: imgRes.reason } as never,
         });
       }
+    } else if (data.documentBase64) {
+      const mime = data.documentContentType ?? "application/pdf";
+      mediaPath = await storeChatMediaFromBase64(s.phone, data.documentBase64, mime, "document");
+      meta.media_path = mediaPath;
+      meta.media_mime = mime;
+      meta.media_kind = "document";
+      meta.filename = data.documentFilename ?? "documento.pdf";
+      const docUrl = await signedChatMediaUrl(mediaPath, 60 * 60);
+      if (!docUrl) throw new Error("Não foi possível gerar URL do documento.");
+      const docRes = await sendWhatsAppDocument(
+        s.line as DbLine,
+        s.phone,
+        docUrl,
+        data.documentFilename ?? "documento.pdf",
+        caption || undefined,
+      );
+      sent = docRes.ok;
+      if (!docRes.ok) {
+        await supabaseAdmin.from("messages").insert({
+          session_id: s.id,
+          direction: "out",
+          author: "system",
+          text: `(falha no envio do documento: ${docRes.reason ?? "desconhecida"})`,
+          metadata: { error: docRes.reason } as never,
+        });
+      }
     } else if (caption) {
       const send = await sendWhatsAppText(s.line as DbLine, s.phone, caption);
       sent = send.ok;
@@ -342,7 +379,9 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       }
     }
 
-    const displayText = caption || (data.imageBase64 ? "[imagem]" : "");
+    const displayText =
+      caption ||
+      (data.imageBase64 ? "[imagem]" : data.documentBase64 ? "[documento]" : "");
     const { error: msgErr } = await supabaseAdmin.from("messages").insert({
       session_id: s.id,
       direction: "out",

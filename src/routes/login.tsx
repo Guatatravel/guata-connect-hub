@@ -117,14 +117,22 @@ function LoginPage() {
                 </Link>
               </p>
             ) : (
-              <button
-                type="button"
-                onClick={handleReset}
-                disabled={resetting}
-                className="block w-full text-xs text-center text-primary underline font-medium hover:opacity-80 disabled:opacity-50"
-              >
-                {resetting ? "Enviando..." : "Esqueci minha senha"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={resetting}
+                  className="block w-full text-xs text-center text-primary underline font-medium hover:opacity-80 disabled:opacity-50"
+                >
+                  {resetting ? "Enviando..." : "Esqueci minha senha"}
+                </button>
+                <p className="text-xs text-center text-muted-foreground pt-2">
+                  Ainda não tem acesso?{" "}
+                  <a href="/apresentacao#solicitar" className="text-primary underline font-medium">
+                    Solicitar cadastro
+                  </a>
+                </p>
+              </>
             )}
           </form>
         </CardContent>

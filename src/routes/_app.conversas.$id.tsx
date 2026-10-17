@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, ImageIcon, Send } from "lucide-react";
+import { ArrowLeft, Paperclip, Send } from "lucide-react";
 import { DossieCard } from "@/components/guata/dossie-card";
 import { HandoffControls } from "@/components/guata/handoff-controls";
 
@@ -36,8 +36,8 @@ function ConversaDetail() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
   const [reply, setReply] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const imageRef = useRef<HTMLInputElement>(null);
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: conv, isLoading } = useQuery({
     queryKey: ["conversation", id],
@@ -51,18 +51,28 @@ function ConversaDetail() {
 
   const replyMut = useMutation({
     mutationFn: async () => {
-      let image: { base64: string; contentType: string } | undefined;
-      if (imageFile) {
-        const img = await fileToBase64(imageFile);
-        image = { base64: img.base64, contentType: img.type };
+      let attachment:
+        | { base64: string; contentType: string; filename?: string; kind: "image" | "document" }
+        | undefined;
+      if (attachFile) {
+        const file = await fileToBase64(attachFile);
+        const isPdf =
+          attachFile.type === "application/pdf" ||
+          attachFile.name.toLowerCase().endsWith(".pdf");
+        attachment = {
+          base64: file.base64,
+          contentType: file.type,
+          filename: attachFile.name,
+          kind: isPdf ? "document" : "image",
+        };
       }
-      if (!reply.trim() && !image) throw new Error("Informe texto ou imagem.");
-      return api.replyConversation(id, reply.trim(), image);
+      if (!reply.trim() && !attachment) throw new Error("Informe texto ou anexo.");
+      return api.replyConversation(id, reply.trim(), attachment);
     },
     onSuccess: () => {
       toast.success("Mensagem enviada");
       setReply("");
-      setImageFile(null);
+      setAttachFile(null);
       qc.invalidateQueries({ queryKey: ["conversation", id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
       qc.invalidateQueries({ queryKey: ["unread-counts"] });
@@ -76,7 +86,7 @@ function ConversaDetail() {
   }
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4 w-full max-w-3xl mx-auto">
       <Button variant="ghost" size="sm" asChild className="-ml-2">
         <Link to="/conversas">
           <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
@@ -97,42 +107,42 @@ function ConversaDetail() {
             <ChatTimeline messages={conv.messages} />
           </div>
           <input
-            ref={imageRef}
+            ref={fileRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
             className="hidden"
-            onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => setAttachFile(e.target.files?.[0] ?? null)}
           />
           <div className="flex flex-wrap gap-2 items-center">
             <Button
               type="button"
               variant="outline"
               size="icon"
-              onClick={() => imageRef.current?.click()}
-              title="Enviar imagem"
+              onClick={() => fileRef.current?.click()}
+              title="Imagem ou PDF"
             >
-              <ImageIcon className="h-4 w-4" />
+              <Paperclip className="h-4 w-4" />
             </Button>
-            {imageFile && (
+            {attachFile && (
               <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                {imageFile.name}
+                {attachFile.name}
               </span>
             )}
             <Input
               className="flex-1 min-w-[200px]"
-              placeholder="Mensagem (legenda se houver imagem)..."
+              placeholder="Mensagem (legenda se houver anexo)..."
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (reply.trim() || imageFile) replyMut.mutate();
+                  if (reply.trim() || attachFile) replyMut.mutate();
                 }
               }}
             />
             <Button
               onClick={() => replyMut.mutate()}
-              disabled={replyMut.isPending || (!reply.trim() && !imageFile)}
+              disabled={replyMut.isPending || (!reply.trim() && !attachFile)}
             >
               <Send className="h-4 w-4" />
             </Button>

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -99,6 +99,12 @@ function UsuariosPage() {
           Cadastre consultores e administradores. Cada novo usuário é obrigado a
           trocar a senha no primeiro acesso.
         </p>
+        <Link
+          to="/solicitacoes"
+          className="text-sm text-primary underline underline-offset-2 mt-2 inline-block"
+        >
+          Ver solicitações de cadastro
+        </Link>
       </div>
 
       <Card className="rounded-2xl">

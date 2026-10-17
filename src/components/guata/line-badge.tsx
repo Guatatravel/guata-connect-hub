@@ -4,12 +4,12 @@ import { cn } from "@/lib/utils";
 
 const map: Record<WhatsAppLine, { label: string; cls: string }> = {
   descubra_ms: {
-    label: "Descubra MS",
+    label: "Guatá",
     cls: "bg-primary/15 text-primary border-primary/40",
   },
   guata_viagens: {
-    label: "Guatá Viagens",
-    cls: "bg-accent/30 text-accent-foreground border-accent",
+    label: "Guatá",
+    cls: "bg-primary/15 text-primary border-primary/40",
   },
 };
 
