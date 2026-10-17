@@ -48,8 +48,19 @@ export const api = {
     return (await fetchConversation({ data: { id } })) as unknown as Conversation | null;
   },
 
-  async replyConversation(id: string, text: string) {
-    return replyAsAgent({ data: { id, text } });
+  async replyConversation(
+    id: string,
+    text: string,
+    image?: { base64: string; contentType: string },
+  ) {
+    return replyAsAgent({
+      data: {
+        id,
+        text: text || undefined,
+        imageBase64: image?.base64,
+        imageContentType: image?.contentType,
+      },
+    });
   },
 
   async releaseBot(id: string) {

@@ -7,11 +7,28 @@ import {
   describeWhatsAppImage,
   transcribeWhatsAppAudio,
 } from "@/lib/media-understanding.server";
+import { storeChatMedia, type ChatMediaKind } from "@/lib/chat-media.server";
+
+export interface InboundAttachment {
+  storagePath: string;
+  mimeType: string;
+  mediaKind: ChatMediaKind;
+}
 
 export interface NormalizedInbound {
   /** Texto usado pela IA e gravado no histórico */
   text: string;
   inboundKind: "text" | "image" | "audio" | "unsupported";
+  attachment?: InboundAttachment;
+}
+
+async function attachStored(
+  phone: string,
+  media: { bytes: Uint8Array; mimeType: string },
+  mediaKind: ChatMediaKind,
+): Promise<InboundAttachment> {
+  const storagePath = await storeChatMedia(phone, media.bytes, media.mimeType, mediaKind);
+  return { storagePath, mimeType: media.mimeType, mediaKind };
 }
 
 const UNSUPPORTED_REPLY =
@@ -50,20 +67,24 @@ export async function normalizeWhatsAppInbound(
         inboundKind: "image",
       };
     }
+    const attachment = await attachStored(phone, media, "image");
+    const cap = image?.caption?.trim();
     try {
-      const text = await describeWhatsAppImage(
+      const described = await describeWhatsAppImage(
         media.bytes,
         media.mimeType,
-        image?.caption,
+        cap,
       );
-      return { text, inboundKind: "image" };
+      const text = cap && !described.includes(cap) ? `${cap}\n\n${described}` : described;
+      return { text, inboundKind: "image", attachment };
     } catch (e) {
       console.error("[inbound] imagem:", e);
       return {
         text:
-          image?.caption?.trim() ||
+          cap ||
           "(Cliente enviou uma imagem — erro ao interpretar. Peça mais detalhes em texto.)",
         inboundKind: "image",
+        attachment,
       };
     }
   }
@@ -84,21 +105,23 @@ export async function normalizeWhatsAppInbound(
         inboundKind: "audio",
       };
     }
+    const attachment = await attachStored(phone, media, "audio");
     try {
       const transcript = await transcribeWhatsAppAudio(media.bytes, media.mimeType);
       if (transcript) {
         return {
-          text: `(Áudio do cliente transcrito): ${transcript}`,
+          text: transcript,
           inboundKind: "audio",
+          attachment,
         };
       }
     } catch (e) {
       console.error("[inbound] áudio:", e);
     }
     return {
-      text:
-        "(Cliente enviou um áudio — não consegui transcrever. Peça para repetir em texto ou gravar de novo.)",
+      text: "(Áudio — ouça abaixo ou peça para o cliente repetir em texto.)",
       inboundKind: "audio",
+      attachment,
     };
   }
 
@@ -118,11 +141,16 @@ export async function normalizeWhatsAppInbound(
     }
     const mime = media.mimeType.toLowerCase();
     if (mime.startsWith("image/")) {
+      const attachment = await attachStored(phone, media, "image");
       try {
         const text = await describeWhatsAppImage(media.bytes, media.mimeType, cap);
-        return { text, inboundKind: "image" };
+        return { text, inboundKind: "image", attachment };
       } catch {
-        /* fall through */
+        return {
+          text: cap || "(Cliente enviou uma imagem.)",
+          inboundKind: "image",
+          attachment,
+        };
       }
     }
     if (mime === "application/pdf" || cap) {

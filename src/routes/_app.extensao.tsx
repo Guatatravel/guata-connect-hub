@@ -19,8 +19,8 @@ function ExtensaoPage() {
       <div>
         <h1 className="font-display text-3xl font-semibold text-primary">Modo Atendimento</h1>
         <p className="text-muted-foreground">
-          Use o painel como central de atendimento: alertas, conversas ao vivo e assumir o chat com um clique.
-          A extensão para o navegador virá depois; por enquanto fixe esta aba ou abra{" "}
+          Mesmo número WhatsApp da empresa (Meta): a equipe atende aqui — texto, imagem e áudio do
+          cliente — sem conta Meta por funcionário. Fixe esta aba ou abra{" "}
           <Link to="/conversas" className="text-primary underline-offset-2 hover:underline">
             Conversas
           </Link>
@@ -42,8 +42,8 @@ function ExtensaoPage() {
       <Card className="rounded-2xl">
         <CardContent className="p-6 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Dica: deixe esta aba fixada no navegador (clique com o botão direito na aba → “Fixar”). O login fica salvo, então você abre e já vê tudo.
-            A extensão para Chrome/Edge será um próximo passo e usará este mesmo painel.
+            Dica: fixe a aba de Conversas no navegador. Você vê o perfil do cliente, ouve áudios,
+            vê fotos enviadas e responde com texto ou imagem — como no WhatsApp, pelo Guatá.
           </p>
           <Button asChild><Link to="/conversas">Abrir conversas</Link></Button>
         </CardContent>

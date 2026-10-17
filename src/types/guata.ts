@@ -34,11 +34,16 @@ export interface TravelIntake {
   updatedAt: string;
 }
 
+export type ChatMediaKind = "image" | "audio" | "video" | "document";
+
 export interface ChatMessage {
   id: string;
   role: "user" | "bot" | "human";
   text: string;
   at: string;
+  mediaKind?: ChatMediaKind;
+  mediaUrl?: string;
+  mediaMime?: string;
 }
 
 export interface Conversation {
@@ -48,6 +53,8 @@ export interface Conversation {
   line: WhatsAppLine;
   mode: SessionMode;
   lastMessageAt: string;
+  createdAt?: string;
+  assignedToName?: string;
   lastMessage: string;
   unread?: number;
   archived?: boolean;

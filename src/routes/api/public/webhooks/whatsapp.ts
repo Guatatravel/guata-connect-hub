@@ -137,6 +137,9 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               text: normalized.text,
               messageId: msgId || undefined,
               inboundKind: normalized.inboundKind,
+              mediaPath: normalized.attachment?.storagePath,
+              mediaMime: normalized.attachment?.mimeType,
+              mediaKind: normalized.attachment?.mediaKind,
             });
           } catch (err) {
             const m = err instanceof Error ? err.message : String(err);

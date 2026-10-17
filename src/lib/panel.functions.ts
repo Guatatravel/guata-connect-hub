@@ -7,7 +7,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { sendWhatsAppText } from "@/lib/meta-send.server";
+import { sendWhatsAppImage, sendWhatsAppText } from "@/lib/meta-send.server";
+import {
+  signedChatMediaUrl,
+  storeChatMediaFromBase64,
+} from "@/lib/chat-media.server";
 
 // --------- mapeamentos DB ↔ UI ---------
 type DbLine = "descubra" | "viagens";
@@ -133,6 +137,43 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
     };
   });
 
+type MessageMeta = {
+  media_path?: string;
+  media_mime?: string;
+  media_kind?: string;
+};
+
+async function mapMessagesForPanel(
+  msgs: Array<{
+    id: string;
+    author: string;
+    text: string;
+    created_at: string;
+    metadata: unknown;
+  }>,
+) {
+  return Promise.all(
+    msgs.map(async (m) => {
+      const meta = (m.metadata ?? {}) as MessageMeta;
+      const path = meta.media_path;
+      const mediaUrl = path ? await signedChatMediaUrl(path) : null;
+      const mediaKind = meta.media_kind as "image" | "audio" | "video" | "document" | undefined;
+      return {
+        id: m.id,
+        role: (m.author === "user" ? "user" : m.author === "bot" ? "bot" : "human") as
+          | "user"
+          | "bot"
+          | "human",
+        text: m.text,
+        at: m.created_at,
+        mediaKind,
+        mediaUrl: mediaUrl ?? undefined,
+        mediaMime: meta.media_mime,
+      };
+    }),
+  );
+}
+
 // =========================================================
 // CONVERSAS / MENSAGENS
 // =========================================================
@@ -195,24 +236,17 @@ export const fetchConversation = createServerFn({ method: "POST" })
     await requireStaff(context.userId);
     const { data: s } = await supabaseAdmin
       .from("sessions")
-      .select("id, line, mode, phone, contact_name, last_message_at")
+      .select("id, line, mode, phone, contact_name, last_message_at, created_at, assigned_to")
       .eq("id", data.id)
       .maybeSingle();
     if (!s) return null;
     const { data: msgs } = await supabaseAdmin
       .from("messages")
-      .select("id, author, text, created_at")
+      .select("id, author, text, created_at, metadata")
       .eq("session_id", data.id)
       .order("created_at", { ascending: true });
-    const messages = (msgs ?? []).map((m) => ({
-      id: m.id,
-      role: (m.author === "user" ? "user" : m.author === "bot" ? "bot" : "human") as
-        | "user"
-        | "bot"
-        | "human",
-      text: m.text,
-      at: m.created_at,
-    }));
+    const messages = await mapMessagesForPanel(msgs ?? []);
+    const assignedToName = await resolveStaffName(s.assigned_to);
     return {
       id: s.id,
       phone: s.phone,
@@ -220,15 +254,23 @@ export const fetchConversation = createServerFn({ method: "POST" })
       line: dbToUiLine(s.line),
       mode: dbToUiMode(s.mode),
       lastMessageAt: s.last_message_at,
+      createdAt: s.created_at,
+      assignedToName: assignedToName ?? undefined,
       lastMessage: messages.at(-1)?.text ?? "",
       messages,
     };
   });
 
-const replySchema = z.object({
-  id: z.string().uuid(),
-  text: z.string().min(1).max(4000),
-});
+const replySchema = z
+  .object({
+    id: z.string().uuid(),
+    text: z.string().max(4000).optional(),
+    imageBase64: z.string().optional(),
+    imageContentType: z.string().optional(),
+  })
+  .refine((d) => Boolean(d.text?.trim()) || Boolean(d.imageBase64), {
+    message: "Informe texto ou imagem.",
+  });
 
 export const replyAsAgent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -242,8 +284,8 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!s) throw new Error("Sessão não encontrada");
 
+    const caption = data.text?.trim() ?? "";
     const now = new Date().toISOString();
-    // Marca em humano + atribui consultor
     await supabaseAdmin
       .from("sessions")
       .update({
@@ -254,29 +296,63 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       })
       .eq("id", s.id);
 
-    // Persiste mensagem
+    let sent = false;
+    let mediaPath: string | undefined;
+    const meta: Record<string, unknown> = { sent_by: context.userId };
+
+    if (data.imageBase64) {
+      mediaPath = await storeChatMediaFromBase64(
+        s.phone,
+        data.imageBase64,
+        data.imageContentType ?? "image/jpeg",
+        "image",
+      );
+      meta.media_path = mediaPath;
+      meta.media_mime = data.imageContentType ?? "image/jpeg";
+      meta.media_kind = "image";
+      const imageUrl = await signedChatMediaUrl(mediaPath, 60 * 60);
+      if (!imageUrl) throw new Error("Não foi possível gerar URL da imagem.");
+      const imgRes = await sendWhatsAppImage(
+        s.line as DbLine,
+        s.phone,
+        imageUrl,
+        caption || undefined,
+      );
+      sent = imgRes.ok;
+      if (!imgRes.ok) {
+        await supabaseAdmin.from("messages").insert({
+          session_id: s.id,
+          direction: "out",
+          author: "system",
+          text: `(falha no envio da imagem: ${imgRes.reason ?? "desconhecida"})`,
+          metadata: { error: imgRes.reason } as never,
+        });
+      }
+    } else if (caption) {
+      const send = await sendWhatsAppText(s.line as DbLine, s.phone, caption);
+      sent = send.ok;
+      if (!send.ok) {
+        await supabaseAdmin.from("messages").insert({
+          session_id: s.id,
+          direction: "out",
+          author: "system",
+          text: `(falha no envio Meta: ${send.reason ?? "desconhecida"})`,
+          metadata: { error: send.reason } as never,
+        });
+      }
+    }
+
+    const displayText = caption || (data.imageBase64 ? "[imagem]" : "");
     const { error: msgErr } = await supabaseAdmin.from("messages").insert({
       session_id: s.id,
       direction: "out",
       author: "agent",
-      text: data.text,
-      metadata: { sent_by: context.userId } as never,
+      text: displayText,
+      metadata: meta as never,
     });
     if (msgErr) throw new Error(msgErr.message);
 
-    // Envia via Meta (se configurado)
-    const send = await sendWhatsAppText(s.line as DbLine, s.phone, data.text);
-    if (!send.ok) {
-      // grava erro para reprocesso, mas não falha (consultor pode mandar manual)
-      await supabaseAdmin.from("messages").insert({
-        session_id: s.id,
-        direction: "out",
-        author: "system",
-        text: `(falha no envio Meta: ${send.reason ?? "desconhecida"})`,
-        metadata: { error: send.reason } as never,
-      });
-    }
-    return { ok: true, sent: send.ok };
+    return { ok: true, sent };
   });
 
 export const releaseBot = createServerFn({ method: "POST" })

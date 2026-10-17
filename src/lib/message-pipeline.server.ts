@@ -19,6 +19,9 @@ export interface IncomingMessage {
   text: string;
   messageId?: string;
   inboundKind?: "text" | "image" | "audio" | "unsupported";
+  mediaPath?: string;
+  mediaMime?: string;
+  mediaKind?: "image" | "audio" | "video" | "document";
 }
 
 interface SessionRow {
@@ -394,8 +397,21 @@ export async function processMessage(
 ): Promise<{ replies: string[]; sessionId: string }> {
   if (msg.messageId) void markReadAndTyping(msg.line, msg.messageId);
   const session = await loadOrCreateSession(msg.line, msg.phone, msg.contactName);
+  if (msg.contactName?.trim()) {
+    await supabaseAdmin
+      .from("sessions")
+      .update({ contact_name: msg.contactName.trim() })
+      .eq("id", session.id);
+  }
   await persistMessage(session.id, "in", "user", msg.text, {
     inbound_kind: msg.inboundKind ?? "text",
+    ...(msg.mediaPath
+      ? {
+          media_path: msg.mediaPath,
+          media_mime: msg.mediaMime,
+          media_kind: msg.mediaKind,
+        }
+      : {}),
   });
   const firstName = msg.contactName?.trim().split(/\s+/)[0];
   const handoffText = firstName

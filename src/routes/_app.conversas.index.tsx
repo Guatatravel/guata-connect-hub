@@ -25,6 +25,7 @@ function ConversasPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => api.listConversations(),
+    refetchInterval: 8000,
   });
   const archive = useMutation({
     mutationFn: (v: { id: string; archived: boolean }) => api.setArchived(v.id, v.archived),
