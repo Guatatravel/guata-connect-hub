@@ -80,7 +80,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Painel operacional do Guatá Channel: WhatsApp do Descubra MS e Guatá Viagens e Turismo.",
+          "Painel operacional do Guatá Channel: WhatsApp do Descubra MS e Guatá.",
       },
       { name: "author", content: "Lovable" },
       { property: "og:title", content: "Guatá Channel — Painel" },

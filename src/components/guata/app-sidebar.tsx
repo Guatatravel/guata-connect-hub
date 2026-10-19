@@ -57,7 +57,7 @@ export function AppSidebar({ counts }: { counts?: Counts }) {
               Guatá Channel
             </span>
             <span className="text-xs text-sidebar-foreground/70">
-              Guatá viagens e turismo
+              Guatá
             </span>
           </div>
         </div>

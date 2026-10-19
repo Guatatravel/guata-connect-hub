@@ -216,8 +216,8 @@ function DiagnosticoWhatsApp() {
                 ].join(" • ")}
                 hint={
                   d.secrets.viagensConfigurada
-                    ? "Linha Guatá Viagens configurada."
-                    : "Linha Guatá Viagens ainda não configurada — tudo entra como Descubra MS."
+                    ? "Linha Guatá configurada."
+                    : "Linha Guatá ainda não configurada — tudo entra como Descubra MS."
                 }
               />
               <Row
