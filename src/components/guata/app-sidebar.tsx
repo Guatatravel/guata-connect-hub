@@ -21,6 +21,8 @@ import {
   BookOpen,
   Bot,
   PanelRight,
+  Calculator,
+  Link2,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
@@ -30,7 +32,9 @@ const items = [
   { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/extensao", label: "Modo Atendimento", icon: PanelRight },
+  { to: "/cotacoes", label: "Cotações", icon: Calculator },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
+  { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
   { to: "/atendentes", label: "Atendentes", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
@@ -57,7 +61,7 @@ export function AppSidebar({ counts }: { counts?: Counts }) {
               Guatá Channel
             </span>
             <span className="text-xs text-sidebar-foreground/70">
-              Guatá viagens e turismo
+              Guatá
             </span>
           </div>
         </div>

@@ -224,7 +224,7 @@ function Atendentes() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="descubra">Descubra MS</SelectItem>
-                    <SelectItem value="viagens">Guatá Viagens</SelectItem>
+                    <SelectItem value="viagens">Guatá</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

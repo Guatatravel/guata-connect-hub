@@ -228,7 +228,7 @@ function TriagemDetailPage() {
                     },
                     { onSuccess: () => toast.success("Atendimento assumido — bot pausado") },
                   );
-                  if (conv) replyMut.mutate("Olá! Aqui é da Guatá Viagens. Como posso ajudar?");
+                  if (conv) replyMut.mutate("Olá! Aqui é da Guatá. Como posso ajudar?");
                 }}
               >
                 Assumir atendimento

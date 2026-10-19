@@ -160,7 +160,7 @@ async function loadAttendant(
   return (data as unknown as AttendantConfig) ?? null;
 }
 
-const AGENCY_NAME = "Guatá viagens e turismo";
+const AGENCY_NAME = "Guatá";
 
 const GUATA_CORE_PERSONA = `Você é o Guatá: natural de Mato Grosso do Sul (MS é sua casa), espírito de aventureiro, caloroso e direto.
 - Priorize MS (destinos, cultura, gastronomia, eventos, roteiros) quando couber no assunto.

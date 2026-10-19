@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Paperclip, Send } from "lucide-react";
 import { DossieCard } from "@/components/guata/dossie-card";
 import { HandoffControls } from "@/components/guata/handoff-controls";
+import { CopilotCard } from "@/components/guata/copilot-card";
 
 export const Route = createFileRoute("/_app/conversas/$id")({
   component: ConversaDetail,
@@ -96,6 +97,8 @@ function ConversaDetail() {
       <ConversationProfileCard conv={conv} />
 
       <DossieCard sessionId={conv.id} onUseMessage={setReply} />
+
+      <CopilotCard sessionId={conv.id} onUseMessage={setReply} />
 
       <Card className="rounded-2xl">
         <CardHeader>

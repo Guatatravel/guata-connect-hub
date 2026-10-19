@@ -286,7 +286,7 @@ export function CampaignsTab() {
             <strong>Para funcionar:</strong> secrets no Lovable —{" "}
             <code className="text-xs">META_ACCESS_TOKEN</code> +{" "}
             <code className="text-xs">META_PHONE_NUMBER_ID</code> (Descubra) e/ou sufixos{" "}
-            <code className="text-xs">_VIAGENS</code> para Guatá Viagens; bucket{" "}
+            <code className="text-xs">_VIAGENS</code> para Guatá; bucket{" "}
             <code className="text-xs">campaigns</code> público no Supabase se usar cartaz.
           </p>
           <div className="flex flex-wrap gap-2 pt-1">

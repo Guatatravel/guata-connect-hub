@@ -16,8 +16,10 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
 import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
+import { Route as AppConectarMetaRouteImport } from './routes/_app.conectar-meta'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
 import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
+import { Route as AppCotacoesRouteImport } from './routes/_app.cotacoes'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
@@ -64,6 +66,11 @@ const AppAtendentesRoute = AppAtendentesRouteImport.update({
   path: '/atendentes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppConectarMetaRoute = AppConectarMetaRouteImport.update({
+  id: '/conectar-meta',
+  path: '/conectar-meta',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
   id: '/configuracoes',
   path: '/configuracoes',
@@ -72,6 +79,11 @@ const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
 const AppConhecimentoRoute = AppConhecimentoRouteImport.update({
   id: '/conhecimento',
   path: '/conhecimento',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCotacoesRoute = AppCotacoesRouteImport.update({
+  id: '/cotacoes',
+  path: '/cotacoes',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
@@ -139,8 +151,10 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/atendentes': typeof AppAtendentesRoute
+  '/conectar-meta': typeof AppConectarMetaRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conhecimento': typeof AppConhecimentoRoute
+  '/cotacoes': typeof AppCotacoesRoute
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/extensao': typeof AppExtensaoRoute
@@ -160,8 +174,10 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/atendentes': typeof AppAtendentesRoute
+  '/conectar-meta': typeof AppConectarMetaRoute
   '/configuracoes': typeof AppConfiguracoesRoute
   '/conhecimento': typeof AppConhecimentoRoute
+  '/cotacoes': typeof AppCotacoesRoute
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/extensao': typeof AppExtensaoRoute
@@ -183,8 +199,10 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/_app/atendentes': typeof AppAtendentesRoute
+  '/_app/conectar-meta': typeof AppConectarMetaRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
   '/_app/conhecimento': typeof AppConhecimentoRoute
+  '/_app/cotacoes': typeof AppCotacoesRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/_app/extensao': typeof AppExtensaoRoute
@@ -206,8 +224,10 @@ export interface FileRouteTypes {
     | '/setup'
     | '/trocar-senha'
     | '/atendentes'
+    | '/conectar-meta'
     | '/configuracoes'
     | '/conhecimento'
+    | '/cotacoes'
     | '/dashboard'
     | '/diagnostico-whatsapp'
     | '/extensao'
@@ -227,8 +247,10 @@ export interface FileRouteTypes {
     | '/setup'
     | '/trocar-senha'
     | '/atendentes'
+    | '/conectar-meta'
     | '/configuracoes'
     | '/conhecimento'
+    | '/cotacoes'
     | '/dashboard'
     | '/diagnostico-whatsapp'
     | '/extensao'
@@ -249,8 +271,10 @@ export interface FileRouteTypes {
     | '/setup'
     | '/trocar-senha'
     | '/_app/atendentes'
+    | '/_app/conectar-meta'
     | '/_app/configuracoes'
     | '/_app/conhecimento'
+    | '/_app/cotacoes'
     | '/_app/dashboard'
     | '/_app/diagnostico-whatsapp'
     | '/_app/extensao'
@@ -326,6 +350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAtendentesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/conectar-meta': {
+      id: '/_app/conectar-meta'
+      path: '/conectar-meta'
+      fullPath: '/conectar-meta'
+      preLoaderRoute: typeof AppConectarMetaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/configuracoes': {
       id: '/_app/configuracoes'
       path: '/configuracoes'
@@ -338,6 +369,13 @@ declare module '@tanstack/react-router' {
       path: '/conhecimento'
       fullPath: '/conhecimento'
       preLoaderRoute: typeof AppConhecimentoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/cotacoes': {
+      id: '/_app/cotacoes'
+      path: '/cotacoes'
+      fullPath: '/cotacoes'
+      preLoaderRoute: typeof AppCotacoesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/dashboard': {
@@ -422,8 +460,10 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppAtendentesRoute: typeof AppAtendentesRoute
+  AppConectarMetaRoute: typeof AppConectarMetaRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
   AppConhecimentoRoute: typeof AppConhecimentoRoute
+  AppCotacoesRoute: typeof AppCotacoesRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
   AppExtensaoRoute: typeof AppExtensaoRoute
@@ -437,8 +477,10 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAtendentesRoute: AppAtendentesRoute,
+  AppConectarMetaRoute: AppConectarMetaRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
   AppConhecimentoRoute: AppConhecimentoRoute,
+  AppCotacoesRoute: AppCotacoesRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
   AppExtensaoRoute: AppExtensaoRoute,

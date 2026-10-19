@@ -92,7 +92,7 @@ function TriagensPage() {
             <SelectContent>
               <SelectItem value="all">Todas as linhas</SelectItem>
               <SelectItem value="descubra_ms">Descubra MS</SelectItem>
-              <SelectItem value="guata_viagens">Guatá Viagens</SelectItem>
+              <SelectItem value="guata_viagens">Guatá</SelectItem>
             </SelectContent>
           </Select>
           <Select value={consultor} onValueChange={setConsultor}>

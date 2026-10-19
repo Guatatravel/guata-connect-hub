@@ -248,13 +248,13 @@ export function assertMetaConfiguredForLine(line: CampaignLine | "both"): void {
     }
     if (!status.viagens) {
       throw new Error(
-        "Guatá viagens e turismo: Meta não configurada. Defina META_ACCESS_TOKEN_VIAGENS e META_PHONE_NUMBER_ID_VIAGENS.",
+        "Guatá: Meta não configurada. Defina META_ACCESS_TOKEN_VIAGENS e META_PHONE_NUMBER_ID_VIAGENS.",
       );
     }
     return;
   }
   if (!isMetaConfigured(line)) {
-    const label = line === "descubra" ? "Descubra MS" : "Guatá viagens e turismo";
+    const label = line === "descubra" ? "Descubra MS" : "Guatá";
     const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
     throw new Error(
       `${label}: WhatsApp (Meta) não configurado. Defina META_ACCESS_TOKEN${suffix} e META_PHONE_NUMBER_ID${suffix} no ambiente de produção (Lovable → Secrets).`,
