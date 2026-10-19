@@ -50,7 +50,7 @@ async function gatewayRequest(
   }
 
   const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string | Array<unknown> } }>;
   };
   const content = json.choices?.[0]?.message?.content;
   if (typeof content === "string") return content.trim();
