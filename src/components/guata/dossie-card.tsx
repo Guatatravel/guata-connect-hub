@@ -112,33 +112,6 @@ export function DossieCard({
               </div>
             )}
 
-            {d.mensagem_sugerida && (
-              <div className="space-y-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Mensagem sugerida
-                </div>
-                <div className="rounded-lg bg-card border border-border px-3 py-2 whitespace-pre-wrap">
-                  {d.mensagem_sugerida}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(d.mensagem_sugerida);
-                      toast.success("Mensagem copiada");
-                    }}
-                  >
-                    <Copy className="h-4 w-4 mr-1" /> Copiar
-                  </Button>
-                  {onUseMessage && (
-                    <Button size="sm" onClick={() => onUseMessage(d.mensagem_sugerida)}>
-                      <Send className="h-4 w-4 mr-1" /> Usar na resposta
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
           </>
         )}
       </CardContent>

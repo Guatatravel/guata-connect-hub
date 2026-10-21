@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, BellRing, Search } from "lucide-react";
+import { Archive, ArchiveRestore, BellRing, Phone, Search } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { SessionModeBadge } from "@/components/guata/status-badge";
 import { LineBadge } from "@/components/guata/line-badge";
@@ -20,8 +20,20 @@ export const Route = createFileRoute("/_app/conversas/")({
 
 function ConversasPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<"ativas" | "arquivadas">("ativas");
   const [q, setQ] = useState("");
+  const [newOpen, setNewOpen] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [newName, setNewName] = useState("");
+  const start = useMutation({
+    mutationFn: () => api.startConversation(newPhone, newName || undefined),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+      navigate({ to: "/conversas/$id", params: { id: r.id } });
+    },
+    onError: (e: Error) => toast.error(e.message || "Não foi possível abrir a conversa"),
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => api.listConversations(),
@@ -92,6 +104,27 @@ function ConversasPage() {
         </div>
         <Button variant={tab === "ativas" ? "default" : "outline"} size="sm" onClick={() => setTab("ativas")}>Ativas</Button>
         <Button variant={tab === "arquivadas" ? "default" : "outline"} size="sm" onClick={() => setTab("arquivadas")}>Arquivadas</Button>
+        <Button size="sm" variant="secondary" onClick={() => setNewOpen((v) => !v)}>
+          <Phone className="h-4 w-4 mr-1" /> Nova conversa
+        </Button>
+      </div>
+
+      {newOpen && (
+        <Card className="rounded-2xl p-4 space-y-3">
+          <div className="text-sm font-medium">Chamar um número no WhatsApp</div>
+          <div className="flex flex-wrap gap-2">
+            <Input className="flex-1 min-w-[180px]" placeholder="Telefone com DDD (ex.: 67 99999-9999)" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+            <Input className="flex-1 min-w-[180px]" placeholder="Nome (opcional)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <Button disabled={start.isPending || newPhone.replace(/\D/g, "").length < 10} onClick={() => start.mutate()}>
+              Abrir conversa
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Se o cliente não falou com o Guatá nas últimas 24h, a Meta pode não entregar mensagem livre.
+          </p>
+        </Card>
+      )}
+      <div className="hidden">
       </div>
 
       {isLoading ? (

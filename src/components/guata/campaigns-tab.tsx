@@ -277,26 +277,6 @@ export function CampaignsTab() {
     <div className="space-y-6">
       <Card className="rounded-2xl border-dashed">
         <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
-          <p>
-            Envio para quem já tem conversa no número escolhido. A Meta só entrega texto/cartaz
-            livre se o cliente falou nas <strong>últimas 24h</strong>; fora disso aparece como
-            ignorado (templates virão depois).
-          </p>
-          <p>
-            <strong>Para funcionar:</strong> secrets no Lovable —{" "}
-            <code className="text-xs">META_ACCESS_TOKEN</code> +{" "}
-            <code className="text-xs">META_PHONE_NUMBER_ID</code> (Descubra) e/ou sufixos{" "}
-            <code className="text-xs">_VIAGENS</code> para Guatá; bucket{" "}
-            <code className="text-xs">campaigns</code> público no Supabase se usar cartaz.
-          </p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Badge variant={meta?.descubra ? "secondary" : "destructive"}>
-              WhatsApp (principal): {meta?.descubra ? "Meta OK" : "Meta pendente"}
-            </Badge>
-            <Badge variant={meta?.viagens ? "secondary" : "destructive"}>
-              WhatsApp (linha 2): {meta?.viagens ? "Meta OK" : "Meta pendente"}
-            </Badge>
-          </div>
         </CardContent>
       </Card>
 

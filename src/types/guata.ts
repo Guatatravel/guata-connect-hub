@@ -39,6 +39,7 @@ export type ChatMediaKind = "image" | "audio" | "video" | "document";
 export interface ChatMessage {
   id: string;
   role: "user" | "bot" | "human";
+  authorName?: string;
   text: string;
   at: string;
   mediaKind?: ChatMediaKind;
