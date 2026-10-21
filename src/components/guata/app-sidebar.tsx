@@ -21,7 +21,6 @@ import {
   BookOpen,
   Bot,
   PanelRight,
-  Calculator,
   Link2,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
@@ -32,7 +31,6 @@ const items = [
   { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/extensao", label: "Modo Atendimento", icon: PanelRight },
-  { to: "/cotacoes", label: "Cotações", icon: Calculator },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
   { to: "/atendentes", label: "Atendentes", icon: Bot },

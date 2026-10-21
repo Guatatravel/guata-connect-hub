@@ -12,6 +12,15 @@ import {
 import { chatCompletion } from "@/lib/ai-gateway.server";
 import { sendWhatsAppText, markReadAndTyping, typingDelayMs } from "@/lib/meta-send.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
+import {
+  detectLeadStage,
+  leadStagePromptSection,
+  mergeLeadStage,
+  type LeadStage,
+} from "@/lib/lead-stage.server";
+
+/** Nome comercial da agência (não usar razão social completa no WhatsApp). */
+export const AGENCY_NAME = "Guatá Viagens";
 
 export interface IncomingMessage {
   line: "descubra" | "viagens";
@@ -30,6 +39,45 @@ interface SessionRow {
   mode: "bot" | "humano" | "triagem" | "aguardando";
   intake_state: string | null;
   intake_data: Record<string, unknown>;
+}
+
+function leadStageFromData(data: Record<string, unknown> | undefined): LeadStage {
+  const s = data?.["lead_stage"];
+  if (s === "qualificando" || s === "quente" || s === "informacional") return s;
+  return "informacional";
+}
+
+async function countUserTurns(sessionId: string): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+    .eq("author", "user");
+  return count ?? 0;
+}
+
+function mayTravelHookInReply(text: string): boolean {
+  return /\b(monte isso para você|monte (essa|a) viagem|Guatá Viagens monte)\b/i.test(text);
+}
+
+async function refreshLeadStage(
+  session: SessionRow,
+  userText: string,
+): Promise<LeadStage> {
+  const turns = await countUserTurns(session.id);
+  const detected = detectLeadStage(userText, turns);
+  const lead_stage = mergeLeadStage(leadStageFromData(session.intake_data), detected);
+  const intake_data = {
+    ...(session.intake_data ?? {}),
+    lead_stage,
+    lead_updated_at: new Date().toISOString(),
+  };
+  await supabaseAdmin
+    .from("sessions")
+    .update({ intake_data: intake_data as never })
+    .eq("id", session.id);
+  session.intake_data = intake_data;
+  return lead_stage;
 }
 
 async function loadOrCreateSession(
@@ -137,7 +185,7 @@ async function continueIntake(
     .update({ mode: "aguardando", intake_state: null })
     .eq("id", session.id);
 
-  return `Triagem registrada! Protocolo ${protocol}. Um consultor entrará em contato em breve.`;
+  return `Triagem registrada! Protocolo ${protocol}. Um consultor da ${AGENCY_NAME} entrará em contato em breve.`;
 }
 
 interface AttendantConfig {
@@ -161,12 +209,10 @@ async function loadAttendant(
   return (data as unknown as AttendantConfig) ?? null;
 }
 
-const AGENCY_NAME = "Guatá";
-
 const GUATA_CORE_PERSONA = `Você é o Guatá (masculino: ele/o Guatá, nunca feminino): natural de Mato Grosso do Sul (MS é sua casa), espírito de aventureiro, caloroso e direto.
 - Priorize MS (destinos, cultura, gastronomia, eventos, roteiros) quando couber no assunto.
 - Pode orientar sobre turismo em outros lugares do mundo com informação útil; MS continua sendo sua referência e orgulho.
-- Pacotes, reservas, orçamentos e viagens sob medida: cite a agência ${AGENCY_NAME} (nome completo).
+- Pacotes, reservas, orçamentos e viagens sob medida: cite a agência ${AGENCY_NAME} (sempre exatamente esse nome).
 - NUNCA diga que não pode ajudar com viagem personalizada ou destino fora de MS — acolha e convide a ${AGENCY_NAME} a montar.`;
 
 /** Remove scripts de menu/apresentação do Me Consulte; mantém fatos úteis da persona oficial. */
@@ -227,6 +273,8 @@ async function answerTurismo(
   line: "descubra" | "viagens",
   sessionId?: string,
   firstName?: string,
+  leadStage: LeadStage = "informacional",
+  intakeData?: Record<string, unknown>,
 ): Promise<string> {
   const attendant = await loadAttendant(line);
   const official = line === "descubra" ? await getGuataPersona() : null;
@@ -270,6 +318,14 @@ async function answerTurismo(
 
   const history = await loadHistory(sessionId, userText);
   const ongoing = history.length > 1;
+  const travelHookSent = Boolean(intakeData?.["travel_hook_sent"]);
+  const userTurns = history.filter((h) => h.role === "user").length;
+  const mayOfferTravelHook =
+    !travelHookSent &&
+    userTurns >= 2 &&
+    /\b(punta cana|canc[uú]n|europa|disney|paris|maldivas|orlando|caribe|exterior|internacional|miami|cruzeiro)\b/i.test(
+      userText,
+    );
   const whatsappRules =
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
     `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- MS é sua casa — destaque MS quando relevante; em assuntos internacionais, seja útil e breve e só então ligue à ${AGENCY_NAME} se for viagem sob medida.\n- Parceiros Descubra MS no contexto podem ser recomendados.\n` +
@@ -280,7 +336,8 @@ async function answerTurismo(
       : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
     (firstName
       ? `- O cliente se chama ${firstName}. Use o primeiro nome de forma natural, no máximo uma vez, sem repetir em toda mensagem.\n`
-      : "");
+      : "") +
+    leadStagePromptSection(leadStage, AGENCY_NAME, { mayOfferTravelHook });
 
   const raw = await chatCompletion(
     [{ role: "system", content: persona + context + whatsappRules }, ...history],
@@ -362,9 +419,14 @@ export async function processMessage(
     /^(sim|s|quero|pode|pode sim|claro|ok|okay|por favor|bora|isso|yes|yeah|sure|sí|si|vale)\b/i.test(lower);
 
   const goHuman = async () => {
+    const intake_data = {
+      ...(session.intake_data ?? {}),
+      lead_stage: "quente" as LeadStage,
+      lead_updated_at: new Date().toISOString(),
+    };
     await supabaseAdmin
       .from("sessions")
-      .update({ mode: "humano", intake_state: null })
+      .update({ mode: "humano", intake_state: null, intake_data: intake_data as never })
       .eq("id", session.id);
     replies.push(handoffText);
   };
@@ -378,12 +440,32 @@ export async function processMessage(
       await supabaseAdmin.from("sessions").update({ intake_state: null }).eq("id", session.id);
     }
     try {
-      const raw = await answerTurismo(msg.text, msg.line, session.id, firstName);
+      const leadStage = await refreshLeadStage(session, msg.text);
+      const raw = await answerTurismo(
+        msg.text,
+        msg.line,
+        session.id,
+        firstName,
+        leadStage,
+        session.intake_data,
+      );
       const offer = raw.includes("[[OFERTA_HUMANO]]");
+      const hookUsed =
+        mayTravelHookInReply(raw) && leadStage !== "informacional";
+      const intakePatch: Record<string, unknown> = { ...(session.intake_data ?? {}) };
+      if (hookUsed) intakePatch["travel_hook_sent"] = true;
       if (offer) {
         await supabaseAdmin
           .from("sessions")
-          .update({ intake_state: "oferta_humano" })
+          .update({
+            intake_state: "oferta_humano",
+            intake_data: intakePatch as never,
+          })
+          .eq("id", session.id);
+      } else if (hookUsed) {
+        await supabaseAdmin
+          .from("sessions")
+          .update({ intake_data: intakePatch as never })
           .eq("id", session.id);
       }
       const body = raw.replace(/\[\[OFERTA_HUMANO\]\]/g, "").trim();
