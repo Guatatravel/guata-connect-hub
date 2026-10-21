@@ -2,11 +2,11 @@
  * Formatação e divisão de texto para envio no WhatsApp (bot e consultor).
  */
 
-/** Limite por balão (Meta aceita até 4096; margem de segurança). */
-export const WHATSAPP_BUBBLE_MAX = 3800;
+/** Tamanho confortável por balão no WhatsApp (várias mensagens em respostas longas). */
+export const WHATSAPP_BUBBLE_MAX = 600;
 
-/** Máximo de balões seguidos por resposta (evita spam; raro atingir). */
-export const WHATSAPP_BUBBLE_MAX_COUNT = 12;
+/** Alvo de balões antes de agrupar o restante (sem descartar texto). */
+export const WHATSAPP_BUBBLE_MAX_COUNT = 8;
 
 export function formatForWhatsApp(text: string): string {
   return text
@@ -76,16 +76,23 @@ export function splitWhatsAppMessages(text: string): string[] {
   }
   flush();
 
-  if (bubbles.length <= WHATSAPP_BUBBLE_MAX_COUNT) {
-    return bubbles.length ? bubbles : [cleaned.slice(0, WHATSAPP_BUBBLE_MAX)];
+  if (bubbles.length === 0) {
+    return [cleaned.slice(0, WHATSAPP_BUBBLE_MAX)];
   }
 
-  const out = bubbles.slice(0, WHATSAPP_BUBBLE_MAX_COUNT);
-  const last = out[out.length - 1];
-  if (last && !last.endsWith("?")) {
-    out[out.length - 1] = `${last}\n\nPosso continuar com mais detalhes se quiser.`;
+  if (bubbles.length <= WHATSAPP_BUBBLE_MAX_COUNT) {
+    return bubbles;
   }
+
+  const out = bubbles.slice(0, WHATSAPP_BUBBLE_MAX_COUNT - 1);
+  const tail = bubbles.slice(WHATSAPP_BUBBLE_MAX_COUNT - 1).join("\n\n");
+  out.push(...splitOversizedChunk(tail, WHATSAPP_BUBBLE_MAX));
   return out;
+}
+
+function agentAttendantLabel(staffName: string | null): string {
+  const name = staffName?.trim() || "Consultor";
+  return `Atendente ${name}:`;
 }
 
 /** Texto(s) para o cliente ver quem atende (primeiro balão assinado). */
@@ -94,8 +101,8 @@ export function agentWhatsAppParts(staffName: string | null, body: string): stri
   if (!trimmed) return [];
   const parts = splitWhatsAppMessages(trimmed);
   if (parts.length === 0) return [];
-  const firstName = staffName?.trim().split(/\s+/)[0] || "Consultor";
-  return parts.map((p, i) => (i === 0 ? `*${firstName}* · Guatá:\n${p}` : p));
+  const label = agentAttendantLabel(staffName);
+  return parts.map((p, i) => (i === 0 ? `${label}\n${p}` : p));
 }
 
 /** Legenda de mídia com assinatura do consultor. */
