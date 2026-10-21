@@ -18,6 +18,7 @@ import {
   mergeLeadStage,
   type LeadStage,
 } from "@/lib/lead-stage.server";
+import { ensureTravelIntakeForSession } from "@/lib/lead-intake.server";
 
 /** Nome comercial da agência (não usar razão social completa no WhatsApp). */
 export const AGENCY_NAME = "Guatá Viagens";
@@ -140,12 +141,19 @@ const STEP_PROMPT: Record<IntakeStep, string> = {
   preferencias: "Alguma preferência (hotel, voo, atividades)?",
 };
 
-async function startIntake(sessionId: string): Promise<string> {
+async function startIntake(
+  sessionId: string,
+  keepData: Record<string, unknown> = {},
+): Promise<string> {
   await supabaseAdmin
     .from("sessions")
-    .update({ mode: "triagem", intake_state: "origem", intake_data: {} })
+    .update({
+      mode: "triagem",
+      intake_state: "origem",
+      intake_data: { ...keepData, triagem_at: new Date().toISOString() },
+    })
     .eq("id", sessionId);
-  return `Vamos montar sua viagem! ${STEP_PROMPT.origem}\n\n(digite "menu" para voltar)`;
+  return `Vamos montar sua viagem com a ${AGENCY_NAME}! ${STEP_PROMPT.origem}\n\n(digite "menu" para voltar ao Guatá)`;
 }
 
 async function continueIntake(
@@ -182,7 +190,15 @@ async function continueIntake(
   });
   await supabaseAdmin
     .from("sessions")
-    .update({ mode: "aguardando", intake_state: null })
+    .update({
+      mode: "aguardando",
+      intake_state: null,
+      intake_data: {
+        ...(session.intake_data ?? {}),
+        lead_stage: "quente",
+        triagem_protocol: protocol,
+      } as never,
+    })
     .eq("id", session.id);
 
   return `Triagem registrada! Protocolo ${protocol}. Um consultor da ${AGENCY_NAME} entrará em contato em breve.`;
@@ -407,7 +423,7 @@ export async function processMessage(
     .from("sessions")
     .update({
       archived_at: null,
-      ...(session.mode === "triagem" || session.mode === "aguardando"
+      ...(session.mode === "aguardando"
         ? { mode: "bot" as const, intake_state: null }
         : {}),
     })
@@ -428,13 +444,32 @@ export async function processMessage(
       .from("sessions")
       .update({ mode: "humano", intake_state: null, intake_data: intake_data as never })
       .eq("id", session.id);
+    void ensureTravelIntakeForSession(session.id).catch((e) =>
+      console.error("[lead-intake] handoff:", e),
+    );
     replies.push(handoffText);
   };
 
+  const wantsStructuredIntake =
+    /\b(montar (minha )?viagem|orçamento de viagem|orcamento de viagem|fazer orçamento|fazer orcamento|quero orçamento completo|quero orcamento completo)\b/i.test(
+      lower,
+    );
+
   if (session.mode === "humano") {
     // Não responde — consultor responde no painel
+  } else if (session.mode === "triagem" && session.intake_state && INTAKE_STEPS.includes(session.intake_state as IntakeStep)) {
+    const reply = await continueIntake(session, msg.text);
+    replies.push(reply);
+  } else if (wantsStructuredIntake && session.mode === "bot") {
+    replies.push(await startIntake(session.id, session.intake_data ?? {}));
   } else if (explicitHuman || (offered && affirmative)) {
     await goHuman();
+  } else if (lower === "menu") {
+    await supabaseAdmin
+      .from("sessions")
+      .update({ mode: "bot", intake_state: null })
+      .eq("id", session.id);
+    replies.push("Beleza! Voltamos ao papo com o Guatá. O que você quer saber?");
   } else {
     if (offered) {
       await supabaseAdmin.from("sessions").update({ intake_state: null }).eq("id", session.id);
@@ -468,6 +503,12 @@ export async function processMessage(
           .update({ intake_data: intakePatch as never })
           .eq("id", session.id);
       }
+      if (leadStage === "quente") {
+        void ensureTravelIntakeForSession(session.id).catch((e) =>
+          console.error("[lead-intake] quente:", e),
+        );
+      }
+
       const body = raw.replace(/\[\[OFERTA_HUMANO\]\]/g, "").trim();
       replies.push(...splitWhatsAppMessages(body));
     } catch (err) {

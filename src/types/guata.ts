@@ -2,6 +2,8 @@ export type WhatsAppLine = "descubra_ms" | "guata_viagens";
 
 export type SessionMode = "informacional" | "triagem" | "humano" | "aguardando";
 
+export type LeadStage = "informacional" | "qualificando" | "quente";
+
 export type TriagemStatus =
   | "novo"
   | "atribuido"
@@ -61,6 +63,8 @@ export interface Conversation {
   unread?: number;
   archived?: boolean;
   unseen?: boolean;
+  leadStage?: LeadStage;
+  triagemProtocol?: string;
   messages: ChatMessage[];
 }
 

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Archive, ArchiveRestore, BellRing, Phone, Search } from "lucide-react";
 import { api } from "@/lib/api/client";
-import { SessionModeBadge } from "@/components/guata/status-badge";
+import { LeadStageBadge, SessionModeBadge } from "@/components/guata/status-badge";
 import { LineBadge } from "@/components/guata/line-badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_app/conversas/")({
 function ConversasPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<"ativas" | "arquivadas">("ativas");
+  const [tab, setTab] = useState<"ativas" | "arquivadas" | "leads">("ativas");
   const [q, setQ] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [newPhone, setNewPhone] = useState("");
@@ -54,6 +54,12 @@ function ConversasPage() {
       if (term) {
         return (c.contactName ?? "").toLowerCase().includes(term) || c.phone.includes(term.replace(/\D/g, "") || "§");
       }
+      if (tab === "leads") {
+        return (
+          !c.archived &&
+          (c.leadStage === "qualificando" || c.leadStage === "quente")
+        );
+      }
       return tab === "arquivadas" ? c.archived : !c.archived;
     });
   }, [data, q, tab]);
@@ -72,6 +78,7 @@ function ConversasPage() {
             <span className="font-medium truncate">{c.contactName ?? formatPhone(c.phone)}</span>
             <LineBadge line={c.line} />
             <SessionModeBadge mode={c.mode} />
+            {c.leadStage && <LeadStageBadge stage={c.leadStage} />}
           </div>
           <div className="text-sm text-muted-foreground truncate">{c.lastMessage}</div>
         </div>
@@ -104,6 +111,7 @@ function ConversasPage() {
         </div>
         <Button variant={tab === "ativas" ? "default" : "outline"} size="sm" onClick={() => setTab("ativas")}>Ativas</Button>
         <Button variant={tab === "arquivadas" ? "default" : "outline"} size="sm" onClick={() => setTab("arquivadas")}>Arquivadas</Button>
+        <Button variant={tab === "leads" ? "default" : "outline"} size="sm" onClick={() => setTab("leads")}>Leads</Button>
         <Button size="sm" variant="secondary" onClick={() => setNewOpen((v) => !v)}>
           <Phone className="h-4 w-4 mr-1" /> Nova conversa
         </Button>

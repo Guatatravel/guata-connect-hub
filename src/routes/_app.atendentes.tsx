@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_app/atendentes")({
   component: Atendentes,
   head: () => ({
     meta: [
-      { title: "Atendentes | Guatá Channel" },
+      { title: "Agentes IA | Guatá Channel" },
       {
         name: "description",
         content:

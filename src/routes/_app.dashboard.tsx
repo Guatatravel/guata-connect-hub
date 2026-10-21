@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plane, UserCog, Users, MessageSquare } from "lucide-react";
+import { Plane, UserCog, Users, MessageSquare, Flame } from "lucide-react";
 import { timeAgo } from "@/lib/format";
 
 export const Route = createFileRoute("/_app/dashboard")({
@@ -36,9 +36,9 @@ function DashboardPage() {
       </div>
 
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {isLoading || !data ? (
-          Array.from({ length: 4 }).map((_, i) => (
+          Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-2xl" />
           ))
         ) : (
@@ -63,6 +63,12 @@ function DashboardPage() {
               label="Conversas ativas"
               value={data.conversasAtivas}
               icon={MessageSquare}
+            />
+            <StatCard
+              label="Leads (qualif. + quente)"
+              value={data.leadsQuentes ?? 0}
+              icon={Flame}
+              accent
             />
           </>
         )}

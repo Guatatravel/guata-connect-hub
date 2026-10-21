@@ -4,6 +4,12 @@
 
 export type LeadStage = "informacional" | "qualificando" | "quente";
 
+export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
+  informacional: "Informacional",
+  qualificando: "Qualificando",
+  quente: "Lead quente",
+};
+
 const STAGE_RANK: Record<LeadStage, number> = {
   informacional: 0,
   qualificando: 1,

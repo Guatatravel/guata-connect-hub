@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import type { SessionMode, TriagemStatus } from "@/types/guata";
+import type { LeadStage, SessionMode, TriagemStatus } from "@/types/guata";
 import { cn } from "@/lib/utils";
 
 const triagemMap: Record<TriagemStatus, { label: string; cls: string }> = {
@@ -38,6 +38,31 @@ export function TriagemStatusBadge({ status }: { status: TriagemStatus }) {
 
 export function SessionModeBadge({ mode }: { mode: SessionMode }) {
   const m = modeMap[mode];
+  return (
+    <Badge variant="outline" className={cn("font-medium", m.cls)}>
+      {m.label}
+    </Badge>
+  );
+}
+
+const leadMap: Record<LeadStage, { label: string; cls: string }> = {
+  informacional: {
+    label: "Informacional",
+    cls: "bg-secondary text-secondary-foreground border-border",
+  },
+  qualificando: {
+    label: "Qualificando",
+    cls: "bg-amber-100 text-amber-900 border-amber-300",
+  },
+  quente: {
+    label: "Lead quente",
+    cls: "bg-orange-100 text-orange-900 border-orange-300",
+  },
+};
+
+export function LeadStageBadge({ stage }: { stage: LeadStage }) {
+  if (stage === "informacional") return null;
+  const m = leadMap[stage];
   return (
     <Badge variant="outline" className={cn("font-medium", m.cls)}>
       {m.label}

@@ -21,6 +21,7 @@ import {
   agentWhatsAppCaption,
   agentWhatsAppParts,
 } from "@/lib/whatsapp-messages.server";
+import { parseLeadStageFromIntake } from "@/lib/lead-intake.server";
 
 // --------- mapeamentos DB ↔ UI ---------
 type DbLine = "descubra" | "viagens";
@@ -75,7 +76,7 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
     today.setUTCHours(0, 0, 0, 0);
     const todayIso = today.toISOString();
 
-    const [triagensHojeRes, abertasRes, humanoRes, sessoesRes, postsRes, ultimasRes] =
+    const [triagensHojeRes, abertasRes, humanoRes, sessoesRes, postsRes, ultimasRes, leadSessionsRes] =
       await Promise.all([
         supabaseAdmin
           .from("travel_intake")
@@ -103,7 +104,17 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
           )
           .order("created_at", { ascending: false })
           .limit(5),
+        supabaseAdmin
+          .from("sessions")
+          .select("intake_data")
+          .is("archived_at", null)
+          .limit(400),
       ]);
+
+    const leadsQuentes = (leadSessionsRes.data ?? []).filter((row) => {
+      const stage = parseLeadStageFromIntake((row.intake_data ?? {}) as Record<string, unknown>);
+      return stage === "quente" || stage === "qualificando";
+    }).length;
 
     const sessionIds = (ultimasRes.data ?? []).map((t) => t.session_id);
     const { data: sess } = sessionIds.length
@@ -141,6 +152,7 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
       aguardandoConsultor: abertasRes.count ?? 0,
       emAtendimentoHumano: humanoRes.count ?? 0,
       conversasAtivas: sessoesRes.count ?? 0,
+      leadsQuentes,
       postsPendentes: postsRes.count ?? 0,
       ultimasTriagens: ultimas,
     };
@@ -201,7 +213,9 @@ export const fetchConversations = createServerFn({ method: "GET" })
     await requireStaff(context.userId);
     const { data } = await supabaseAdmin
       .from("sessions")
-      .select("id, line, mode, phone, contact_name, last_message_at, created_at, archived_at, staff_seen_at")
+      .select(
+        "id, line, mode, phone, contact_name, last_message_at, created_at, archived_at, staff_seen_at, intake_data",
+      )
       .order("last_message_at", { ascending: false })
       .limit(200);
 
@@ -219,18 +233,26 @@ export const fetchConversations = createServerFn({ method: "GET" })
       }
     }
 
-    return (data ?? []).map((s) => ({
-      id: s.id,
-      phone: s.phone,
-      contactName: s.contact_name ?? undefined,
-      line: dbToUiLine(s.line),
-      mode: dbToUiMode(s.mode),
-      lastMessageAt: s.last_message_at,
-      lastMessage: lastMsgByConv.get(s.id) ?? "",
-      archived: Boolean(s.archived_at),
-      unseen: !s.staff_seen_at || s.staff_seen_at < s.last_message_at,
-      messages: [],
-    }));
+    return (data ?? []).map((s) => {
+      const intake = (s.intake_data ?? {}) as Record<string, unknown>;
+      return {
+        id: s.id,
+        phone: s.phone,
+        contactName: s.contact_name ?? undefined,
+        line: dbToUiLine(s.line),
+        mode: dbToUiMode(s.mode),
+        lastMessageAt: s.last_message_at,
+        lastMessage: lastMsgByConv.get(s.id) ?? "",
+        archived: Boolean(s.archived_at),
+        unseen: !s.staff_seen_at || s.staff_seen_at < s.last_message_at,
+        leadStage: parseLeadStageFromIntake(intake),
+        triagemProtocol:
+          typeof intake["triagem_protocol"] === "string"
+            ? intake["triagem_protocol"]
+            : undefined,
+        messages: [],
+      };
+    });
   });
 
 export const setConversationArchived = createServerFn({ method: "POST" })
@@ -298,10 +320,13 @@ export const fetchConversation = createServerFn({ method: "POST" })
     await requireStaff(context.userId);
     const { data: s } = await supabaseAdmin
       .from("sessions")
-      .select("id, line, mode, phone, contact_name, last_message_at, created_at, assigned_to")
+      .select(
+        "id, line, mode, phone, contact_name, last_message_at, created_at, assigned_to, intake_data",
+      )
       .eq("id", data.id)
       .maybeSingle();
     if (!s) return null;
+    const intake = (s.intake_data ?? {}) as Record<string, unknown>;
     const { data: msgs } = await supabaseAdmin
       .from("messages")
       .select("id, author, text, created_at, metadata")
@@ -319,6 +344,9 @@ export const fetchConversation = createServerFn({ method: "POST" })
       createdAt: s.created_at,
       assignedToName: assignedToName ?? undefined,
       lastMessage: messages.at(-1)?.text ?? "",
+      leadStage: parseLeadStageFromIntake(intake),
+      triagemProtocol:
+        typeof intake["triagem_protocol"] === "string" ? intake["triagem_protocol"] : undefined,
       messages,
     };
   });

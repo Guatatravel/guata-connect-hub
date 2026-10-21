@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
-import { SessionModeBadge } from "@/components/guata/status-badge";
+import { LeadStageBadge, SessionModeBadge } from "@/components/guata/status-badge";
 import { formatPhone, timeAgo, waLink } from "@/lib/format";
 import type { Conversation } from "@/types/guata";
 import { MessageCircle, User } from "lucide-react";
@@ -21,7 +21,13 @@ export function ConversationProfileCard({ conv }: { conv: Conversation }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-display font-semibold text-lg">{display}</span>
             <SessionModeBadge mode={conv.mode} />
+            {conv.leadStage && <LeadStageBadge stage={conv.leadStage} />}
           </div>
+          {conv.triagemProtocol && (
+            <p className="text-xs font-medium text-muted-foreground">
+              Protocolo triagem: {conv.triagemProtocol}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground flex items-center gap-1">
             <User className="h-3.5 w-3.5" />
             Cliente no WhatsApp · {formatPhone(conv.phone)}

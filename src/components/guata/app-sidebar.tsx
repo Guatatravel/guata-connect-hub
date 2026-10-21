@@ -33,7 +33,7 @@ const items = [
   { to: "/extensao", label: "Modo Atendimento", icon: PanelRight },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
-  { to: "/atendentes", label: "Atendentes", icon: Bot },
+  { to: "/atendentes", label: "Agentes IA", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
