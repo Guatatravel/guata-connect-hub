@@ -11,11 +11,16 @@ import {
   sendWhatsAppDocument,
   sendWhatsAppImage,
   sendWhatsAppText,
+  typingDelayMs,
 } from "@/lib/meta-send.server";
 import {
   signedChatMediaUrl,
   storeChatMediaFromBase64,
 } from "@/lib/chat-media.server";
+import {
+  agentWhatsAppCaption,
+  agentWhatsAppParts,
+} from "@/lib/whatsapp-messages.server";
 
 // --------- mapeamentos DB ↔ UI ---------
 type DbLine = "descubra" | "viagens";
@@ -347,6 +352,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
     if (!s) throw new Error("Sessão não encontrada");
 
     const caption = data.text?.trim() ?? "";
+    const staffName = await resolveStaffName(context.userId);
     const now = new Date().toISOString();
     await supabaseAdmin
       .from("sessions")
@@ -378,7 +384,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         s.line as DbLine,
         s.phone,
         imageUrl,
-        caption || undefined,
+        caption ? agentWhatsAppCaption(staffName, caption) : undefined,
       );
       sent = imgRes.ok;
       if (!imgRes.ok) {
@@ -404,7 +410,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         s.phone,
         docUrl,
         data.documentFilename ?? "documento.pdf",
-        caption || undefined,
+        caption ? agentWhatsAppCaption(staffName, caption) : undefined,
       );
       sent = docRes.ok;
       if (!docRes.ok) {
@@ -417,16 +423,21 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         });
       }
     } else if (caption) {
-      const send = await sendWhatsAppText(s.line as DbLine, s.phone, caption);
-      sent = send.ok;
-      if (!send.ok) {
-        await supabaseAdmin.from("messages").insert({
-          session_id: s.id,
-          direction: "out",
-          author: "system",
-          text: `(falha no envio Meta: ${send.reason ?? "desconhecida"})`,
-          metadata: { error: send.reason } as never,
-        });
+      const parts = agentWhatsAppParts(staffName, caption);
+      for (const part of parts) {
+        await new Promise((r) => setTimeout(r, typingDelayMs(part)));
+        const send = await sendWhatsAppText(s.line as DbLine, s.phone, part);
+        if (send.ok) sent = true;
+        else {
+          await supabaseAdmin.from("messages").insert({
+            session_id: s.id,
+            direction: "out",
+            author: "system",
+            text: `(falha no envio Meta: ${send.reason ?? "desconhecida"})`,
+            metadata: { error: send.reason } as never,
+          });
+          break;
+        }
       }
     }
 
