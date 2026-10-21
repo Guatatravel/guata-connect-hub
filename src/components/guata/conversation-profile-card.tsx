@@ -32,7 +32,7 @@ export function ConversationProfileCard({ conv }: { conv: Conversation }) {
             </p>
           )}
           {conv.assignedToName && (
-            <p className="text-xs text-muted-foreground">Consultor: {conv.assignedToName}</p>
+            <p className="text-xs font-medium text-primary">Atendido por: {conv.assignedToName}</p>
           )}
         </div>
         <a

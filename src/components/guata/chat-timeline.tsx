@@ -15,7 +15,13 @@ export function ChatTimeline({ messages }: { messages: ChatMessage[] }) {
               ? "bg-primary/10 border border-primary/20 text-foreground"
               : "bg-accent/40 border border-accent text-accent-foreground";
         const label =
-          m.role === "user" ? "Cliente" : m.role === "bot" ? "Guatá 🦫" : "Consultor";
+          m.role === "user"
+            ? "Cliente"
+            : m.role === "bot"
+              ? "Guatá 🦫"
+              : m.authorName
+                ? `${m.authorName} (Consultor)`
+                : "Consultor";
         const showText =
           m.text &&
           !(

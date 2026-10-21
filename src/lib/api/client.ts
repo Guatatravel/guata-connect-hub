@@ -22,6 +22,7 @@ import {
   assumeConversation,
   markConversationSeen,
   setConversationArchived,
+  startConversation,
 } from "@/lib/panel.functions";
 import type {
   AgencyService,
@@ -83,6 +84,10 @@ export const api = {
 
   async setArchived(id: string, archived: boolean) {
     return setConversationArchived({ data: { id, archived } });
+  },
+
+  async startConversation(phone: string, name?: string) {
+    return startConversation({ data: { phone, name } });
   },
 
   async markConversationSeen(id: string) {
