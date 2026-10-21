@@ -157,18 +157,25 @@ async function mapMessagesForPanel(
     metadata: unknown;
   }>,
 ) {
+  const nameCache = new Map<string, string | null>();
   return Promise.all(
     msgs.map(async (m) => {
-      const meta = (m.metadata ?? {}) as MessageMeta;
+      const meta = (m.metadata ?? {}) as MessageMeta & { sent_by?: string };
       const path = meta.media_path;
       const mediaUrl = path ? await signedChatMediaUrl(path) : null;
       const mediaKind = meta.media_kind as "image" | "audio" | "video" | "document" | undefined;
+      let authorName: string | undefined;
+      if (m.author === "agent" && meta.sent_by) {
+        if (!nameCache.has(meta.sent_by)) nameCache.set(meta.sent_by, await resolveStaffName(meta.sent_by));
+        authorName = nameCache.get(meta.sent_by) ?? undefined;
+      }
       return {
         id: m.id,
         role: (m.author === "user" ? "user" : m.author === "bot" ? "bot" : "human") as
           | "user"
           | "bot"
           | "human",
+        authorName,
         text: m.text,
         at: m.created_at,
         mediaKind,
@@ -234,6 +241,50 @@ export const setConversationArchived = createServerFn({ method: "POST" })
   });
 
 const idSchema = z.object({ id: z.string().uuid() });
+
+/** Inicia (ou reabre) conversa com um número informado pelo consultor. */
+export const startConversation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) =>
+    z.object({ phone: z.string().min(8).max(20), name: z.string().max(120).optional() }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    let phone = data.phone.replace(/\D/g, "");
+    if (phone.length === 10 || phone.length === 11) phone = "55" + phone;
+    if (phone.length < 12) throw new Error("Telefone inválido. Use DDD + número.");
+    const { data: existing } = await supabaseAdmin
+      .from("sessions")
+      .select("id")
+      .eq("phone", phone)
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      await supabaseAdmin
+        .from("sessions")
+        .update({
+          archived_at: null,
+          ...(data.name?.trim() ? { contact_name: data.name.trim() } : {}),
+        })
+        .eq("id", existing.id);
+      return { id: existing.id as string };
+    }
+    const { data: created, error } = await supabaseAdmin
+      .from("sessions")
+      .insert({
+        phone,
+        line: "descubra",
+        contact_name: data.name?.trim() || null,
+        mode: "humano",
+        assigned_to: context.userId,
+        staff_seen_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: created.id as string };
+  });
 
 export const fetchConversation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
