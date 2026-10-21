@@ -166,7 +166,7 @@ function Atendentes() {
           </CardHeader>
           <CardContent className="space-y-2">
             {isLoading && <Skeleton className="h-10 w-full" />}
-            {data?.map((a) => (
+            {data?.filter((a) => a.ativo).map((a) => (
               <button
                 key={a.id as string}
                 onClick={() => setSelectedId(a.id as string)}
@@ -179,7 +179,7 @@ function Atendentes() {
                   <span className="font-medium truncate">{a.nome as string}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline">{a.line as string}</Badge>
+                  <Badge variant="outline">WhatsApp oficial</Badge>
                   {a.ativo ? (
                     <Badge variant="secondary">ativo</Badge>
                   ) : (
