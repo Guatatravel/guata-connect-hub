@@ -126,7 +126,7 @@ export const saveWhatsAppChannel = createServerFn({ method: "POST" })
 
     const { error } = await supabaseAdmin
       .from("whatsapp_channels")
-      .update(patch)
+      .update(patch as never)
       .eq("organization_id", orgId)
       .eq("line", data.line);
     if (error) throw new Error(error.message);

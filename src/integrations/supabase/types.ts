@@ -99,6 +99,7 @@ export type Database = {
           line: Database["public"]["Enums"]["channel_line"]
           modelo: string
           nome: string
+          organization_id: string | null
           palavras_humano: string[]
           persona: string
           saudacao: string
@@ -116,6 +117,7 @@ export type Database = {
           line?: Database["public"]["Enums"]["channel_line"]
           modelo?: string
           nome: string
+          organization_id?: string | null
           palavras_humano?: string[]
           persona?: string
           saudacao?: string
@@ -133,6 +135,7 @@ export type Database = {
           line?: Database["public"]["Enums"]["channel_line"]
           modelo?: string
           nome?: string
+          organization_id?: string | null
           palavras_humano?: string[]
           persona?: string
           saudacao?: string
@@ -141,7 +144,15 @@ export type Database = {
           usa_base_descubra?: boolean
           usa_base_local?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "attendants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       broadcast_campaigns: {
         Row: {
@@ -298,6 +309,7 @@ export type Database = {
           logo_url: string | null
           mensagem_fora_horario: string
           mensagem_humano: string
+          organization_id: string | null
           persona_descubra: string
           persona_viagens: string
           singleton: boolean
@@ -310,6 +322,7 @@ export type Database = {
           logo_url?: string | null
           mensagem_fora_horario?: string
           mensagem_humano?: string
+          organization_id?: string | null
           persona_descubra?: string
           persona_viagens?: string
           singleton?: boolean
@@ -322,12 +335,21 @@ export type Database = {
           logo_url?: string | null
           mensagem_fora_horario?: string
           mensagem_humano?: string
+          organization_id?: string | null
           persona_descubra?: string
           persona_viagens?: string
           singleton?: boolean
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "channel_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       knowledge_documents: {
         Row: {
@@ -337,12 +359,16 @@ export type Database = {
           error: string | null
           file_path: string | null
           id: string
+          organization_id: string | null
+          send_keywords: string[]
           size_bytes: number
           source_type: string
           status: string
           title: string
           updated_at: string
           url: string | null
+          whatsapp_caption: string | null
+          whatsapp_sendable: boolean
         }
         Insert: {
           content?: string
@@ -351,12 +377,16 @@ export type Database = {
           error?: string | null
           file_path?: string | null
           id?: string
+          organization_id?: string | null
+          send_keywords?: string[]
           size_bytes?: number
           source_type?: string
           status?: string
           title: string
           updated_at?: string
           url?: string | null
+          whatsapp_caption?: string | null
+          whatsapp_sendable?: boolean
         }
         Update: {
           content?: string
@@ -365,14 +395,26 @@ export type Database = {
           error?: string | null
           file_path?: string | null
           id?: string
+          organization_id?: string | null
+          send_keywords?: string[]
           size_bytes?: number
           source_type?: string
           status?: string
           title?: string
           updated_at?: string
           url?: string | null
+          whatsapp_caption?: string | null
+          whatsapp_sendable?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -412,8 +454,68 @@ export type Database = {
           },
         ]
       }
+      organization_members: {
+        Row: {
+          created_at: string
+          organization_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          organization_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          organization_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          is_guata: boolean
+          name: string
+          slug: string
+          updated_at: string
+          use_descubra_kb: boolean
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_guata?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+          use_descubra_kb?: boolean
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_guata?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+          use_descubra_kb?: boolean
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          active_organization_id: string | null
           created_at: string
           email: string
           id: string
@@ -422,6 +524,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active_organization_id?: string | null
           created_at?: string
           email: string
           id: string
@@ -430,6 +533,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active_organization_id?: string | null
           created_at?: string
           email?: string
           id?: string
@@ -437,7 +541,15 @@ export type Database = {
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_active_organization_id_fkey"
+            columns: ["active_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sessions: {
         Row: {
@@ -453,6 +565,7 @@ export type Database = {
           last_message_at: string
           line: Database["public"]["Enums"]["channel_line"]
           mode: Database["public"]["Enums"]["session_mode"]
+          organization_id: string | null
           phone: string
           staff_seen_at: string | null
           updated_at: string
@@ -470,6 +583,7 @@ export type Database = {
           last_message_at?: string
           line: Database["public"]["Enums"]["channel_line"]
           mode?: Database["public"]["Enums"]["session_mode"]
+          organization_id?: string | null
           phone: string
           staff_seen_at?: string | null
           updated_at?: string
@@ -487,11 +601,20 @@ export type Database = {
           last_message_at?: string
           line?: Database["public"]["Enums"]["channel_line"]
           mode?: Database["public"]["Enums"]["session_mode"]
+          organization_id?: string | null
           phone?: string
           staff_seen_at?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       travel_intake: {
         Row: {
@@ -575,6 +698,53 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      whatsapp_channels: {
+        Row: {
+          access_token: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          line: Database["public"]["Enums"]["channel_line"]
+          organization_id: string
+          phone_number_id: string | null
+          updated_at: string
+          waba_id: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          line: Database["public"]["Enums"]["channel_line"]
+          organization_id: string
+          phone_number_id?: string | null
+          updated_at?: string
+          waba_id?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          line?: Database["public"]["Enums"]["channel_line"]
+          organization_id?: string
+          phone_number_id?: string | null
+          updated_at?: string
+          waba_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_channels_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_deliveries: {
         Row: {

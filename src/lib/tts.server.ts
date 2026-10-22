@@ -18,25 +18,32 @@ export function plainTextForSpeech(text: string): string {
     .slice(0, MAX_SPEECH_CHARS);
 }
 
+function maleVoiceId(): string | null {
+  return (
+    process.env.ELEVENLABS_VOICE_ID?.trim() ||
+    process.env.GUATA_TTS_VOICE_MALE_ID?.trim() ||
+    null
+  );
+}
+
+function femaleVoiceId(): string | null {
+  return (
+    process.env.ELEVENLABS_VOICE_FEMALE_ID?.trim() ||
+    process.env.GUATA_TTS_VOICE_FEMALE_ID?.trim() ||
+    null
+  );
+}
+
 export function isBotTtsConfigured(): boolean {
   if (process.env.ELEVENLABS_API_KEY?.trim()) {
-    return Boolean(
-      process.env.GUATA_TTS_VOICE_MALE_ID?.trim() ||
-        process.env.GUATA_TTS_VOICE_FEMALE_ID?.trim(),
-    );
+    return Boolean(maleVoiceId() || femaleVoiceId());
   }
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 function voiceIdFor(profile: BotVoiceProfile): string | null {
-  if (profile === "female") {
-    return (
-      process.env.GUATA_TTS_VOICE_FEMALE_ID?.trim() ||
-      process.env.GUATA_TTS_VOICE_MALE_ID?.trim() ||
-      null
-    );
-  }
-  return process.env.GUATA_TTS_VOICE_MALE_ID?.trim() || null;
+  if (profile === "female") return femaleVoiceId() || maleVoiceId();
+  return maleVoiceId() || femaleVoiceId();
 }
 
 function openAiVoice(profile: BotVoiceProfile): string {
