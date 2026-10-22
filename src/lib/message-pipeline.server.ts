@@ -10,7 +10,12 @@ import {
   isDescubraConfigured,
 } from "@/integrations/descubra/admin.server";
 import { chatCompletion } from "@/lib/ai-gateway.server";
-import { sendWhatsAppText, markReadAndTyping, typingDelayMs } from "@/lib/meta-send.server";
+import {
+  sendWhatsAppText,
+  sendWhatsAppImage,
+  markReadAndTyping,
+  typingDelayMs,
+} from "@/lib/meta-send.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
 import {
   detectLeadStage,
@@ -28,6 +33,7 @@ import {
 export const AGENCY_NAME = "Guatá Viagens";
 
 export interface IncomingMessage {
+  organizationId: string;
   line: "descubra" | "viagens";
   phone: string;
   contactName?: string;
@@ -86,6 +92,7 @@ async function refreshLeadStage(
 }
 
 async function loadOrCreateSession(
+  organizationId: string,
   line: "descubra" | "viagens",
   phone: string,
   contactName?: string,
@@ -93,11 +100,12 @@ async function loadOrCreateSession(
   const { data: existing } = await supabaseAdmin
     .from("sessions")
     .select("id, mode, intake_state, intake_data")
+    .eq("organization_id", organizationId)
     .eq("line", line)
     .eq("phone", phone)
     .maybeSingle();
   if (existing) return existing as unknown as SessionRow;
-  const organization_id = await getGuataOrganizationId();
+  const organization_id = organizationId;
   const { data: created, error } = await supabaseAdmin
     .from("sessions")
     .insert({
@@ -325,6 +333,9 @@ async function answerTurismo(
   let context = "";
 
   // Base de conhecimento própria (documentos, textos e links anexados no painel)
+  const { listSendableKnowledgeForPrompt } = await import("@/lib/knowledge.server");
+  const sendableCatalog = await listSendableKnowledgeForPrompt(orgId).catch(() => []);
+
   if (attendant?.usa_base_local !== false) {
     const { searchLocalKnowledge } = await import("@/lib/knowledge.server");
     const local = await searchLocalKnowledge(userText, 3, orgId).catch(() => []);
@@ -379,7 +390,12 @@ async function answerTurismo(
     (firstName
       ? `- O cliente se chama ${firstName}. Use o primeiro nome de forma natural, no máximo uma vez, sem repetir em toda mensagem.\n`
       : "") +
-    leadStagePromptSection(leadStage, AGENCY_NAME, { mayOfferTravelHook });
+    leadStagePromptSection(leadStage, AGENCY_NAME, { mayOfferTravelHook }) +
+    (sendableCatalog.length > 0
+      ? "\n\n## MÍDIAS NO WHATSAPP\n" +
+        "Se o cliente pedir promoção, cartaz, flyer ou o assunto bater com um item abaixo, você pode enviar a imagem automaticamente — termine a resposta com [[ENVIAR_MIDIA:ID]] (um ID só, da lista). Não envie mídia sem necessidade.\n" +
+        sendableCatalog.map((s) => `- ${s.id}: ${s.title} — ${s.hint}`).join("\n")
+      : "");
 
   const raw = await chatCompletion(
     [{ role: "system", content: persona + context + whatsappRules }, ...history],
@@ -410,15 +426,26 @@ async function notifyOwner(msg: IncomingMessage, sessionId: string) {
     `Resumo: ${resumo}\n\n` +
     `Responder pelo painel: https://guata-connect-hub.lovable.app/conversas/${sessionId}\n` +
     `Chamar pelo seu WhatsApp: https://wa.me/${phone}`;
-  const res = await sendWhatsAppText(msg.line, owner, text);
+  const orgId = await sessionOrganizationId(sessionId);
+  const res = await sendWhatsAppText(
+    { organizationId: orgId, line: msg.line },
+    owner,
+    text,
+  );
   if (!res.ok) console.error("[alerta] envio falhou:", res.reason);
 }
 
 export async function processMessage(
   msg: IncomingMessage,
 ): Promise<{ replies: string[]; sessionId: string }> {
-  if (msg.messageId) void markReadAndTyping(msg.line, msg.messageId);
-  const session = await loadOrCreateSession(msg.line, msg.phone, msg.contactName);
+  const waTarget = { organizationId: msg.organizationId, line: msg.line };
+  if (msg.messageId) void markReadAndTyping(waTarget, msg.messageId);
+  const session = await loadOrCreateSession(
+    msg.organizationId,
+    msg.line,
+    msg.phone,
+    msg.contactName,
+  );
   if (msg.contactName?.trim()) {
     await supabaseAdmin
       .from("sessions")
@@ -535,8 +562,15 @@ export async function processMessage(
         );
       }
 
-      const body = raw.replace(/\[\[OFERTA_HUMANO\]\]/g, "").trim();
+      const mediaTag = raw.match(/\[\[ENVIAR_MIDIA:([0-9a-f-]{36})\]\]/i);
+      const body = raw
+        .replace(/\[\[OFERTA_HUMANO\]\]/g, "")
+        .replace(/\[\[ENVIAR_MIDIA:[0-9a-f-]{36}\]\]/gi, "")
+        .trim();
       replies.push(...splitWhatsAppMessages(body));
+      if (mediaTag?.[1]) {
+        (session.intake_data as Record<string, unknown>)["_pending_media_doc"] = mediaTag[1];
+      }
     } catch (err) {
       console.error("[brain] erro:", err);
       replies.push(
@@ -555,11 +589,57 @@ export async function processMessage(
   for (const text of replies) {
     await persistMessage(session.id, "out", "bot", text);
     await new Promise((r) => setTimeout(r, typingDelayMs(text)));
-    const res = await sendWhatsAppText(msg.line, msg.phone, text).catch(
+    const res = await sendWhatsAppText(waTarget, msg.phone, text).catch(
       (e) => ({ ok: false, reason: String(e) }) as const,
     );
     if (!res.ok) console.error("[meta] send falhou:", res.reason);
     else console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
+  }
+
+  if (replies.length > 0 && session.mode !== "humano") {
+    const {
+      pickSendableKnowledgeMedia,
+      getSendableKnowledgeMediaById,
+      signedKnowledgeMediaUrl,
+    } = await import("@/lib/knowledge.server");
+    const taggedId = session.intake_data?.["_pending_media_doc"] as string | undefined;
+    let media = taggedId
+      ? await getSendableKnowledgeMediaById(taggedId, msg.organizationId)
+      : null;
+    if (!media) {
+      media = await pickSendableKnowledgeMedia(msg.text, msg.organizationId);
+    }
+    if (media?.file_path) {
+      const url = await signedKnowledgeMediaUrl(media.file_path);
+      if (url) {
+        await new Promise((r) => setTimeout(r, 800));
+        const imgRes = await sendWhatsAppImage(
+          waTarget,
+          msg.phone,
+          url,
+          media.caption ?? undefined,
+        );
+        if (imgRes.ok) {
+          await persistMessage(
+            session.id,
+            "out",
+            "bot",
+            media.caption || `📎 ${media.title}`,
+            { knowledge_doc_id: media.id, media_kind: "image" },
+          );
+        } else {
+          console.error("[meta] imagem base conhecimento:", imgRes.reason);
+        }
+      }
+    }
+    if (taggedId) {
+      const intake = { ...(session.intake_data ?? {}) };
+      delete intake["_pending_media_doc"];
+      await supabaseAdmin
+        .from("sessions")
+        .update({ intake_data: intake as never })
+        .eq("id", session.id);
+    }
   }
 
   if (handoff) {

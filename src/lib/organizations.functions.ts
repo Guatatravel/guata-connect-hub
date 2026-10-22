@@ -3,8 +3,13 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
+  addOrganizationMember,
+  createPartnerOrganization,
+  listOrganizationsForUser,
   listWhatsAppChannels,
   resolveOrganizationForUser,
+  setActiveOrganizationForUser,
+  userCanManagePartnerOrgs,
 } from "@/lib/organizations.server";
 
 async function requireAdmin(userId: string) {
@@ -17,6 +22,56 @@ async function requireAdmin(userId: string) {
   if (!data) throw new Error("Apenas administradores podem alterar canais WhatsApp.");
 }
 
+export const fetchMyOrganizations = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgs = await listOrganizationsForUser(context.userId);
+    const activeId = await resolveOrganizationForUser(context.userId);
+    const canManagePartners = await userCanManagePartnerOrgs(context.userId);
+    return { organizations: orgs, activeOrganizationId: activeId, canManagePartners };
+  });
+
+export const setActiveOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ organizationId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await setActiveOrganizationForUser(context.userId, data.organizationId);
+    return { ok: true };
+  });
+
+const createOrgSchema = z.object({
+  name: z.string().min(2).max(120),
+  slug: z.string().min(2).max(60),
+});
+
+export const createPartnerOrg = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => createOrgSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    if (!(await userCanManagePartnerOrgs(context.userId))) {
+      throw new Error("Apenas administradores Guatá podem criar agências parceiras.");
+    }
+    const id = await createPartnerOrganization(data);
+    return { id };
+  });
+
+const addMemberSchema = z.object({
+  organizationId: z.string().uuid(),
+  userId: z.string().uuid(),
+  role: z.enum(["owner", "admin", "member"]).optional(),
+});
+
+export const addOrgMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => addMemberSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    if (!(await userCanManagePartnerOrgs(context.userId))) {
+      throw new Error("Apenas administradores Guatá podem vincular membros.");
+    }
+    await addOrganizationMember(data.organizationId, data.userId, data.role ?? "member");
+    return { ok: true };
+  });
+
 export const fetchOrganizationContext = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -28,6 +83,9 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
       .maybeSingle();
     if (!org) throw new Error("Organização não encontrada.");
     const channels = await listWhatsAppChannels(orgId);
+    const hasViagensChannel = channels.some(
+      (c) => c.line === "viagens" && Boolean(c.phone_number_id?.trim()),
+    );
     return {
       organization: {
         id: org.id as string,
@@ -36,6 +94,7 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
         isGuata: Boolean(org.is_guata),
         useDescubraKb: Boolean(org.use_descubra_kb),
       },
+      hasViagensChannel,
       channels,
     };
   });

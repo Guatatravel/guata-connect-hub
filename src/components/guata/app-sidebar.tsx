@@ -20,8 +20,8 @@ import {
   Users,
   BookOpen,
   Bot,
-  PanelRight,
   Link2,
+  Building2,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
@@ -30,8 +30,8 @@ const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
-  { to: "/extensao", label: "Modo Atendimento", icon: PanelRight },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
+  { to: "/organizacoes", label: "Agências", icon: Building2 },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
   { to: "/atendentes", label: "Agentes IA", icon: Bot },
   { to: "/usuarios", label: "Usuários", icon: Users },

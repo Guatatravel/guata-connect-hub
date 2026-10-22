@@ -137,12 +137,16 @@ function ConfigPage() {
             <div className="flex gap-2">
               <StatusBadge
                 state={settings.metaConfiguredDescubra ? "ok" : "warn"}
-                label="Linha Descubra"
+                label={settings.isGuataOrg ? "Linha Descubra" : "WhatsApp"}
               />
-              <StatusBadge
-                state={settings.metaConfiguredViagens ? "ok" : "idle"}
-                label={settings.metaConfiguredViagens ? "Linha Viagens" : "Linha Viagens (não usada)"}
-              />
+              {settings.isGuataOrg && (
+                <StatusBadge
+                  state={settings.metaConfiguredViagens ? "ok" : "idle"}
+                  label={
+                    settings.metaConfiguredViagens ? "Linha Viagens" : "Linha Viagens (opcional)"
+                  }
+                />
+              )}
             </div>
           </CardTitle>
         </CardHeader>
@@ -168,14 +172,20 @@ function ConfigPage() {
               Subscreva o campo <code className="text-[10px]">messages</code>.
             </p>
             <p className="text-xs mt-2">
+              Credenciais de envio:{" "}
+              <Link to="/conectar-meta" className="underline font-medium">
+                Conectar WhatsApp
+              </Link>
+              {" · "}
               <Link to="/diagnostico-whatsapp" className="underline font-medium">
-                Abrir verificação técnica do WhatsApp →
+                Diagnóstico técnico
               </Link>
             </p>
           </div>
         </CardContent>
       </Card>
 
+      {settings.useDescubraKb && (
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="font-display flex items-center justify-between gap-2 flex-wrap">
@@ -216,8 +226,9 @@ function ConfigPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      <DiagnosticsCard />
+      {settings.useDescubraKb && <DiagnosticsCard />}
 
       <BrandingCard />
 

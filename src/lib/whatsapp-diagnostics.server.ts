@@ -4,6 +4,7 @@
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sendWhatsAppText } from "@/lib/meta-send.server";
+import { getGuataOrganizationId } from "@/lib/organizations.server";
 
 export interface DeliveryRow {
   id: string;
@@ -228,7 +229,8 @@ export async function sendTestWhatsApp(
       message: "Informe o número completo com DDI e DDD (ex.: 5567999999999).",
     };
   }
-  const res = await sendWhatsAppText("descubra", digits, text);
+  const orgId = await getGuataOrganizationId();
+  const res = await sendWhatsAppText({ organizationId: orgId, line: "descubra" }, digits, text);
   if (res.ok) {
     return {
       ok: true,

@@ -6,6 +6,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/guata/app-sidebar";
+import { OrgSwitcher } from "@/components/guata/org-switcher";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeNotifications } from "@/hooks/use-realtime-notifications";
@@ -54,6 +55,9 @@ function AppLayoutInner() {
             <SidebarTrigger />
             <div className="font-display text-lg font-semibold text-primary">
               Guatá Channel
+            </div>
+            <div className="ml-auto">
+              <OrgSwitcher />
             </div>
           </header>
           <main className="flex-1 p-6">

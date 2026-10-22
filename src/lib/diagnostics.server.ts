@@ -8,7 +8,7 @@ import {
   isDescubraConfigured,
   getGuataPersona,
 } from "@/integrations/descubra/admin.server";
-import { isMetaConfigured } from "@/lib/meta-send.server";
+import { isGuataMetaConfigured } from "@/lib/meta-send.server";
 
 export type CheckState = "ok" | "warn" | "fail";
 
@@ -164,7 +164,7 @@ export async function runDiagnostics(): Promise<DiagnosticCheck[]> {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const metaOk = await isMetaConfigured("descubra");
+  const metaOk = await isGuataMetaConfigured("descubra");
   checks.push({
     id: "meta",
     label: "WhatsApp Business (Meta)",

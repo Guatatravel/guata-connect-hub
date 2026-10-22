@@ -26,6 +26,8 @@ import {
   removeAttendant,
   type AttendantInput,
 } from "@/lib/attendants.functions";
+import { useOrgLineUi } from "@/hooks/use-org-line-ui";
+import { attendantLineOptions } from "@/lib/org-ui";
 
 export const Route = createFileRoute("/_app/atendentes")({
   component: Atendentes,
@@ -79,6 +81,9 @@ function Atendentes() {
 
   const [form, setForm] = useState<AttendantInput>(EMPTY);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const { ui: orgUi } = useOrgLineUi();
+  const lineOpts = attendantLineOptions(orgUi);
 
   const { data, isLoading } = useQuery({
     queryKey: ["attendants"],
@@ -223,8 +228,11 @@ function Atendentes() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="descubra">Descubra MS</SelectItem>
-                    <SelectItem value="viagens">Guatá</SelectItem>
+                    {lineOpts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -330,18 +338,20 @@ function Atendentes() {
                   onCheckedChange={(v) => set("usa_base_local", v)}
                 />
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">Usar a base do Descubra MS</p>
-                  <p className="text-xs text-muted-foreground">
-                    Perguntas, respostas e eventos oficiais do estado.
-                  </p>
+              {orgUi.useDescubraKb && (
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">Usar a base do Descubra MS</p>
+                    <p className="text-xs text-muted-foreground">
+                      Perguntas, respostas e eventos oficiais do estado.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.usa_base_descubra}
+                    onCheckedChange={(v) => set("usa_base_descubra", v)}
+                  />
                 </div>
-                <Switch
-                  checked={form.usa_base_descubra}
-                  onCheckedChange={(v) => set("usa_base_descubra", v)}
-                />
-              </div>
+              )}
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">Atendente ativo</p>

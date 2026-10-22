@@ -280,12 +280,14 @@ export const startConversation = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
     let phone = data.phone.replace(/\D/g, "");
     if (phone.length === 10 || phone.length === 11) phone = "55" + phone;
     if (phone.length < 12) throw new Error("Telefone inválido. Use DDD + número.");
     const { data: existing } = await supabaseAdmin
       .from("sessions")
       .select("id")
+      .eq("organization_id", orgId)
       .eq("phone", phone)
       .order("last_message_at", { ascending: false })
       .limit(1)
@@ -305,6 +307,7 @@ export const startConversation = createServerFn({ method: "POST" })
       .insert({
         phone,
         line: "descubra",
+        organization_id: orgId,
         contact_name: data.name?.trim() || null,
         mode: "humano",
         assigned_to: context.userId,
@@ -377,10 +380,12 @@ export const replyAsAgent = createServerFn({ method: "POST" })
     await requireStaff(context.userId);
     const { data: s } = await supabaseAdmin
       .from("sessions")
-      .select("id, phone, line")
+      .select("id, phone, line, organization_id")
       .eq("id", data.id)
       .maybeSingle();
     if (!s) throw new Error("Sessão não encontrada");
+    const orgId = (s.organization_id as string) || (await resolveOrganizationForUser(context.userId));
+    const wa = { organizationId: orgId, line: s.line as DbLine };
 
     const caption = data.text?.trim() ?? "";
     const staffName = await resolveStaffName(context.userId);
@@ -412,7 +417,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       const imageUrl = await signedChatMediaUrl(mediaPath, 60 * 60);
       if (!imageUrl) throw new Error("Não foi possível gerar URL da imagem.");
       const imgRes = await sendWhatsAppImage(
-        s.line as DbLine,
+        wa,
         s.phone,
         imageUrl,
         caption ? agentWhatsAppCaption(staffName, caption) : undefined,
@@ -437,7 +442,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       const docUrl = await signedChatMediaUrl(mediaPath, 60 * 60);
       if (!docUrl) throw new Error("Não foi possível gerar URL do documento.");
       const docRes = await sendWhatsAppDocument(
-        s.line as DbLine,
+        wa,
         s.phone,
         docUrl,
         data.documentFilename ?? "documento.pdf",
@@ -457,7 +462,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       const parts = agentWhatsAppParts(staffName, caption);
       for (const part of parts) {
         await new Promise((r) => setTimeout(r, typingDelayMs(part)));
-        const send = await sendWhatsAppText(s.line as DbLine, s.phone, part);
+        const send = await sendWhatsAppText(wa, s.phone, part);
         if (send.ok) sent = true;
         else {
           await supabaseAdmin.from("messages").insert({
@@ -731,6 +736,7 @@ export const fetchSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
     let { data: s } = await supabaseAdmin
       .from("channel_settings")
       .select("*")
@@ -744,12 +750,21 @@ export const fetchSettings = createServerFn({ method: "GET" })
       s = ins.data ?? null;
     }
 
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("is_guata, use_descubra_kb")
+      .eq("id", orgId)
+      .maybeSingle();
+
     return {
-      metaStatus: ((await isMetaConfigured("descubra")) ? "conectado" : "desconectado") as
+      organizationId: orgId,
+      isGuataOrg: Boolean(org?.is_guata),
+      useDescubraKb: Boolean(org?.use_descubra_kb),
+      metaStatus: ((await isMetaConfigured(orgId, "descubra")) ? "conectado" : "desconectado") as
         | "conectado"
         | "desconectado",
-      metaConfiguredDescubra: await isMetaConfigured("descubra"),
-      metaConfiguredViagens: await isMetaConfigured("viagens"),
+      metaConfiguredDescubra: await isMetaConfigured(orgId, "descubra"),
+      metaConfiguredViagens: await isMetaConfigured(orgId, "viagens"),
       descubraSupabaseConfigured: isDescubraConfigured(),
       descubraWebhookSecretConfigured: Boolean(process.env.DESCUBRA_WEBHOOK_SECRET),
       descubraCanalWebhookReady: Boolean(process.env.DESCUBRA_WEBHOOK_SECRET),

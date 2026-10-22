@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { type TriagemStatus } from "@/types/guata";
 import { formatDate, waLink, formatPhone } from "@/lib/format";
+import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 import { ArrowLeft, MessageCircle, Send } from "lucide-react";
 
 export const Route = createFileRoute("/_app/triagens/$id")({
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/_app/triagens/$id")({
 function TriagemDetailPage() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
+  const { ui: orgUi } = useOrgLineUi();
 
   const { data: triage, isLoading } = useQuery({
     queryKey: ["triage", id],
@@ -126,7 +128,7 @@ function TriagemDetailPage() {
             {triage.protocol}
           </h1>
           <TriagemStatusBadge status={triage.status} />
-          <LineBadge line={triage.line} />
+          <LineBadge line={triage.line} org={orgUi} />
           <a
             href={waLink(triage.phone)}
             target="_blank"

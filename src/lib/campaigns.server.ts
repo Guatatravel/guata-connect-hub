@@ -3,11 +3,12 @@
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
-  isMetaConfigured,
+  isGuataMetaConfigured,
   sendWhatsAppImage,
   sendWhatsAppText,
   typingDelayMs,
 } from "@/lib/meta-send.server";
+import { getGuataOrganizationId } from "@/lib/organizations.server";
 
 const BUCKET = "campaigns";
 const MAX_SEND_PER_LAUNCH = 80;
@@ -228,8 +229,8 @@ export async function getCampaignMetaStatus(): Promise<{
   viagens: boolean;
 }> {
   return {
-    descubra: await isMetaConfigured("descubra"),
-    viagens: await isMetaConfigured("viagens"),
+    descubra: await isGuataMetaConfigured("descubra"),
+    viagens: await isGuataMetaConfigured("viagens"),
   };
 }
 
@@ -253,7 +254,7 @@ export async function assertMetaConfiguredForLine(line: CampaignLine | "both"): 
     }
     return;
   }
-  if (!(await isMetaConfigured(line))) {
+  if (!(await isGuataMetaConfigured(line))) {
     const label = line === "descubra" ? "Descubra MS" : "Guatá";
     const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
     throw new Error(
@@ -375,6 +376,8 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
 
   const line = campaign.line as CampaignLine;
   await assertMetaConfiguredForLine(line);
+  const guataOrgId = await getGuataOrganizationId();
+  const wa = { organizationId: guataOrgId, line };
   const audience = campaign.audience as CampaignAudience;
 
   if (campaign.status === "rascunho") {
@@ -438,7 +441,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     try {
       let delivered = false;
       if (imageUrl) {
-        const imgRes = await sendWhatsAppImage(line, phone, imageUrl, body || undefined);
+        const imgRes = await sendWhatsAppImage(wa, phone, imageUrl, body || undefined);
         if (imgRes.ok) {
           delivered = true;
           await persistOutbound(
@@ -450,7 +453,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
             await new Promise((r) => setTimeout(r, typingDelayMs(body)));
           }
         } else if (body) {
-          const txtRes = await sendWhatsAppText(line, phone, body);
+          const txtRes = await sendWhatsAppText(wa, phone, body);
           if (txtRes.ok) {
             delivered = true;
             await persistOutbound(sessionId, body, {
@@ -475,7 +478,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
       }
 
       if (body && !imageUrl) {
-        const txtRes = await sendWhatsAppText(line, phone, body);
+        const txtRes = await sendWhatsAppText(wa, phone, body);
         if (!txtRes.ok) {
           sentFail += 1;
           await supabaseAdmin

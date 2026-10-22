@@ -1,15 +1,21 @@
 /**
  * Envio de mensagens via Meta WhatsApp Cloud API — server-only.
- * Suporta 2 linhas via sufixos _DESCUBRA / _VIAGENS.
- * Retorna { ok:false, reason:'not_configured' } quando os secrets faltam.
+ * Credenciais por organização + linha (banco ou env Guatá).
  */
-
-import { resolveWhatsAppCredentials } from "@/lib/organizations.server";
+import {
+  getGuataOrganizationId,
+  resolveWhatsAppCredentials,
+} from "@/lib/organizations.server";
 
 export type Line = "descubra" | "viagens";
 
-async function lineCreds(line: Line) {
-  return resolveWhatsAppCredentials(line);
+export interface WhatsAppTarget {
+  organizationId: string;
+  line: Line;
+}
+
+async function lineCreds(target: WhatsAppTarget) {
+  return resolveWhatsAppCredentials(target.organizationId, target.line);
 }
 
 export interface SendResult {
@@ -19,11 +25,11 @@ export interface SendResult {
 }
 
 export async function sendWhatsAppText(
-  line: Line,
+  target: WhatsAppTarget,
   to: string,
   text: string,
 ): Promise<SendResult> {
-  const { token, phoneId } = await lineCreds(line);
+  const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
@@ -56,13 +62,13 @@ export async function sendWhatsAppText(
 }
 
 export async function sendWhatsAppDocument(
-  line: Line,
+  target: WhatsAppTarget,
   to: string,
   documentUrl: string,
   filename = "documento.pdf",
   caption?: string,
 ): Promise<SendResult> {
-  const { token, phoneId } = await lineCreds(line);
+  const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
@@ -101,12 +107,12 @@ export async function sendWhatsAppDocument(
 }
 
 export async function sendWhatsAppImage(
-  line: Line,
+  target: WhatsAppTarget,
   to: string,
   imageUrl: string,
   caption?: string,
 ): Promise<SendResult> {
-  const { token, phoneId } = await lineCreds(line);
+  const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
@@ -141,12 +147,11 @@ export async function sendWhatsAppImage(
   return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
-/**
- * Marca a mensagem recebida como lida (tique azul) e mostra
- * "digitando..." no WhatsApp do cliente (até 25s ou até a resposta chegar).
- */
-export async function markReadAndTyping(line: Line, messageId: string): Promise<void> {
-  const { token, phoneId } = await lineCreds(line);
+export async function markReadAndTyping(
+  target: WhatsAppTarget,
+  messageId: string,
+): Promise<void> {
+  const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId || !messageId) return;
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
@@ -161,12 +166,20 @@ export async function markReadAndTyping(line: Line, messageId: string): Promise<
   if (res && !res.ok) console.error("[meta] read/typing falhou:", res.status, await res.text().catch(() => ""));
 }
 
-/** Atraso humanizado: ~2s a 4s, proporcional ao tamanho da resposta. */
 export function typingDelayMs(text: string): number {
   return Math.round(Math.min(4000, 2000 + text.length * 8));
 }
 
-export async function isMetaConfigured(line: Line = "descubra"): Promise<boolean> {
-  const { token, phoneId } = await lineCreds(line);
+export async function isMetaConfigured(
+  organizationId: string,
+  line: Line = "descubra",
+): Promise<boolean> {
+  const { token, phoneId } = await resolveWhatsAppCredentials(organizationId, line);
   return Boolean(token && phoneId);
+}
+
+/** Campanhas e diagnósticos legados da org Guatá. */
+export async function isGuataMetaConfigured(line: Line = "descubra"): Promise<boolean> {
+  const orgId = await getGuataOrganizationId();
+  return isMetaConfigured(orgId, line);
 }

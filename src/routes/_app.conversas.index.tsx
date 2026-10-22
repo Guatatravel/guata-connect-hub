@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatPhone, timeAgo } from "@/lib/format";
 import type { Conversation } from "@/types/guata";
+import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 
 export const Route = createFileRoute("/_app/conversas/")({
   head: () => ({ meta: [{ title: "Conversas — Guatá Channel" }] }),
@@ -34,6 +35,7 @@ function ConversasPage() {
     },
     onError: (e: Error) => toast.error(e.message || "Não foi possível abrir a conversa"),
   });
+  const { ui: orgUi } = useOrgLineUi();
   const { data, isLoading } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => api.listConversations(),
@@ -76,7 +78,7 @@ function ConversasPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium truncate">{c.contactName ?? formatPhone(c.phone)}</span>
-            <LineBadge line={c.line} />
+            <LineBadge line={c.line} org={orgUi} />
             <SessionModeBadge mode={c.mode} />
             {c.leadStage && <LeadStageBadge stage={c.leadStage} />}
           </div>

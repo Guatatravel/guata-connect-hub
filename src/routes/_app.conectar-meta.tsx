@@ -127,11 +127,13 @@ function ConectarMeta() {
       {isLoading || !data ? (
         <Skeleton className="h-48 rounded-2xl" />
       ) : (
-        data.channels.map((ch) => (
+        data.channels
+          .filter((ch) => data.organization.isGuata || ch.line === "descubra")
+          .map((ch) => (
           <ChannelForm
             key={ch.id}
             line={ch.line}
-            label={ch.label || (ch.line === "descubra" ? "Descubra MS" : "Guatá Viagens")}
+            label={ch.label || (ch.line === "descubra" ? (data.organization.isGuata ? "Descubra MS" : "WhatsApp") : "Guatá Viagens")}
             initial={{
               waba_id: ch.waba_id,
               phone_number_id: ch.phone_number_id,

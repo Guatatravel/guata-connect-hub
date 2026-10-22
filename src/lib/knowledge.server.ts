@@ -93,12 +93,24 @@ export interface KnowledgeDoc {
   size_bytes: number;
   created_at: string;
   preview: string;
+  whatsapp_sendable: boolean;
+  send_keywords: string[];
+  whatsapp_caption: string | null;
+}
+
+const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+
+function isImageFilename(filename: string): boolean {
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  return IMAGE_EXT.has(ext);
 }
 
 export async function listKnowledgeDocs(organizationId: string): Promise<KnowledgeDoc[]> {
   const { data, error } = await supabaseAdmin
     .from("knowledge_documents")
-    .select("id,title,source_type,url,file_path,status,error,size_bytes,created_at,content")
+    .select(
+      "id,title,source_type,url,file_path,status,error,size_bytes,created_at,content,whatsapp_sendable,send_keywords,whatsapp_caption",
+    )
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -114,7 +126,20 @@ export async function listKnowledgeDocs(organizationId: string): Promise<Knowled
     size_bytes: (d.size_bytes as number) ?? 0,
     created_at: d.created_at as string,
     preview: String(d.content ?? "").slice(0, 240),
+    whatsapp_sendable: Boolean(d.whatsapp_sendable),
+    send_keywords: Array.isArray(d.send_keywords)
+      ? (d.send_keywords as string[]).map(String)
+      : [],
+    whatsapp_caption: (d.whatsapp_caption as string) ?? null,
   }));
+}
+
+export async function signedKnowledgeMediaUrl(filePath: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin.storage
+    .from("knowledge")
+    .createSignedUrl(filePath, 60 * 60);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
 }
 
 export async function addKnowledgeText(
@@ -180,12 +205,20 @@ export async function addKnowledgeFile(
   let content = "";
   let status = "pronto";
   let err: string | null = null;
-  try {
-    content = await extractFromFile(filename, binary);
-    if (!content) throw new Error("Nenhum texto legível encontrado no arquivo");
-  } catch (e) {
-    status = "erro";
-    err = e instanceof Error ? e.message : String(e);
+  let source_type = "arquivo";
+
+  if (isImageFilename(filename)) {
+    source_type = "imagem";
+    content = clean(title ?? filename);
+    if (!content) content = "Imagem promocional";
+  } else {
+    try {
+      content = await extractFromFile(filename, binary);
+      if (!content) throw new Error("Nenhum texto legível encontrado no arquivo");
+    } catch (e) {
+      status = "erro";
+      err = e instanceof Error ? e.message : String(e);
+    }
   }
 
   await supabaseAdmin.storage
@@ -195,7 +228,7 @@ export async function addKnowledgeFile(
 
   const { error } = await supabaseAdmin.from("knowledge_documents").insert({
     title: title || filename,
-    source_type: "arquivo",
+    source_type,
     file_path: path,
     content,
     size_bytes: binary.length,
@@ -203,6 +236,50 @@ export async function addKnowledgeFile(
     error: err,
     created_by: userId,
     organization_id: organizationId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function addKnowledgeWhatsAppImage(
+  userId: string,
+  organizationId: string,
+  input: {
+    filename: string;
+    base64: string;
+    title: string;
+    description: string;
+    keywords: string[];
+    caption: string;
+    sendable: boolean;
+  },
+): Promise<void> {
+  const binary = Uint8Array.from(atob(input.base64), (c) => c.charCodeAt(0));
+  if (!isImageFilename(input.filename)) {
+    throw new Error("Use PNG, JPG ou WebP.");
+  }
+  const path = `${userId}/${Date.now()}-${input.filename.replace(/[^\w.\-]/g, "_")}`;
+  const content = clean(
+    [input.title, input.description].filter(Boolean).join("\n\n"),
+  );
+  if (!content) throw new Error("Informe título ou descrição para a IA encontrar esta imagem.");
+
+  const { error: upErr } = await supabaseAdmin.storage
+    .from("knowledge")
+    .upload(path, binary, { upsert: true });
+  if (upErr) throw new Error(upErr.message);
+
+  const { error } = await supabaseAdmin.from("knowledge_documents").insert({
+    title: input.title.slice(0, 160) || input.filename,
+    source_type: "imagem",
+    file_path: path,
+    content,
+    size_bytes: binary.length,
+    status: "pronto",
+    created_by: userId,
+    organization_id: organizationId,
+    whatsapp_sendable: input.sendable,
+    send_keywords: input.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean).slice(0, 30),
+    whatsapp_caption: input.caption.slice(0, 1024) || null,
   });
   if (error) throw new Error(error.message);
 }
@@ -268,4 +345,120 @@ export async function searchLocalKnowledge(
     .slice(0, limit);
 
   return scored.map(({ title, excerpt }) => ({ title, excerpt }));
+}
+
+export interface SendableKnowledgeMedia {
+  id: string;
+  title: string;
+  file_path: string;
+  caption: string | null;
+  score: number;
+}
+
+function scoreSendableMatch(
+  query: string,
+  doc: {
+    title: string;
+    content: string;
+    send_keywords: string[];
+  },
+): number {
+  const q = query.toLowerCase();
+  const terms = q
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
+  let score = 0;
+  const hay = `${doc.title} ${doc.content}`.toLowerCase();
+  for (const kw of doc.send_keywords) {
+    if (kw && q.includes(kw.toLowerCase())) score += 3;
+  }
+  for (const t of terms) {
+    if (hay.includes(t)) score += 1;
+  }
+  return score;
+}
+
+/** Mídias marcadas como enviáveis no WhatsApp, ranqueadas pelo texto do cliente. */
+export async function getSendableKnowledgeMediaById(
+  id: string,
+  organizationId: string,
+): Promise<SendableKnowledgeMedia | null> {
+  const { data } = await supabaseAdmin
+    .from("knowledge_documents")
+    .select("id,title,file_path,whatsapp_caption")
+    .eq("id", id)
+    .eq("organization_id", organizationId)
+    .eq("status", "pronto")
+    .eq("whatsapp_sendable", true)
+    .not("file_path", "is", null)
+    .maybeSingle();
+  if (!data?.file_path) return null;
+  return {
+    id: data.id as string,
+    title: String(data.title ?? ""),
+    file_path: data.file_path as string,
+    caption: (data.whatsapp_caption as string) ?? null,
+    score: 99,
+  };
+}
+
+export async function pickSendableKnowledgeMedia(
+  userText: string,
+  organizationId: string,
+  minScore = 2,
+): Promise<SendableKnowledgeMedia | null> {
+  const { data } = await supabaseAdmin
+    .from("knowledge_documents")
+    .select("id,title,content,file_path,whatsapp_caption,send_keywords")
+    .eq("organization_id", organizationId)
+    .eq("status", "pronto")
+    .eq("whatsapp_sendable", true)
+    .not("file_path", "is", null)
+    .limit(50);
+
+  const ranked = (data ?? [])
+    .map((d) => {
+      const keywords = Array.isArray(d.send_keywords)
+        ? (d.send_keywords as string[])
+        : [];
+      const score = scoreSendableMatch(userText, {
+        title: String(d.title ?? ""),
+        content: String(d.content ?? ""),
+        send_keywords: keywords,
+      });
+      return {
+        id: d.id as string,
+        title: String(d.title ?? ""),
+        file_path: d.file_path as string,
+        caption: (d.whatsapp_caption as string) ?? null,
+        score,
+      };
+    })
+    .filter((d) => d.score >= minScore)
+    .sort((a, b) => b.score - a.score);
+
+  return ranked[0] ?? null;
+}
+
+export async function listSendableKnowledgeForPrompt(
+  organizationId: string,
+): Promise<Array<{ id: string; title: string; hint: string }>> {
+  const { data } = await supabaseAdmin
+    .from("knowledge_documents")
+    .select("id,title,content,send_keywords")
+    .eq("organization_id", organizationId)
+    .eq("status", "pronto")
+    .eq("whatsapp_sendable", true)
+    .limit(12);
+  return (data ?? []).map((d) => {
+    const kws = Array.isArray(d.send_keywords) ? (d.send_keywords as string[]).join(", ") : "";
+    return {
+      id: d.id as string,
+      title: String(d.title ?? ""),
+      hint: [String(d.content ?? "").slice(0, 120), kws ? `Palavras: ${kws}` : ""]
+        .filter(Boolean)
+        .join(" — "),
+    };
+  });
 }

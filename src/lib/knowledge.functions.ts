@@ -65,6 +65,48 @@ export const addKnowledgeFileDoc = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const addKnowledgeWhatsAppImageDoc = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      filename: string;
+      base64: string;
+      title: string;
+      description: string;
+      keywords: string;
+      caption: string;
+      sendable: boolean;
+    }) => ({
+      filename: String(input?.filename ?? "imagem.png"),
+      base64: String(input?.base64 ?? ""),
+      title: String(input?.title ?? "").slice(0, 160),
+      description: String(input?.description ?? "").slice(0, 4000),
+      keywords: String(input?.keywords ?? ""),
+      caption: String(input?.caption ?? "").slice(0, 1024),
+      sendable: Boolean(input?.sendable),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { addKnowledgeWhatsAppImage } = await import("@/lib/knowledge.server");
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const keywords = data.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    await addKnowledgeWhatsAppImage(context.userId, orgId, {
+      filename: data.filename,
+      base64: data.base64,
+      title: data.title,
+      description: data.description,
+      keywords,
+      caption: data.caption,
+      sendable: data.sendable,
+    });
+    return { ok: true };
+  });
+
 export const removeKnowledgeDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => ({ id: String(input?.id ?? "") }))

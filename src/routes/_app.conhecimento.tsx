@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { BookOpen, FileText, Link2, Megaphone, Trash2, Upload, Type } from "lucide-react";
+import { BookOpen, FileText, ImageIcon, Link2, Megaphone, Trash2, Upload, Type } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { CampaignsTab } from "@/components/guata/campaigns-tab";
 import {
   listKnowledge,
@@ -19,6 +20,7 @@ import {
   addKnowledgeLinkDoc,
   addKnowledgeFileDoc,
   removeKnowledgeDoc,
+  addKnowledgeWhatsAppImageDoc,
 } from "@/lib/knowledge.functions";
 
 export const Route = createFileRoute("/_app/conhecimento")({
@@ -42,7 +44,8 @@ export const Route = createFileRoute("/_app/conhecimento")({
   }),
 });
 
-const ACCEPT = ".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json";
+const ACCEPT = ".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp";
+const IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp";
 const MAX_BYTES = 8 * 1024 * 1024;
 
 function fileToBase64(file: File): Promise<string> {
@@ -69,13 +72,21 @@ function KnowledgeBasePanel() {
   const addText = useServerFn(addKnowledgeTextDoc);
   const addLink = useServerFn(addKnowledgeLinkDoc);
   const addFile = useServerFn(addKnowledgeFileDoc);
+  const addImage = useServerFn(addKnowledgeWhatsAppImageDoc);
   const removeDoc = useServerFn(removeKnowledgeDoc);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
   const [textTitle, setTextTitle] = useState("");
   const [textBody, setTextBody] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [imgTitle, setImgTitle] = useState("");
+  const [imgDesc, setImgDesc] = useState("");
+  const [imgKeywords, setImgKeywords] = useState("");
+  const [imgCaption, setImgCaption] = useState("");
+  const [imgSendable, setImgSendable] = useState(true);
+  const [imgFile, setImgFile] = useState<File | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["knowledge"],
@@ -121,6 +132,35 @@ function KnowledgeBasePanel() {
     onError,
   });
 
+  const imageMutation = useMutation({
+    mutationFn: async () => {
+      if (!imgFile) throw new Error("Escolha uma imagem");
+      if (imgFile.size > MAX_BYTES) throw new Error("Imagem maior que 8 MB");
+      const base64 = await fileToBase64(imgFile);
+      return addImage({
+        data: {
+          filename: imgFile.name,
+          base64,
+          title: imgTitle || imgFile.name,
+          description: imgDesc,
+          keywords: imgKeywords,
+          caption: imgCaption,
+          sendable: imgSendable,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Imagem cadastrada para o WhatsApp");
+      setImgTitle("");
+      setImgDesc("");
+      setImgKeywords("");
+      setImgCaption("");
+      setImgFile(null);
+      invalidate();
+    },
+    onError,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => removeDoc({ data: { id } }),
     onSuccess: () => {
@@ -151,11 +191,16 @@ function KnowledgeBasePanel() {
                 <Link2 className="h-4 w-4 mr-2" />
                 Link
               </TabsTrigger>
+              <TabsTrigger value="imagem">
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Imagem WhatsApp
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="arquivo" className="space-y-3 pt-4">
               <p className="text-sm text-muted-foreground">
-                PDF, Word (.docx), planilhas (.xlsx/.csv) ou texto simples, até 8 MB.
+                PDF, Word, planilhas, texto ou imagens (PNG/JPG), até 8 MB. Imagens
+                promocionais: use a aba &quot;Imagem WhatsApp&quot;.
               </p>
               <input
                 ref={inputRef}
@@ -231,6 +276,68 @@ function KnowledgeBasePanel() {
                 {linkMutation.isPending ? "Importando..." : "Importar link"}
               </Button>
             </TabsContent>
+
+            <TabsContent value="imagem" className="space-y-3 pt-4">
+              <p className="text-sm text-muted-foreground">
+                O bot pode enviar esta imagem na conversa quando o cliente pedir promoção ou
+                usar palavras-chave que você definir (não é disparo em massa).
+              </p>
+              <div className="space-y-2">
+                <Label>Título</Label>
+                <Input
+                  value={imgTitle}
+                  onChange={(e) => setImgTitle(e.target.value)}
+                  placeholder="Ex.: Black Friday Pantanal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição (a IA usa para decidir enviar)</Label>
+                <Textarea
+                  rows={3}
+                  value={imgDesc}
+                  onChange={(e) => setImgDesc(e.target.value)}
+                  placeholder="O que é a promoção, validade, destino..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Palavras-chave (vírgula)</Label>
+                <Input
+                  value={imgKeywords}
+                  onChange={(e) => setImgKeywords(e.target.value)}
+                  placeholder="promoção, desconto, black friday"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Legenda no WhatsApp (opcional)</Label>
+                <Input
+                  value={imgCaption}
+                  onChange={(e) => setImgCaption(e.target.value)}
+                  placeholder="Texto que aparece junto da imagem"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={imgSendable} onCheckedChange={setImgSendable} />
+                <Label>Bot pode enviar automaticamente</Label>
+              </div>
+              <input
+                ref={imageRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                className="hidden"
+                onChange={(e) => setImgFile(e.target.files?.[0] ?? null)}
+              />
+              <div className="flex gap-2 flex-wrap">
+                <Button type="button" variant="outline" onClick={() => imageRef.current?.click()}>
+                  {imgFile ? imgFile.name : "Escolher imagem"}
+                </Button>
+                <Button
+                  onClick={() => imageMutation.mutate()}
+                  disabled={imageMutation.isPending || !imgFile}
+                >
+                  {imageMutation.isPending ? "Salvando..." : "Salvar imagem"}
+                </Button>
+              </div>
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -263,6 +370,9 @@ function KnowledgeBasePanel() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium truncate">{doc.title}</span>
                   <Badge variant="outline">{doc.source_type}</Badge>
+                  {doc.whatsapp_sendable && (
+                    <Badge className="bg-emerald-600">envia no WhatsApp</Badge>
+                  )}
                   {doc.status === "erro" ? (
                     <Badge variant="destructive">falhou</Badge>
                   ) : (

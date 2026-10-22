@@ -13,12 +13,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plane, UserCog, Users, MessageSquare, Flame } from "lucide-react";
 import { timeAgo } from "@/lib/format";
+import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
 });
 
 function DashboardPage() {
+  const { ui: orgUi } = useOrgLineUi();
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: () => api.getDashboardStats(),
@@ -102,7 +104,7 @@ function DashboardPage() {
                     {t.destino}
                   </div>
                   <div className="col-span-2">
-                    <LineBadge line={t.line} />
+                    <LineBadge line={t.line} org={orgUi} />
                   </div>
                   <div className="col-span-1">
                     <TriagemStatusBadge status={t.status as never} />

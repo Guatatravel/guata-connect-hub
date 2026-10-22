@@ -14,10 +14,16 @@ function verifySig(body: string, header: string | null): boolean {
   }
 }
 
-function lineFromPhoneId(phoneId: string): "descubra" | "viagens" {
-  const viagens = process.env.META_PHONE_NUMBER_ID_VIAGENS;
-  if (viagens && phoneId === viagens) return "viagens";
-  return "descubra";
+async function resolveInboundChannel(phoneId: string): Promise<{
+  organizationId: string;
+  line: "descubra" | "viagens";
+}> {
+  const { resolveChannelByPhoneNumberId, legacyLineFromEnvPhoneId, getGuataOrganizationId } =
+    await import("@/lib/organizations.server");
+  const fromDb = await resolveChannelByPhoneNumberId(phoneId);
+  if (fromDb) return fromDb;
+  const line = legacyLineFromEnvPhoneId(phoneId);
+  return { organizationId: await getGuataOrganizationId(), line };
 }
 
 export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
@@ -63,6 +69,10 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
             ? "status"
             : "other";
 
+        const inboundMeta = phoneNumberId
+          ? await resolveInboundChannel(phoneNumberId)
+          : null;
+
         // 1) Grava SEMPRE a entrega (inclusive as recusadas) — caixa de entrada bruta.
         const { supabaseAdmin } = await import(
           "@/integrations/supabase/client.server"
@@ -75,7 +85,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               signature_ok: signatureOk,
               signature_header: sig,
               phone_number_id: phoneNumberId || null,
-              line: phoneNumberId ? lineFromPhoneId(phoneNumberId) : null,
+              line: inboundMeta?.line ?? null,
               event_kind: eventKind,
               message_ids: [
                 ...messages.map((m) => String(m?.id ?? "")),
@@ -117,7 +127,8 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
             value.contacts?.[0]?.profile?.name;
           if (!phone) continue;
 
-          const line = lineFromPhoneId(phoneNumberId);
+          if (!inboundMeta) continue;
+          const { organizationId, line } = inboundMeta;
           let normalized;
           try {
             normalized = await normalizeWhatsAppInbound(line, msg as Record<string, unknown>);
@@ -131,6 +142,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
 
           try {
             await processMessage({
+              organizationId,
               line,
               phone,
               contactName,

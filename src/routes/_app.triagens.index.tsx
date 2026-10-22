@@ -26,6 +26,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { type TriagemStatus } from "@/types/guata";
 import { formatDate } from "@/lib/format";
+import { useOrgLineUi } from "@/hooks/use-org-line-ui";
+import { lineFilterOptions } from "@/lib/org-ui";
 
 export const Route = createFileRoute("/_app/triagens/")({
   component: TriagensPage,
@@ -46,6 +48,9 @@ function TriagensPage() {
     queryKey: ["triages", { status, line, consultor, destino }],
     queryFn: () => api.listTriages({ status, line, consultor, destino }),
   });
+
+  const { ui: orgUi } = useOrgLineUi();
+  const lineOptions = lineFilterOptions(orgUi);
 
   const assumeMut = useMutation({
     mutationFn: ({ id, who }: { id: string; who: string }) =>
@@ -70,7 +75,9 @@ function TriagensPage() {
       </div>
 
       <Card className="rounded-2xl">
-        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <CardContent
+          className={`p-4 grid grid-cols-1 gap-3 ${lineOptions.length > 0 ? "md:grid-cols-4" : "md:grid-cols-3"}`}
+        >
           <Select value={status} onValueChange={(v) => setStatus(v as TriagemStatus | "all")}>
             <SelectTrigger>
               <SelectValue placeholder="Status" />
@@ -85,16 +92,21 @@ function TriagensPage() {
               <SelectItem value="perdido">Perdido</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={line} onValueChange={setLine}>
-            <SelectTrigger>
-              <SelectValue placeholder="Linha" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as linhas</SelectItem>
-              <SelectItem value="descubra_ms">Descubra MS</SelectItem>
-              <SelectItem value="guata_viagens">Guatá</SelectItem>
-            </SelectContent>
-          </Select>
+          {lineOptions.length > 0 && (
+            <Select value={line} onValueChange={setLine}>
+              <SelectTrigger>
+                <SelectValue placeholder="Canal WhatsApp" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os canais</SelectItem>
+                {lineOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={consultor} onValueChange={setConsultor}>
             <SelectTrigger>
               <SelectValue placeholder="Consultor" />
@@ -125,7 +137,7 @@ function TriagensPage() {
               <TableHead>Destino</TableHead>
               <TableHead>Datas</TableHead>
               <TableHead>Viajantes</TableHead>
-              <TableHead>Linha</TableHead>
+              {lineOptions.length > 0 && <TableHead>Canal</TableHead>}
               <TableHead>Status</TableHead>
               <TableHead>Consultor</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -151,9 +163,11 @@ function TriagensPage() {
                       {formatDate(t.dataIda)} → {formatDate(t.dataVolta)}
                     </TableCell>
                     <TableCell>{t.viajantes}</TableCell>
-                    <TableCell>
-                      <LineBadge line={t.line} />
-                    </TableCell>
+                    {lineOptions.length > 0 && (
+                      <TableCell>
+                        <LineBadge line={t.line} org={orgUi} />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <TriagemStatusBadge status={t.status} />
                     </TableCell>
