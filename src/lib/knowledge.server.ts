@@ -425,7 +425,7 @@ export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Prom
 
   const { error } = await supabaseAdmin
     .from("knowledge_documents")
-    .update(patch)
+    .update(patch as never)
     .eq("id", input.id)
     .eq("organization_id", input.organizationId);
   if (error) throw new Error(error.message);

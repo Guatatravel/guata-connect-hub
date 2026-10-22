@@ -111,6 +111,8 @@ export interface ChannelSettings {
   horarioAtendimento: string;
   mensagemForaHorario: string;
   mensagemHumano: string;
+  isGuataOrg?: boolean;
+  useDescubraKb?: boolean;
 }
 
 export interface StaffMember {
