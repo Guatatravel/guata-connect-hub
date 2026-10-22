@@ -19,6 +19,10 @@ import {
   type LeadStage,
 } from "@/lib/lead-stage.server";
 import { ensureTravelIntakeForSession } from "@/lib/lead-intake.server";
+import {
+  getGuataOrganizationId,
+  organizationUsesDescubra,
+} from "@/lib/organizations.server";
 
 /** Nome comercial da agência (não usar razão social completa no WhatsApp). */
 export const AGENCY_NAME = "Guatá Viagens";
@@ -93,9 +97,16 @@ async function loadOrCreateSession(
     .eq("phone", phone)
     .maybeSingle();
   if (existing) return existing as unknown as SessionRow;
+  const organization_id = await getGuataOrganizationId();
   const { data: created, error } = await supabaseAdmin
     .from("sessions")
-    .insert({ line, phone, contact_name: contactName ?? null, mode: "bot" })
+    .insert({
+      line,
+      phone,
+      contact_name: contactName ?? null,
+      mode: "bot",
+      organization_id,
+    })
     .select("id, mode, intake_state, intake_data")
     .single();
   if (error) throw new Error(error.message);
@@ -214,15 +225,27 @@ interface AttendantConfig {
 
 async function loadAttendant(
   line: "descubra" | "viagens",
+  organizationId: string,
 ): Promise<AttendantConfig | null> {
   const { data } = await supabaseAdmin
     .from("attendants")
     .select("persona, criatividade, modelo, usa_base_local, usa_base_descubra")
     .eq("line", line)
+    .eq("organization_id", organizationId)
     .eq("ativo", true)
     .limit(1)
     .maybeSingle();
   return (data as unknown as AttendantConfig) ?? null;
+}
+
+async function sessionOrganizationId(sessionId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("organization_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (data?.organization_id) return data.organization_id as string;
+  return getGuataOrganizationId();
 }
 
 const GUATA_CORE_PERSONA = `Você é o Guatá (masculino: ele/o Guatá, nunca feminino): natural de Mato Grosso do Sul (MS é sua casa), espírito de aventureiro, caloroso e direto.
@@ -292,8 +315,11 @@ async function answerTurismo(
   leadStage: LeadStage = "informacional",
   intakeData?: Record<string, unknown>,
 ): Promise<string> {
-  const attendant = await loadAttendant(line);
-  const official = line === "descubra" ? await getGuataPersona() : null;
+  const orgId = sessionId ? await sessionOrganizationId(sessionId) : await getGuataOrganizationId();
+  const attendant = await loadAttendant(line, orgId);
+  const descubraAllowed = await organizationUsesDescubra(orgId);
+  const official =
+    line === "descubra" && descubraAllowed ? await getGuataPersona() : null;
   const persona = buildSystemPersona(line, official, attendant);
 
   let context = "";
@@ -301,7 +327,7 @@ async function answerTurismo(
   // Base de conhecimento própria (documentos, textos e links anexados no painel)
   if (attendant?.usa_base_local !== false) {
     const { searchLocalKnowledge } = await import("@/lib/knowledge.server");
-    const local = await searchLocalKnowledge(userText, 3).catch(() => []);
+    const local = await searchLocalKnowledge(userText, 3, orgId).catch(() => []);
     if (local.length > 0) {
       context +=
         "\n\nDocumentos da empresa (use como fonte principal):\n" +
@@ -310,14 +336,14 @@ async function answerTurismo(
   }
 
   const kb =
-    attendant?.usa_base_descubra === false
+    !descubraAllowed || attendant?.usa_base_descubra === false
       ? []
       : await searchGuataKnowledgeBase(userText, 3);
   if (kb.length > 0) {
     context +=
       "\n\nBase de conhecimento Descubra MS:\n" +
       kb.map((k) => `- ${k.question}: ${k.answer}`).join("\n");
-  } else if (!context && isDescubraConfigured()) {
+  } else if (!context && descubraAllowed && isDescubraConfigured()) {
     const events = await listDescubraEvents(8);
     if (events.length > 0) {
       context =

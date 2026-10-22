@@ -95,10 +95,11 @@ export interface KnowledgeDoc {
   preview: string;
 }
 
-export async function listKnowledgeDocs(): Promise<KnowledgeDoc[]> {
+export async function listKnowledgeDocs(organizationId: string): Promise<KnowledgeDoc[]> {
   const { data, error } = await supabaseAdmin
     .from("knowledge_documents")
     .select("id,title,source_type,url,file_path,status,error,size_bytes,created_at,content")
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) throw new Error(error.message);
@@ -118,6 +119,7 @@ export async function listKnowledgeDocs(): Promise<KnowledgeDoc[]> {
 
 export async function addKnowledgeText(
   userId: string,
+  organizationId: string,
   title: string,
   content: string,
 ): Promise<void> {
@@ -130,12 +132,14 @@ export async function addKnowledgeText(
     size_bytes: text.length,
     status: "pronto",
     created_by: userId,
+    organization_id: organizationId,
   });
   if (error) throw new Error(error.message);
 }
 
 export async function addKnowledgeLink(
   userId: string,
+  organizationId: string,
   title: string,
   url: string,
 ): Promise<void> {
@@ -158,12 +162,14 @@ export async function addKnowledgeLink(
     status,
     error: err,
     created_by: userId,
+    organization_id: organizationId,
   });
   if (error) throw new Error(error.message);
 }
 
 export async function addKnowledgeFile(
   userId: string,
+  organizationId: string,
   filename: string,
   base64: string,
   title?: string,
@@ -196,6 +202,7 @@ export async function addKnowledgeFile(
     status,
     error: err,
     created_by: userId,
+    organization_id: organizationId,
   });
   if (error) throw new Error(error.message);
 }
@@ -218,6 +225,7 @@ export async function deleteKnowledgeDoc(id: string): Promise<void> {
 export async function searchLocalKnowledge(
   query: string,
   limit = 3,
+  organizationId?: string,
 ): Promise<Array<{ title: string; excerpt: string }>> {
   const terms = query
     .toLowerCase()
@@ -227,11 +235,13 @@ export async function searchLocalKnowledge(
     .slice(0, 6);
   if (terms.length === 0) return [];
 
-  const { data } = await supabaseAdmin
+  let q = supabaseAdmin
     .from("knowledge_documents")
     .select("title,content")
     .eq("status", "pronto")
     .limit(100);
+  if (organizationId) q = q.eq("organization_id", organizationId);
+  const { data } = await q;
 
   const scored = (data ?? [])
     .map((doc) => {

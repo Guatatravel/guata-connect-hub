@@ -164,7 +164,7 @@ export async function runDiagnostics(): Promise<DiagnosticCheck[]> {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const metaOk = isMetaConfigured("descubra");
+  const metaOk = await isMetaConfigured("descubra");
   checks.push({
     id: "meta",
     label: "WhatsApp Business (Meta)",

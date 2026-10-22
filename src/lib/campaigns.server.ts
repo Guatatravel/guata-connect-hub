@@ -171,7 +171,7 @@ export async function duplicateAndLaunchCampaign(
 ): Promise<CampaignRow> {
   const src = await getCampaign(sourceId);
   const line = src.line as CampaignLine;
-  assertMetaConfiguredForLine(line);
+  await assertMetaConfiguredForLine(line);
   const baseTitle = src.title.replace(/\s*·\s*(Descubra|Viagens)\s*$/i, "").trim();
   const title = `${baseTitle} (reenvio)`.slice(0, 160);
   const draft = await createCampaignDraft(userId, {
@@ -223,18 +223,18 @@ function linesForSelect(line: CampaignLine | "both"): CampaignLine[] {
   return line === "both" ? ["descubra", "viagens"] : [line];
 }
 
-export function getCampaignMetaStatus(): {
+export async function getCampaignMetaStatus(): Promise<{
   descubra: boolean;
   viagens: boolean;
-} {
+}> {
   return {
-    descubra: isMetaConfigured("descubra"),
-    viagens: isMetaConfigured("viagens"),
+    descubra: await isMetaConfigured("descubra"),
+    viagens: await isMetaConfigured("viagens"),
   };
 }
 
-export function assertMetaConfiguredForLine(line: CampaignLine | "both"): void {
-  const status = getCampaignMetaStatus();
+export async function assertMetaConfiguredForLine(line: CampaignLine | "both"): Promise<void> {
+  const status = await getCampaignMetaStatus();
   if (line === "both") {
     if (!status.descubra && !status.viagens) {
       throw new Error(
@@ -253,7 +253,7 @@ export function assertMetaConfiguredForLine(line: CampaignLine | "both"): void {
     }
     return;
   }
-  if (!isMetaConfigured(line)) {
+  if (!(await isMetaConfigured(line))) {
     const label = line === "descubra" ? "Descubra MS" : "Guatá";
     const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
     throw new Error(
@@ -374,7 +374,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
   if (campaign.status === "concluida") throw new Error("Campanha já foi enviada.");
 
   const line = campaign.line as CampaignLine;
-  assertMetaConfiguredForLine(line);
+  await assertMetaConfiguredForLine(line);
   const audience = campaign.audience as CampaignAudience;
 
   if (campaign.status === "rascunho") {
@@ -581,7 +581,7 @@ export async function createAndLaunchCampaigns(
   userId: string,
   input: CreateCampaignInput,
 ): Promise<{ results: CampaignRow[] }> {
-  assertMetaConfiguredForLine(input.line);
+  await assertMetaConfiguredForLine(input.line);
   const lines = linesForSelect(input.line);
   const results: CampaignRow[] = [];
   let sharedImagePath: string | null = null;

@@ -4,13 +4,12 @@
  * Retorna { ok:false, reason:'not_configured' } quando os secrets faltam.
  */
 
+import { resolveWhatsAppCredentials } from "@/lib/organizations.server";
+
 export type Line = "descubra" | "viagens";
 
-function lineEnv(line: Line, key: "ACCESS_TOKEN" | "PHONE_NUMBER_ID"): string | undefined {
-  const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
-  return (
-    process.env[`META_${key}${suffix}`] ?? process.env[`META_${key}`]
-  );
+async function lineCreds(line: Line) {
+  return resolveWhatsAppCredentials(line);
 }
 
 export interface SendResult {
@@ -24,8 +23,7 @@ export async function sendWhatsAppText(
   to: string,
   text: string,
 ): Promise<SendResult> {
-  const token = lineEnv(line, "ACCESS_TOKEN");
-  const phoneId = lineEnv(line, "PHONE_NUMBER_ID");
+  const { token, phoneId } = await lineCreds(line);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
@@ -64,8 +62,7 @@ export async function sendWhatsAppDocument(
   filename = "documento.pdf",
   caption?: string,
 ): Promise<SendResult> {
-  const token = lineEnv(line, "ACCESS_TOKEN");
-  const phoneId = lineEnv(line, "PHONE_NUMBER_ID");
+  const { token, phoneId } = await lineCreds(line);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
@@ -109,8 +106,7 @@ export async function sendWhatsAppImage(
   imageUrl: string,
   caption?: string,
 ): Promise<SendResult> {
-  const token = lineEnv(line, "ACCESS_TOKEN");
-  const phoneId = lineEnv(line, "PHONE_NUMBER_ID");
+  const { token, phoneId } = await lineCreds(line);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
@@ -150,8 +146,7 @@ export async function sendWhatsAppImage(
  * "digitando..." no WhatsApp do cliente (até 25s ou até a resposta chegar).
  */
 export async function markReadAndTyping(line: Line, messageId: string): Promise<void> {
-  const token = lineEnv(line, "ACCESS_TOKEN");
-  const phoneId = lineEnv(line, "PHONE_NUMBER_ID");
+  const { token, phoneId } = await lineCreds(line);
   if (!token || !phoneId || !messageId) return;
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
@@ -171,6 +166,7 @@ export function typingDelayMs(text: string): number {
   return Math.round(Math.min(4000, 2000 + text.length * 8));
 }
 
-export function isMetaConfigured(line: Line = "descubra"): boolean {
-  return Boolean(lineEnv(line, "ACCESS_TOKEN") && lineEnv(line, "PHONE_NUMBER_ID"));
+export async function isMetaConfigured(line: Line = "descubra"): Promise<boolean> {
+  const { token, phoneId } = await lineCreds(line);
+  return Boolean(token && phoneId);
 }

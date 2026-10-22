@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolveOrganizationForUser } from "@/lib/organizations.server";
 
 export const listKnowledge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -7,7 +8,8 @@ export const listKnowledge = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { listKnowledgeDocs } = await import("@/lib/knowledge.server");
     await requireStaffUser(context.userId);
-    return listKnowledgeDocs();
+    const orgId = await resolveOrganizationForUser(context.userId);
+    return listKnowledgeDocs(orgId);
   });
 
 export const addKnowledgeTextDoc = createServerFn({ method: "POST" })
@@ -20,7 +22,8 @@ export const addKnowledgeTextDoc = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { addKnowledgeText } = await import("@/lib/knowledge.server");
     await requireStaffUser(context.userId);
-    await addKnowledgeText(context.userId, data.title || "Texto sem título", data.content);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    await addKnowledgeText(context.userId, orgId, data.title || "Texto sem título", data.content);
     return { ok: true };
   });
 
@@ -34,8 +37,9 @@ export const addKnowledgeLinkDoc = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { addKnowledgeLink } = await import("@/lib/knowledge.server");
     await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
     if (!/^https?:\/\//i.test(data.url)) throw new Error("Informe um link válido (http ou https)");
-    await addKnowledgeLink(context.userId, data.title, data.url);
+    await addKnowledgeLink(context.userId, orgId, data.title, data.url);
     return { ok: true };
   });
 
@@ -50,8 +54,14 @@ export const addKnowledgeFileDoc = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { addKnowledgeFile } = await import("@/lib/knowledge.server");
     await requireStaffUser(context.userId);
-    if (!data.base64) throw new Error("Arquivo vazio");
-    await addKnowledgeFile(context.userId, data.filename, data.base64, data.title);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    await addKnowledgeFile(
+      context.userId,
+      orgId,
+      data.filename,
+      data.base64,
+      data.title || undefined,
+    );
     return { ok: true };
   });
 

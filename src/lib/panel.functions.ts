@@ -22,6 +22,7 @@ import {
   agentWhatsAppParts,
 } from "@/lib/whatsapp-messages.server";
 import { parseLeadStageFromIntake } from "@/lib/lead-intake.server";
+import { resolveOrganizationForUser } from "@/lib/organizations.server";
 
 // --------- mapeamentos DB ↔ UI ---------
 type DbLine = "descubra" | "viagens";
@@ -211,11 +212,13 @@ export const fetchConversations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
     const { data } = await supabaseAdmin
       .from("sessions")
       .select(
         "id, line, mode, phone, contact_name, last_message_at, created_at, archived_at, staff_seen_at, intake_data",
       )
+      .eq("organization_id", orgId)
       .order("last_message_at", { ascending: false })
       .limit(200);
 
@@ -742,11 +745,11 @@ export const fetchSettings = createServerFn({ method: "GET" })
     }
 
     return {
-      metaStatus: (isMetaConfigured("descubra") ? "conectado" : "desconectado") as
+      metaStatus: ((await isMetaConfigured("descubra")) ? "conectado" : "desconectado") as
         | "conectado"
         | "desconectado",
-      metaConfiguredDescubra: isMetaConfigured("descubra"),
-      metaConfiguredViagens: isMetaConfigured("viagens"),
+      metaConfiguredDescubra: await isMetaConfigured("descubra"),
+      metaConfiguredViagens: await isMetaConfigured("viagens"),
       descubraSupabaseConfigured: isDescubraConfigured(),
       descubraWebhookSecretConfigured: Boolean(process.env.DESCUBRA_WEBHOOK_SECRET),
       descubraCanalWebhookReady: Boolean(process.env.DESCUBRA_WEBHOOK_SECRET),

@@ -46,7 +46,7 @@ export const campaignMetaStatusFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { getCampaignMetaStatus } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    return getCampaignMetaStatus();
+    return await getCampaignMetaStatus();
   });
 
 export const createAndLaunchCampaignFn = createServerFn({ method: "POST" })

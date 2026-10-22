@@ -41,9 +41,12 @@ export const listAttendants = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await requireStaffUser(context.userId);
+    const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
+    const orgId = await resolveOrganizationForUser(context.userId);
     const { data, error } = await supabaseAdmin
       .from("attendants")
       .select("*")
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -62,7 +65,11 @@ export const saveAttendant = createServerFn({ method: "POST" })
       const { error } = await supabaseAdmin.from("attendants").update(fields).eq("id", id);
       if (error) throw new Error(error.message);
     } else {
-      const { error } = await supabaseAdmin.from("attendants").insert(fields);
+      const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
+      const organization_id = await resolveOrganizationForUser(context.userId);
+      const { error } = await supabaseAdmin
+        .from("attendants")
+        .insert({ ...fields, organization_id });
       if (error) throw new Error(error.message);
     }
     return { ok: true };
