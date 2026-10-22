@@ -39,12 +39,23 @@ export type AudioPrefCommandResult =
   | { handled: false }
   | { handled: true; reply: string; prefs?: BotAudioPrefs };
 
+function isShortAudioPreferenceCommand(raw: string): boolean {
+  const t = raw.trim();
+  return t.length > 0 && t.length <= 120;
+}
+
 export async function handleBotAudioPreferenceMessage(
   sessionId: string,
   intake: Record<string, unknown>,
   text: string,
   organizationId: string,
+  inboundKind?: "text" | "image" | "audio" | "unsupported",
 ): Promise<AudioPrefCommandResult> {
+  // Comandos só em texto digitado — transcrição de áudio não deve ativar "só texto" etc.
+  if (inboundKind && inboundKind !== "text") {
+    return { handled: false };
+  }
+
   const raw = text.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
   const orgPolicy = await getOrgBotAudioPolicy(organizationId);
 
@@ -70,6 +81,7 @@ export async function handleBotAudioPreferenceMessage(
   }
 
   if (
+    isShortAudioPreferenceCommand(raw) &&
     /\b(ativar audio|quero audio|resposta em audio|responder em audio|modo audio|com audio)\b/i.test(
       raw,
     )
@@ -95,7 +107,12 @@ export async function handleBotAudioPreferenceMessage(
     };
   }
 
-  if (/\b(desativar audio|sem audio|so texto|apenas texto|modo texto)\b/i.test(raw)) {
+  if (
+    isShortAudioPreferenceCommand(raw) &&
+    /^(desativar audio|sem audio|so texto|apenas texto|modo texto|nao quero audio|não quero audio)[\s!.?]*$/i.test(
+      raw.trim(),
+    )
+  ) {
     const prefs = await persistBotAudioPrefs(sessionId, intake, { textOnly: true });
     return {
       handled: true,

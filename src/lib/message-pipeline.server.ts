@@ -563,6 +563,7 @@ export async function processMessage(
     session.intake_data ?? {},
     msg.text,
     msg.organizationId,
+    msg.inboundKind,
   );
   if (audioPrefCmd.handled && audioPrefCmd.prefs) {
     session.intake_data = {

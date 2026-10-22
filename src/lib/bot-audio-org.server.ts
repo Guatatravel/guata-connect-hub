@@ -50,6 +50,7 @@ export async function getOrgBotAudioPolicy(
 export function orgCanSendTtsNow(policy: OrgBotAudioPolicy): boolean {
   if (!policy.allowBotAudio) return false;
   if (policy.monthlyCap === null) return true;
+  if (policy.monthlyCap <= 0) return false;
   return policy.audioCountThisMonth < policy.monthlyCap;
 }
 
