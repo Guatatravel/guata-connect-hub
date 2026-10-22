@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Bot, Plus, Trash2, Volume2 } from "lucide-react";
+import { Bot, Plus, Trash2 } from "lucide-react";
 import {
   listAttendants,
   saveAttendant,
@@ -118,21 +118,11 @@ function Atendentes() {
     }
   }, [audioSettings]);
 
-  const audioSaveMutation = useMutation({
-    mutationFn: () =>
-      saveAudioSettings({
-        data: {
-          allowBotAudio: audioAllow,
-          monthlyCap: audioAllow && audioUnlimited ? null : audioAllow ? Number(audioCap) || 0 : null,
-          clientDefaultOn: audioClientDefault,
-        },
-      }),
-    onSuccess: () => {
-      toast.success("Configuração de voz salva");
-      qc.invalidateQueries({ queryKey: ["org-bot-audio"] });
-    },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Não foi possível salvar"),
+  const buildAudioPayload = () => ({
+    allowBotAudio: audioAllow,
+    monthlyCap:
+      audioAllow && audioUnlimited ? null : audioAllow ? Number(audioCap) || 0 : null,
+    clientDefaultOn: audioClientDefault,
   });
 
   useEffect(() => {
@@ -163,10 +153,16 @@ function Atendentes() {
   }, [data, selectedId]);
 
   const saveMutation = useMutation({
-    mutationFn: () => save({ data: form }),
+    mutationFn: async () => {
+      await save({ data: form });
+      if (audioSettings?.canEdit) {
+        await saveAudioSettings({ data: buildAudioPayload() });
+      }
+    },
     onSuccess: () => {
       toast.success("Atendente salvo");
       qc.invalidateQueries({ queryKey: ["attendants"] });
+      qc.invalidateQueries({ queryKey: ["org-bot-audio"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar"),
@@ -208,98 +204,6 @@ function Atendentes() {
           Novo atendente
         </Button>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Volume2 className="h-4 w-4" />
-            Voz no WhatsApp (add-on)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {audioLoading && <Skeleton className="h-24 w-full" />}
-          {audioSettings && (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Plano base: só texto. Com o add-on, o cliente pode pedir{" "}
-                <span className="font-medium">ativar áudio</span> no WhatsApp. Uso
-                deste mês:{" "}
-                <span className="font-medium">
-                  {audioSettings.audioCountThisMonth}
-                  {audioSettings.monthlyCap !== null
-                    ? ` / ${audioSettings.monthlyCap}`
-                    : " (sem teto)"}
-                </span>{" "}
-                áudios.
-              </p>
-              {!audioSettings.canEdit && (
-                <p className="text-sm text-amber-700 dark:text-amber-400">
-                  A voz é contratada com a Guatá. Peça ao suporte para liberar o
-                  pacote de áudios da sua agência.
-                </p>
-              )}
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">Permitir respostas em áudio</p>
-                  <p className="text-xs text-muted-foreground">
-                    Clientes podem ativar a voz do Guatá na conversa.
-                  </p>
-                </div>
-                <Switch
-                  checked={audioAllow}
-                  disabled={!audioSettings.canEdit}
-                  onCheckedChange={setAudioAllow}
-                />
-              </div>
-              {audioAllow && audioSettings.canEdit && (
-                <>
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium">Áudio ilimitado no mês</p>
-                      <p className="text-xs text-muted-foreground">
-                        Desligue para definir um pacote (ex.: 500 áudios/mês).
-                      </p>
-                    </div>
-                    <Switch checked={audioUnlimited} onCheckedChange={setAudioUnlimited} />
-                  </div>
-                  {!audioUnlimited && (
-                    <div className="space-y-2 max-w-xs">
-                      <Label>Limite de áudios por mês</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={audioCap}
-                        onChange={(e) => setAudioCap(e.target.value)}
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium">Áudio ligado em conversas novas</p>
-                      <p className="text-xs text-muted-foreground">
-                        Recomendado para Guatá. O cliente ainda pode digitar{" "}
-                        <em>só texto</em>.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={audioClientDefault}
-                      onCheckedChange={setAudioClientDefault}
-                    />
-                  </div>
-                </>
-              )}
-              {audioSettings.canEdit && (
-                <Button
-                  onClick={() => audioSaveMutation.mutate()}
-                  disabled={audioSaveMutation.isPending}
-                >
-                  {audioSaveMutation.isPending ? "Salvando..." : "Salvar voz no WhatsApp"}
-                </Button>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <Card>
@@ -501,6 +405,81 @@ function Atendentes() {
                   onCheckedChange={(v) => set("ativo", v)}
                 />
               </div>
+              {audioLoading && <Skeleton className="h-14 w-full" />}
+              {audioSettings && (
+                <>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <p className="text-sm font-medium">Permitir respostas em áudio</p>
+                      <p className="text-xs text-muted-foreground">
+                        Voz do Guatá no WhatsApp (add-on). Cliente usa{" "}
+                        <em>ativar áudio</em> na conversa.
+                        {audioSettings.allowBotAudio && (
+                          <>
+                            {" "}
+                            Uso no mês: {audioSettings.audioCountThisMonth}
+                            {audioSettings.monthlyCap !== null
+                              ? ` / ${audioSettings.monthlyCap}`
+                              : ""}
+                            .
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={audioAllow}
+                      disabled={!audioSettings.canEdit}
+                      onCheckedChange={setAudioAllow}
+                    />
+                  </div>
+                  {!audioSettings.canEdit && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 px-1">
+                      Add-on de voz: solicite à Guatá para liberar o pacote de áudios.
+                    </p>
+                  )}
+                  {audioAllow && audioSettings.canEdit && (
+                    <>
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                        <div>
+                          <p className="text-sm font-medium">Áudio ilimitado no mês</p>
+                          <p className="text-xs text-muted-foreground">
+                            Desligue para pacote mensal (ex.: 500 áudios).
+                          </p>
+                        </div>
+                        <Switch
+                          checked={audioUnlimited}
+                          onCheckedChange={setAudioUnlimited}
+                        />
+                      </div>
+                      {!audioUnlimited && (
+                        <div className="space-y-2 rounded-lg border p-3">
+                          <Label>Limite de áudios por mês</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={audioCap}
+                            onChange={(e) => setAudioCap(e.target.value)}
+                          />
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                        <div>
+                          <p className="text-sm font-medium">
+                            Áudio ligado em conversas novas
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Cliente pode desligar com <em>só texto</em>.
+                          </p>
+                        </div>
+                        <Switch
+                          checked={audioClientDefault}
+                          onCheckedChange={setAudioClientDefault}
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
 
             <div className="flex gap-2">
