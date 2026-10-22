@@ -29,9 +29,11 @@ export const addKnowledgeTextDoc = createServerFn({ method: "POST" })
 
 export const addKnowledgeLinkDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { title: string; url: string }) => ({
+  .inputValidator((input: { title: string; url: string; keywords?: string; sendable?: boolean }) => ({
     title: String(input?.title ?? "").slice(0, 160),
     url: String(input?.url ?? "").slice(0, 2000),
+    keywords: String(input?.keywords ?? ""),
+    sendable: input?.sendable !== false,
   }))
   .handler(async ({ data, context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
@@ -39,7 +41,66 @@ export const addKnowledgeLinkDoc = createServerFn({ method: "POST" })
     await requireStaffUser(context.userId);
     const orgId = await resolveOrganizationForUser(context.userId);
     if (!/^https?:\/\//i.test(data.url)) throw new Error("Informe um link válido (http ou https)");
-    await addKnowledgeLink(context.userId, orgId, data.title, data.url);
+    const keywords = data.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    await addKnowledgeLink(context.userId, orgId, data.title, data.url, {
+      whatsappSendable: data.sendable,
+      keywords,
+    });
+    return { ok: true };
+  });
+
+export const updateKnowledgeDoc = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      id: string;
+      title?: string;
+      content?: string;
+      url?: string;
+      refreshLink?: boolean;
+      keywords?: string;
+      caption?: string;
+      sendable?: boolean;
+      imageBase64?: string;
+      imageFilename?: string;
+    }) => ({
+      id: String(input?.id ?? ""),
+      title: input?.title !== undefined ? String(input.title).slice(0, 160) : undefined,
+      content: input?.content !== undefined ? String(input.content) : undefined,
+      url: input?.url !== undefined ? String(input.url).slice(0, 2000) : undefined,
+      refreshLink: Boolean(input?.refreshLink),
+      keywords: input?.keywords !== undefined ? String(input.keywords) : undefined,
+      caption: input?.caption !== undefined ? String(input.caption).slice(0, 1024) : undefined,
+      sendable: input?.sendable !== undefined ? Boolean(input.sendable) : undefined,
+      imageBase64: input?.imageBase64 ? String(input.imageBase64) : undefined,
+      imageFilename: input?.imageFilename ? String(input.imageFilename) : undefined,
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { updateKnowledgeDocument } = await import("@/lib/knowledge.server");
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const keywords =
+      data.keywords !== undefined
+        ? data.keywords.split(",").map((k) => k.trim()).filter(Boolean)
+        : undefined;
+    await updateKnowledgeDocument({
+      id: data.id,
+      organizationId: orgId,
+      title: data.title,
+      content: data.content,
+      url: data.url,
+      refreshLink: data.refreshLink,
+      keywords,
+      caption: data.caption,
+      whatsappSendable: data.sendable,
+      imageBase64: data.imageBase64,
+      imageFilename: data.imageFilename,
+    });
     return { ok: true };
   });
 

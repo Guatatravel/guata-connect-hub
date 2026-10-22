@@ -93,9 +93,18 @@ export interface KnowledgeDoc {
   size_bytes: number;
   created_at: string;
   preview: string;
+  content: string;
   whatsapp_sendable: boolean;
   send_keywords: string[];
   whatsapp_caption: string | null;
+}
+
+function linkBodyWithUrl(text: string, url: string): string {
+  const base = clean(text);
+  const u = url.trim();
+  if (!u) return base;
+  if (base.toLowerCase().includes(u.toLowerCase())) return base;
+  return clean(`${base}\n\nLink para o cliente: ${u}`);
 }
 
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
@@ -126,6 +135,7 @@ export async function listKnowledgeDocs(organizationId: string): Promise<Knowled
     size_bytes: (d.size_bytes as number) ?? 0,
     created_at: d.created_at as string,
     preview: String(d.content ?? "").slice(0, 240),
+    content: String(d.content ?? ""),
     whatsapp_sendable: Boolean(d.whatsapp_sendable),
     send_keywords: Array.isArray(d.send_keywords)
       ? (d.send_keywords as string[]).map(String)
@@ -167,16 +177,22 @@ export async function addKnowledgeLink(
   organizationId: string,
   title: string,
   url: string,
+  opts?: { whatsappSendable?: boolean; keywords?: string[] },
 ): Promise<void> {
   let content = "";
   let status = "pronto";
   let err: string | null = null;
   try {
-    content = await extractFromUrl(url);
-    if (!content) throw new Error("Nenhum texto encontrado no link");
+    const scraped = await extractFromUrl(url);
+    content = linkBodyWithUrl(scraped || title || "", url);
+    if (!scraped) {
+      status = "pronto";
+      err = null;
+    }
   } catch (e) {
-    status = "erro";
-    err = e instanceof Error ? e.message : String(e);
+    content = linkBodyWithUrl(title || "", url);
+    status = "pronto";
+    err = null;
   }
   const { error } = await supabaseAdmin.from("knowledge_documents").insert({
     title: title || url,
@@ -188,6 +204,8 @@ export async function addKnowledgeLink(
     error: err,
     created_by: userId,
     organization_id: organizationId,
+    whatsapp_sendable: opts?.whatsappSendable ?? true,
+    send_keywords: (opts?.keywords ?? []).map((k) => k.trim().toLowerCase()).filter(Boolean),
   });
   if (error) throw new Error(error.message);
 }
@@ -284,6 +302,135 @@ export async function addKnowledgeWhatsAppImage(
   if (error) throw new Error(error.message);
 }
 
+export async function getKnowledgeDoc(
+  id: string,
+  organizationId: string,
+): Promise<KnowledgeDoc | null> {
+  const { data, error } = await supabaseAdmin
+    .from("knowledge_documents")
+    .select(
+      "id,title,source_type,url,file_path,status,error,size_bytes,created_at,content,whatsapp_sendable,send_keywords,whatsapp_caption",
+    )
+    .eq("id", id)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    id: data.id as string,
+    title: data.title as string,
+    source_type: data.source_type as string,
+    url: (data.url as string) ?? null,
+    file_path: (data.file_path as string) ?? null,
+    status: data.status as string,
+    error: (data.error as string) ?? null,
+    size_bytes: (data.size_bytes as number) ?? 0,
+    created_at: data.created_at as string,
+    preview: String(data.content ?? "").slice(0, 240),
+    content: String(data.content ?? ""),
+    whatsapp_sendable: Boolean(data.whatsapp_sendable),
+    send_keywords: Array.isArray(data.send_keywords)
+      ? (data.send_keywords as string[]).map(String)
+      : [],
+    whatsapp_caption: (data.whatsapp_caption as string) ?? null,
+  };
+}
+
+export type KnowledgeUpdateInput = {
+  id: string;
+  organizationId: string;
+  title?: string;
+  content?: string;
+  url?: string;
+  refreshLink?: boolean;
+  keywords?: string[];
+  caption?: string;
+  whatsappSendable?: boolean;
+  imageBase64?: string;
+  imageFilename?: string;
+};
+
+export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Promise<void> {
+  const existing = await getKnowledgeDoc(input.id, input.organizationId);
+  if (!existing) throw new Error("Documento não encontrado.");
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  if (input.title !== undefined) patch.title = input.title.trim().slice(0, 160) || existing.title;
+
+  if (existing.source_type === "texto" && input.content !== undefined) {
+    const text = clean(input.content);
+    if (!text) throw new Error("Conteúdo vazio");
+    patch.content = text;
+    patch.size_bytes = text.length;
+    patch.status = "pronto";
+    patch.error = null;
+  }
+
+  if (existing.source_type === "link") {
+    const url = (input.url ?? existing.url ?? "").trim();
+    if (!url) throw new Error("URL inválida");
+    patch.url = url;
+    if (input.refreshLink) {
+      let scraped = "";
+      try {
+        scraped = await extractFromUrl(url);
+      } catch {
+        scraped = "";
+      }
+      patch.content = linkBodyWithUrl(scraped || String(patch.title ?? existing.title), url);
+      patch.status = "pronto";
+      patch.error = null;
+    } else if (input.content !== undefined) {
+      patch.content = linkBodyWithUrl(input.content, url);
+    } else if (input.url !== undefined) {
+      patch.content = linkBodyWithUrl(existing.content, url);
+    }
+    if (input.whatsappSendable !== undefined) patch.whatsapp_sendable = input.whatsappSendable;
+    if (input.keywords !== undefined) {
+      patch.send_keywords = input.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
+    }
+  }
+
+  if (existing.source_type === "imagem") {
+    if (input.content !== undefined) {
+      const text = clean(input.content);
+      if (!text) throw new Error("Descrição vazia");
+      patch.content = text;
+    }
+    if (input.caption !== undefined) patch.whatsapp_caption = input.caption.slice(0, 1024) || null;
+    if (input.whatsappSendable !== undefined) patch.whatsapp_sendable = input.whatsappSendable;
+    if (input.keywords !== undefined) {
+      patch.send_keywords = input.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
+    }
+    if (input.imageBase64 && input.imageFilename) {
+      const binary = Uint8Array.from(atob(input.imageBase64), (c) => c.charCodeAt(0));
+      if (!isImageFilename(input.imageFilename)) throw new Error("Use PNG, JPG ou WebP.");
+      const path = `${input.organizationId}/${Date.now()}-${input.imageFilename.replace(/[^\w.\-]/g, "_")}`;
+      const { error: upErr } = await supabaseAdmin.storage.from("knowledge").upload(path, binary, {
+        upsert: true,
+      });
+      if (upErr) throw new Error(upErr.message);
+      if (existing.file_path) {
+        await supabaseAdmin.storage.from("knowledge").remove([existing.file_path]).catch(() => undefined);
+      }
+      patch.file_path = path;
+      patch.size_bytes = binary.length;
+    }
+  }
+
+  if (existing.source_type === "arquivo" && input.title !== undefined) {
+    patch.title = input.title.trim().slice(0, 160);
+  }
+
+  const { error } = await supabaseAdmin
+    .from("knowledge_documents")
+    .update(patch)
+    .eq("id", input.id)
+    .eq("organization_id", input.organizationId);
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteKnowledgeDoc(id: string): Promise<void> {
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
@@ -314,7 +461,7 @@ export async function searchLocalKnowledge(
 
   let q = supabaseAdmin
     .from("knowledge_documents")
-    .select("title,content")
+    .select("title,content,url,source_type")
     .eq("status", "pronto")
     .limit(100);
   if (organizationId) q = q.eq("organization_id", organizationId);
@@ -322,7 +469,12 @@ export async function searchLocalKnowledge(
 
   const scored = (data ?? [])
     .map((doc) => {
-      const content = String(doc.content ?? "");
+      const url = String(doc.url ?? "").trim();
+      const raw = String(doc.content ?? "");
+      const content =
+        doc.source_type === "link" && url
+          ? linkBodyWithUrl(raw, url)
+          : raw;
       const lower = content.toLowerCase();
       let score = 0;
       let firstHit = -1;
@@ -439,6 +591,40 @@ export async function pickSendableKnowledgeMedia(
     .sort((a, b) => b.score - a.score);
 
   return ranked[0] ?? null;
+}
+
+export async function pickSendableKnowledgeLink(
+  userText: string,
+  organizationId: string,
+  minScore = 2,
+): Promise<{ title: string; url: string } | null> {
+  const { data } = await supabaseAdmin
+    .from("knowledge_documents")
+    .select("title,content,url,send_keywords")
+    .eq("organization_id", organizationId)
+    .eq("status", "pronto")
+    .eq("source_type", "link")
+    .eq("whatsapp_sendable", true)
+    .not("url", "is", null)
+    .limit(40);
+
+  const ranked = (data ?? [])
+    .map((d) => {
+      const url = String(d.url ?? "").trim();
+      if (!url) return null;
+      const keywords = Array.isArray(d.send_keywords) ? (d.send_keywords as string[]) : [];
+      const score = scoreSendableMatch(userText, {
+        title: String(d.title ?? ""),
+        content: `${String(d.content ?? "")} ${url}`,
+        send_keywords: keywords,
+      });
+      return { title: String(d.title ?? ""), url, score };
+    })
+    .filter((d): d is { title: string; url: string; score: number } => d !== null && d.score >= minScore)
+    .sort((a, b) => b.score - a.score);
+
+  const top = ranked[0];
+  return top ? { title: top.title, url: top.url } : null;
 }
 
 export async function listSendableKnowledgeForPrompt(

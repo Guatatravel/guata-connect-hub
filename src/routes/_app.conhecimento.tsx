@@ -11,7 +11,17 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { BookOpen, FileText, ImageIcon, Link2, Megaphone, Trash2, Upload, Type } from "lucide-react";
+import {
+  BookOpen,
+  FileText,
+  ImageIcon,
+  Link2,
+  Megaphone,
+  Pencil,
+  Trash2,
+  Upload,
+  Type,
+} from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { CampaignsTab } from "@/components/guata/campaigns-tab";
 import {
@@ -21,7 +31,20 @@ import {
   addKnowledgeFileDoc,
   removeKnowledgeDoc,
   addKnowledgeWhatsAppImageDoc,
+  updateKnowledgeDoc,
 } from "@/lib/knowledge.functions";
+
+type EditDoc = {
+  id: string;
+  title: string;
+  source_type: string;
+  url: string | null;
+  content: string;
+  preview: string;
+  whatsapp_sendable: boolean;
+  send_keywords: string[];
+  whatsapp_caption: string | null;
+};
 
 export const Route = createFileRoute("/_app/conhecimento")({
   component: Conhecimento,
@@ -73,6 +96,7 @@ function KnowledgeBasePanel() {
   const addLink = useServerFn(addKnowledgeLinkDoc);
   const addFile = useServerFn(addKnowledgeFileDoc);
   const addImage = useServerFn(addKnowledgeWhatsAppImageDoc);
+  const updateDoc = useServerFn(updateKnowledgeDoc);
   const removeDoc = useServerFn(removeKnowledgeDoc);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +105,17 @@ function KnowledgeBasePanel() {
   const [textBody, setTextBody] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [linkKeywords, setLinkKeywords] = useState("");
+  const [linkSendable, setLinkSendable] = useState(true);
+  const [editing, setEditing] = useState<EditDoc | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editUrl, setEditUrl] = useState("");
+  const [editKeywords, setEditKeywords] = useState("");
+  const [editCaption, setEditCaption] = useState("");
+  const [editSendable, setEditSendable] = useState(false);
+  const [editRefreshLink, setEditRefreshLink] = useState(false);
+  const [editReplaceImage, setEditReplaceImage] = useState<File | null>(null);
   const [imgTitle, setImgTitle] = useState("");
   const [imgDesc, setImgDesc] = useState("");
   const [imgKeywords, setImgKeywords] = useState("");
@@ -109,11 +144,70 @@ function KnowledgeBasePanel() {
   });
 
   const linkMutation = useMutation({
-    mutationFn: () => addLink({ data: { title: linkTitle, url: linkUrl } }),
+    mutationFn: () =>
+      addLink({
+        data: {
+          title: linkTitle,
+          url: linkUrl,
+          keywords: linkKeywords,
+          sendable: linkSendable,
+        },
+      }),
     onSuccess: () => {
       toast.success("Link importado");
       setLinkTitle("");
       setLinkUrl("");
+      setLinkKeywords("");
+      invalidate();
+    },
+    onError,
+  });
+
+  const openEdit = (doc: EditDoc) => {
+    setEditing(doc);
+    setEditTitle(doc.title);
+    setEditContent(doc.content || doc.preview);
+    setEditUrl(doc.url ?? "");
+    setEditKeywords(doc.send_keywords.join(", "));
+    setEditCaption(doc.whatsapp_caption ?? "");
+    setEditSendable(doc.whatsapp_sendable);
+    setEditRefreshLink(false);
+    setEditReplaceImage(null);
+  };
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!editing) return;
+      const payload: Record<string, unknown> = {
+        id: editing.id,
+        title: editTitle,
+      };
+      if (editing.source_type === "texto") payload.content = editContent;
+      if (editing.source_type === "link") {
+        payload.url = editUrl;
+        payload.content = editContent;
+        payload.keywords = editKeywords;
+        payload.sendable = editSendable;
+        payload.refreshLink = editRefreshLink;
+      }
+      if (editing.source_type === "imagem") {
+        payload.content = editContent;
+        payload.keywords = editKeywords;
+        payload.caption = editCaption;
+        payload.sendable = editSendable;
+        if (editReplaceImage) {
+          payload.imageBase64 = await fileToBase64(editReplaceImage);
+          payload.imageFilename = editReplaceImage.name;
+        }
+      }
+      if (editing.source_type === "arquivo") {
+        /* só título */
+      }
+      return updateDoc({ data: payload as never });
+    },
+    onSuccess: () => {
+      toast.success("Conteúdo atualizado");
+      setEditing(null);
       invalidate();
     },
     onError,
@@ -269,6 +363,18 @@ function KnowledgeBasePanel() {
                   placeholder="https://..."
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Palavras-chave (vírgula)</Label>
+                <Input
+                  value={linkKeywords}
+                  onChange={(e) => setLinkKeywords(e.target.value)}
+                  placeholder="vídeo, bonito, pantanal"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={linkSendable} onCheckedChange={setLinkSendable} />
+                <Label>Bot pode enviar o link no WhatsApp quando relevante</Label>
+              </div>
               <Button
                 onClick={() => linkMutation.mutate()}
                 disabled={linkMutation.isPending || !linkUrl.trim()}
@@ -342,6 +448,86 @@ function KnowledgeBasePanel() {
         </CardContent>
       </Card>
 
+      {editing && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center justify-between gap-2">
+              <span>Editar: {editing.title}</span>
+              <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+                Cancelar
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <Label>Título</Label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+            </div>
+            {editing.source_type === "texto" && (
+              <div className="space-y-2">
+                <Label>Conteúdo</Label>
+                <Textarea rows={8} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+              </div>
+            )}
+            {editing.source_type === "link" && (
+              <>
+                <div className="space-y-2">
+                  <Label>URL</Label>
+                  <Input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Texto de apoio (opcional)</Label>
+                  <Textarea rows={4} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Palavras-chave</Label>
+                  <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={editSendable} onCheckedChange={setEditSendable} />
+                  <Label>Enviar link no WhatsApp quando relevante</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={editRefreshLink} onCheckedChange={setEditRefreshLink} />
+                  <Label>Reimportar texto da página</Label>
+                </div>
+              </>
+            )}
+            {editing.source_type === "imagem" && (
+              <>
+                <div className="space-y-2">
+                  <Label>Descrição para a IA</Label>
+                  <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Palavras-chave</Label>
+                  <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Legenda WhatsApp</Label>
+                  <Input value={editCaption} onChange={(e) => setEditCaption(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={editSendable} onCheckedChange={setEditSendable} />
+                  <Label>Bot pode enviar imagem</Label>
+                </div>
+                <div className="space-y-2">
+                  <Label>Substituir imagem (opcional)</Label>
+                  <Input
+                    type="file"
+                    accept={IMAGE_ACCEPT}
+                    onChange={(e) => setEditReplaceImage(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </>
+            )}
+            <Button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Salvando..." : "Salvar alterações"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
@@ -371,7 +557,14 @@ function KnowledgeBasePanel() {
                   <span className="font-medium truncate">{doc.title}</span>
                   <Badge variant="outline">{doc.source_type}</Badge>
                   {doc.whatsapp_sendable && (
-                    <Badge className="bg-emerald-600">envia no WhatsApp</Badge>
+                    <Badge className="bg-emerald-600">
+                      {doc.source_type === "link" ? "envia link" : "envia no WhatsApp"}
+                    </Badge>
+                  )}
+                  {doc.url && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                      {doc.url}
+                    </span>
                   )}
                   {doc.status === "erro" ? (
                     <Badge variant="destructive">falhou</Badge>
@@ -386,15 +579,25 @@ function KnowledgeBasePanel() {
                   {doc.error ?? doc.preview ?? ""}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => deleteMutation.mutate(doc.id)}
-                disabled={deleteMutation.isPending}
-                aria-label="Remover"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEdit(doc as EditDoc)}
+                  aria-label="Editar"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deleteMutation.mutate(doc.id)}
+                  disabled={deleteMutation.isPending}
+                  aria-label="Remover"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           ))}
         </CardContent>
