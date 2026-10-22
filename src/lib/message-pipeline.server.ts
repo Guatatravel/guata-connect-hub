@@ -21,7 +21,13 @@ import {
   handleBotAudioPreferenceMessage,
   readBotAudioPrefs,
 } from "@/lib/bot-audio-preference.server";
-import { isBotTtsConfigured, synthesizeBotSpeech } from "@/lib/tts.server";
+import {
+  getOrgBotAudioPolicy,
+  orgCanSendTtsNow,
+  recordOrganizationTtsUsage,
+  defaultIntakeForNewSession,
+} from "@/lib/bot-audio-org.server";
+import { isBotTtsConfigured, plainTextForSpeech, synthesizeBotSpeech } from "@/lib/tts.server";
 import { signedChatMediaUrl, storeChatMedia } from "@/lib/chat-media.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
 import {
@@ -113,6 +119,7 @@ async function loadOrCreateSession(
     .maybeSingle();
   if (existing) return existing as unknown as SessionRow;
   const organization_id = organizationId;
+  const intake_data = await defaultIntakeForNewSession(organizationId);
   const { data: created, error } = await supabaseAdmin
     .from("sessions")
     .insert({
@@ -121,6 +128,7 @@ async function loadOrCreateSession(
       contact_name: contactName ?? null,
       mode: "bot",
       organization_id,
+      ...(Object.keys(intake_data).length > 0 ? { intake_data: intake_data as never } : {}),
     })
     .select("id, mode, intake_state, intake_data")
     .single();
@@ -429,8 +437,15 @@ async function deliverTextReplies(
   botMode: boolean,
 ): Promise<void> {
   const audioPrefs = readBotAudioPrefs(intake);
+  const orgPolicy = await getOrgBotAudioPolicy(waTarget.organizationId);
+  const quotaOk = orgCanSendTtsNow(orgPolicy);
   const tryAudio =
-    botMode && audioPrefs.enabled && isBotTtsConfigured() && replies.length > 0;
+    botMode &&
+    orgPolicy.allowBotAudio &&
+    quotaOk &&
+    audioPrefs.enabled &&
+    isBotTtsConfigured() &&
+    replies.length > 0;
 
   for (let i = 0; i < replies.length; i++) {
     const text = replies[i];
@@ -449,6 +464,10 @@ async function deliverTextReplies(
             );
             if (audioRes.ok) {
               console.log("[meta] áudio enviado:", "messageId" in audioRes ? audioRes.messageId : "");
+              await recordOrganizationTtsUsage(
+                waTarget.organizationId,
+                plainTextForSpeech(text).length,
+              );
               continue;
             }
             console.error("[meta] áudio falhou:", audioRes.reason);
@@ -541,6 +560,7 @@ export async function processMessage(
     session.id,
     session.intake_data ?? {},
     msg.text,
+    msg.organizationId,
   );
   if (audioPrefCmd.handled && audioPrefCmd.prefs) {
     session.intake_data = {

@@ -132,3 +132,55 @@ export const saveWhatsAppChannel = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+const botAudioSettingsSchema = z.object({
+  allowBotAudio: z.boolean(),
+  monthlyCap: z.number().int().min(0).max(1_000_000).nullable(),
+  clientDefaultOn: z.boolean(),
+});
+
+export const fetchOrgBotAudioSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { loadOrgBotAudioSettings } = await import("@/lib/bot-audio-org.server");
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("is_guata")
+      .eq("id", orgId)
+      .maybeSingle();
+    const settings = await loadOrgBotAudioSettings(orgId);
+    const canManagePartners = await userCanManagePartnerOrgs(context.userId);
+    const isGuata = Boolean(org?.is_guata);
+    return {
+      ...settings,
+      isGuata,
+      canEdit: isGuata || canManagePartners,
+    };
+  });
+
+export const saveOrgBotAudioSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => botAudioSettingsSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { saveOrgBotAudioSettings: persist } = await import("@/lib/bot-audio-org.server");
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("is_guata")
+      .eq("id", orgId)
+      .maybeSingle();
+    const isGuata = Boolean(org?.is_guata);
+    const canManagePartners = await userCanManagePartnerOrgs(context.userId);
+    if (!isGuata && !canManagePartners) {
+      throw new Error(
+        "O add-on de voz é ativado pela equipe Guatá. Entre em contato para contratar o pacote de áudios.",
+      );
+    }
+    await persist(orgId, data);
+    return { ok: true };
+  });

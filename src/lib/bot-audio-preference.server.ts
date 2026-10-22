@@ -3,6 +3,7 @@
  * Persistido em sessions.intake_data.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { getOrgBotAudioPolicy } from "@/lib/bot-audio-org.server";
 import { isBotTtsConfigured } from "@/lib/tts.server";
 
 export type BotVoiceProfile = "male" | "female";
@@ -33,8 +34,10 @@ export async function handleBotAudioPreferenceMessage(
   sessionId: string,
   intake: Record<string, unknown>,
   text: string,
+  organizationId: string,
 ): Promise<AudioPrefCommandResult> {
   const raw = text.trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  const orgPolicy = await getOrgBotAudioPolicy(organizationId);
 
   if (
     /\b(opcoes de audio|opcao de audio|configurar audio|preferencia de audio|como funciona o audio)\b/i.test(
@@ -62,6 +65,14 @@ export async function handleBotAudioPreferenceMessage(
       raw,
     )
   ) {
+    if (!orgPolicy.allowBotAudio) {
+      return {
+        handled: true,
+        reply:
+          "No momento sua agência atende só por *texto* no WhatsApp. Se quiser ouvir o Guatá em áudio, peça ao consultor sobre o add-on de voz.",
+        prefs: readBotAudioPrefs(intake),
+      };
+    }
     const prefs = await persistBotAudioPrefs(sessionId, intake, { enabled: true });
     const ttsNote = isBotTtsConfigured()
       ? ""
