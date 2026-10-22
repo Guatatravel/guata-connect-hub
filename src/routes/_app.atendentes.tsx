@@ -90,7 +90,6 @@ function Atendentes() {
   const [audioAllow, setAudioAllow] = useState(false);
   const [audioCap, setAudioCap] = useState("500");
   const [audioUnlimited, setAudioUnlimited] = useState(false);
-  const [audioClientDefault, setAudioClientDefault] = useState(false);
 
   const { ui: orgUi } = useOrgLineUi();
   const lineOpts = attendantLineOptions(orgUi);
@@ -108,7 +107,6 @@ function Atendentes() {
   useEffect(() => {
     if (!audioSettings) return;
     setAudioAllow(audioSettings.allowBotAudio);
-    setAudioClientDefault(audioSettings.clientDefaultOn);
     if (audioSettings.monthlyCap === null) {
       setAudioUnlimited(true);
       setAudioCap("500");
@@ -122,7 +120,7 @@ function Atendentes() {
     allowBotAudio: audioAllow,
     monthlyCap:
       audioAllow && audioUnlimited ? null : audioAllow ? Number(audioCap) || 0 : null,
-    clientDefaultOn: audioClientDefault,
+          clientDefaultOn: false,
   });
 
   useEffect(() => {
@@ -412,8 +410,8 @@ function Atendentes() {
                     <div>
                       <p className="text-sm font-medium">Permitir respostas em áudio</p>
                       <p className="text-xs text-muted-foreground">
-                        Voz do Guatá no WhatsApp (add-on). Cliente usa{" "}
-                        <em>ativar áudio</em> na conversa.
+                        Add-on: o bot responde em voz quando o cliente manda{" "}
+                        <em>nota de voz</em>; em texto, responde escrito.
                         {audioSettings.allowBotAudio && (
                           <>
                             {" "}
@@ -462,20 +460,6 @@ function Atendentes() {
                           />
                         </div>
                       )}
-                      <div className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                          <p className="text-sm font-medium">
-                            Áudio ligado em conversas novas
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Cliente pode desligar com <em>só texto</em>.
-                          </p>
-                        </div>
-                        <Switch
-                          checked={audioClientDefault}
-                          onCheckedChange={setAudioClientDefault}
-                        />
-                      </div>
                     </>
                   )}
                 </>

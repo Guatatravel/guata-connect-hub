@@ -1,6 +1,5 @@
 /**
- * Preferência do cliente: respostas do bot em áudio (WhatsApp).
- * Persistido em sessions.intake_data.
+ * Preferência do cliente: respostas em áudio espelham o canal (voz → voz, texto → texto).
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getOrgBotAudioPolicy } from "@/lib/bot-audio-org.server";
@@ -9,11 +8,12 @@ import { isBotTtsConfigured } from "@/lib/tts.server";
 export type BotVoiceProfile = "male" | "female";
 
 export interface BotAudioPrefs {
-  enabled: boolean;
+  /** Cliente pediu só texto — não responder em áudio mesmo se mandar voz. */
+  textOnly: boolean;
   voice: BotVoiceProfile;
 }
 
-const INTAKE_ENABLED = "bot_audio_enabled";
+const INTAKE_TEXT_ONLY = "bot_audio_text_only";
 const INTAKE_VOICE = "bot_voice_profile";
 
 export function readBotAudioPrefs(
@@ -21,9 +21,18 @@ export function readBotAudioPrefs(
 ): BotAudioPrefs {
   const voice = intake?.[INTAKE_VOICE];
   return {
-    enabled: intake?.[INTAKE_ENABLED] === true,
+    textOnly: intake?.[INTAKE_TEXT_ONLY] === true,
     voice: voice === "female" ? "female" : "male",
   };
+}
+
+/** Responde em áudio nesta troca se o cliente mandou nota de voz e não pediu só texto. */
+export function shouldSendAudioReply(
+  intake: Record<string, unknown> | undefined,
+  inboundKind: "text" | "image" | "audio" | "unsupported" | undefined,
+): boolean {
+  if (inboundKind !== "audio") return false;
+  return !readBotAudioPrefs(intake).textOnly;
 }
 
 export type AudioPrefCommandResult =
@@ -45,17 +54,17 @@ export async function handleBotAudioPreferenceMessage(
     )
   ) {
     const p = readBotAudioPrefs(intake);
-    const status = p.enabled ? "ligado" : "desligado";
+    const modo = p.textOnly ? "só texto" : "voz quando você manda áudio";
     const voz = p.voice === "female" ? "feminina" : "masculina";
     return {
       handled: true,
       reply:
-        "Áudio do Guatá no WhatsApp:\n\n" +
-        "• *Ativar áudio* — envio a resposta em voz.\n" +
-        "• *Só texto* — desligo o áudio automático.\n" +
-        "• *Voz masculina* ou *voz feminina* — escolhe o tom.\n\n" +
-        `Agora: áudio *${status}*, voz *${voz}*.\n` +
-        'Comandos: "ativar áudio", "só texto", "voz masculina", "voz feminina".',
+        "Áudio do Guatá:\n\n" +
+        "• Mando *áudio* quando você me envia *nota de voz*.\n" +
+        "• Mando *texto* quando você *escreve*.\n" +
+        "• *Só texto* — não mando áudio mesmo em nota de voz.\n" +
+        "• *Voz masculina* / *voz feminina* — tom da voz.\n\n" +
+        `Agora: *${modo}*, voz *${voz}*.`,
       prefs: p,
     };
   }
@@ -73,49 +82,42 @@ export async function handleBotAudioPreferenceMessage(
         prefs: readBotAudioPrefs(intake),
       };
     }
-    const prefs = await persistBotAudioPrefs(sessionId, intake, { enabled: true });
+    const prefs = await persistBotAudioPrefs(sessionId, intake, { textOnly: false });
     const ttsNote = isBotTtsConfigured()
       ? ""
-      : "\n\n(O servidor de voz ainda não está configurado — por enquanto você recebe só texto até ativarmos a API de áudio.)";
+      : "\n\n(O servidor de voz ainda não está configurado — por enquanto você recebe só texto.)";
     return {
       handled: true,
       reply:
-        "Combinado! Nas próximas respostas eu mando *áudio* do Guatá quando couber. Para voltar ao texto, digite *só texto*." +
+        "Combinado! Quando você me mandar *áudio*, eu respondo em voz. Quando *escrever*, respondo em texto." +
         ttsNote,
       prefs,
     };
   }
 
   if (/\b(desativar audio|sem audio|so texto|apenas texto|modo texto)\b/i.test(raw)) {
-    const prefs = await persistBotAudioPrefs(sessionId, intake, { enabled: false });
+    const prefs = await persistBotAudioPrefs(sessionId, intake, { textOnly: true });
     return {
       handled: true,
-      reply:
-        "Beleza! A partir de agora respondo só em *texto*. Para áudio de novo, digite *ativar áudio*.",
+      reply: "Beleza! Respondo só em *texto*, mesmo se você mandar áudio. Para voltar ao normal, digite *ativar áudio*.",
       prefs,
     };
   }
 
   if (/\b(voz feminina|voz de mulher|voz mulher)\b/i.test(raw)) {
     const prefs = await persistBotAudioPrefs(sessionId, intake, { voice: "female" });
-    const extra = prefs.enabled
-      ? " Quando eu mandar áudio, será com essa voz."
-      : ' Digite *ativar áudio* para eu responder em voz.';
     return {
       handled: true,
-      reply: `Voz *feminina* salva.${extra}`,
+      reply: `Voz *feminina* salva para quando eu responder em áudio.`,
       prefs,
     };
   }
 
   if (/\b(voz masculina|voz de homem|voz homem)\b/i.test(raw)) {
     const prefs = await persistBotAudioPrefs(sessionId, intake, { voice: "male" });
-    const extra = prefs.enabled
-      ? " Quando eu mandar áudio, será com essa voz."
-      : ' Digite *ativar áudio* para eu responder em voz.';
     return {
       handled: true,
-      reply: `Voz *masculina* do Guatá salva.${extra}`,
+      reply: `Voz *masculina* do Guatá salva para quando eu responder em áudio.`,
       prefs,
     };
   }
@@ -126,17 +128,21 @@ export async function handleBotAudioPreferenceMessage(
 export async function persistBotAudioPrefs(
   sessionId: string,
   intake: Record<string, unknown>,
-  patch: Partial<BotAudioPrefs>,
+  patch: Partial<BotAudioPrefs> & { enabled?: boolean },
 ): Promise<BotAudioPrefs> {
   const current = readBotAudioPrefs(intake);
   const next: BotAudioPrefs = {
-    enabled: patch.enabled ?? current.enabled,
+    textOnly: patch.textOnly ?? current.textOnly,
     voice: patch.voice ?? current.voice,
   };
-  const intake_data = {
+  if (patch.enabled === false) next.textOnly = true;
+  if (patch.enabled === true) next.textOnly = false;
+
+  const intake_data: Record<string, unknown> = {
     ...intake,
-    [INTAKE_ENABLED]: next.enabled,
+    [INTAKE_TEXT_ONLY]: next.textOnly,
     [INTAKE_VOICE]: next.voice,
+    bot_audio_enabled: false,
     bot_audio_updated_at: new Date().toISOString(),
   };
   await supabaseAdmin

@@ -20,6 +20,7 @@ import {
 import {
   handleBotAudioPreferenceMessage,
   readBotAudioPrefs,
+  shouldSendAudioReply,
 } from "@/lib/bot-audio-preference.server";
 import {
   getOrgBotAudioPolicy,
@@ -435,6 +436,7 @@ async function deliverTextReplies(
   replies: string[],
   intake: Record<string, unknown>,
   botMode: boolean,
+  inboundKind: IncomingMessage["inboundKind"],
 ): Promise<void> {
   const audioPrefs = readBotAudioPrefs(intake);
   const orgPolicy = await getOrgBotAudioPolicy(waTarget.organizationId);
@@ -443,7 +445,7 @@ async function deliverTextReplies(
     botMode &&
     orgPolicy.allowBotAudio &&
     quotaOk &&
-    audioPrefs.enabled &&
+    shouldSendAudioReply(intake, inboundKind) &&
     isBotTtsConfigured() &&
     replies.length > 0;
 
@@ -565,8 +567,9 @@ export async function processMessage(
   if (audioPrefCmd.handled && audioPrefCmd.prefs) {
     session.intake_data = {
       ...(session.intake_data ?? {}),
-      bot_audio_enabled: audioPrefCmd.prefs.enabled,
+      bot_audio_text_only: audioPrefCmd.prefs.textOnly,
       bot_voice_profile: audioPrefCmd.prefs.voice,
+      bot_audio_enabled: false,
     };
   }
 
@@ -613,7 +616,7 @@ export async function processMessage(
       .update({ mode: "bot", intake_state: null })
       .eq("id", session.id);
     replies.push(
-      'Beleza! Voltamos ao papo com o Guatá. O que você quer saber?\n\n(Digite *opções de áudio* se quiser resposta em voz ou só texto.)',
+      "Beleza! Voltamos ao papo com o Guatá. O que você quer saber?\n\n(Mando áudio quando você me envia voz; em texto, respondo escrito. Digite *opções de áudio* para detalhes.)",
     );
   } else {
     if (offered) {
@@ -686,6 +689,7 @@ export async function processMessage(
       replies,
       session.intake_data ?? {},
       botOutbound,
+      msg.inboundKind,
     );
   }
 

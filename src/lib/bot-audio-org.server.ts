@@ -53,15 +53,11 @@ export function orgCanSendTtsNow(policy: OrgBotAudioPolicy): boolean {
   return policy.audioCountThisMonth < policy.monthlyCap;
 }
 
+/** Sessões novas começam em texto; áudio só após nota de voz do cliente. */
 export async function defaultIntakeForNewSession(
-  organizationId: string,
+  _organizationId: string,
 ): Promise<Record<string, unknown>> {
-  const policy = await getOrgBotAudioPolicy(organizationId);
-  if (!policy.allowBotAudio || !policy.clientDefaultOn) return {};
-  return {
-    bot_audio_enabled: true,
-    bot_voice_profile: "male",
-  };
+  return {};
 }
 
 export async function recordOrganizationTtsUsage(
