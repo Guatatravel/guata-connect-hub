@@ -147,6 +147,43 @@ export async function sendWhatsAppImage(
   return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
+export async function sendWhatsAppAudio(
+  target: WhatsAppTarget,
+  to: string,
+  audioUrl: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: to.replace(/\D/g, ""),
+        type: "audio",
+        audio: { link: audioUrl },
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as {
+    messages?: Array<{ id?: string }>;
+  };
+  return { ok: true, messageId: json.messages?.[0]?.id };
+}
+
 export async function markReadAndTyping(
   target: WhatsAppTarget,
   messageId: string,

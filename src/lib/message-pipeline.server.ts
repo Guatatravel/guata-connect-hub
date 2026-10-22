@@ -13,9 +13,16 @@ import { chatCompletion } from "@/lib/ai-gateway.server";
 import {
   sendWhatsAppText,
   sendWhatsAppImage,
+  sendWhatsAppAudio,
   markReadAndTyping,
   typingDelayMs,
 } from "@/lib/meta-send.server";
+import {
+  handleBotAudioPreferenceMessage,
+  readBotAudioPrefs,
+} from "@/lib/bot-audio-preference.server";
+import { isBotTtsConfigured, synthesizeBotSpeech } from "@/lib/tts.server";
+import { signedChatMediaUrl, storeChatMedia } from "@/lib/chat-media.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
 import {
   detectLeadStage,
@@ -413,6 +420,54 @@ export { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-message
 /**
  * Processa uma mensagem recebida. Persiste e retorna o(s) texto(s) a enviar.
  */
+async function deliverTextReplies(
+  sessionId: string,
+  phone: string,
+  waTarget: { organizationId: string; line: "descubra" | "viagens" },
+  replies: string[],
+  intake: Record<string, unknown>,
+  botMode: boolean,
+): Promise<void> {
+  const audioPrefs = readBotAudioPrefs(intake);
+  const tryAudio =
+    botMode && audioPrefs.enabled && isBotTtsConfigured() && replies.length > 0;
+
+  for (let i = 0; i < replies.length; i++) {
+    const text = replies[i];
+    await persistMessage(sessionId, "out", "bot", text);
+
+    if (i === 0 && tryAudio) {
+      const speech = await synthesizeBotSpeech(text, audioPrefs.voice);
+      if (speech) {
+        try {
+          const path = await storeChatMedia(phone, speech.bytes, speech.mimeType, "audio");
+          const url = await signedChatMediaUrl(path, 60 * 60);
+          if (url) {
+            await new Promise((r) => setTimeout(r, typingDelayMs(text)));
+            const audioRes = await sendWhatsAppAudio(waTarget, phone, url).catch(
+              (e) => ({ ok: false, reason: String(e) }) as const,
+            );
+            if (audioRes.ok) {
+              console.log("[meta] áudio enviado:", "messageId" in audioRes ? audioRes.messageId : "");
+              continue;
+            }
+            console.error("[meta] áudio falhou:", audioRes.reason);
+          }
+        } catch (e) {
+          console.error("[tts] envio:", e);
+        }
+      }
+    }
+
+    await new Promise((r) => setTimeout(r, typingDelayMs(text)));
+    const res = await sendWhatsAppText(waTarget, phone, text).catch(
+      (e) => ({ ok: false, reason: String(e) }) as const,
+    );
+    if (!res.ok) console.error("[meta] send falhou:", res.reason);
+    else console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
+  }
+}
+
 async function notifyOwner(msg: IncomingMessage, sessionId: string) {
   const owner = process.env["OWNER_ALERT_PHONE"] || "5567992123617";
   const { data } = await supabaseAdmin
@@ -482,6 +537,19 @@ export async function processMessage(
     })
     .eq("id", session.id);
 
+  const audioPrefCmd = await handleBotAudioPreferenceMessage(
+    session.id,
+    session.intake_data ?? {},
+    msg.text,
+  );
+  if (audioPrefCmd.handled && audioPrefCmd.prefs) {
+    session.intake_data = {
+      ...(session.intake_data ?? {}),
+      bot_audio_enabled: audioPrefCmd.prefs.enabled,
+      bot_voice_profile: audioPrefCmd.prefs.voice,
+    };
+  }
+
   const explicitHuman =
     /\b(humano|atendente|consultor|falar com (uma )?pessoa|pessoa real|human agent|speak to (a )?human|hablar con (una )?persona|agente humano)\b/i.test(lower);
   const affirmative =
@@ -508,7 +576,9 @@ export async function processMessage(
       lower,
     );
 
-  if (session.mode === "humano") {
+  if (audioPrefCmd.handled && audioPrefCmd.reply) {
+    replies.push(audioPrefCmd.reply);
+  } else if (session.mode === "humano") {
     // Não responde — consultor responde no painel
   } else if (session.mode === "triagem" && session.intake_state && INTAKE_STEPS.includes(session.intake_state as IntakeStep)) {
     const reply = await continueIntake(session, msg.text);
@@ -522,7 +592,9 @@ export async function processMessage(
       .from("sessions")
       .update({ mode: "bot", intake_state: null })
       .eq("id", session.id);
-    replies.push("Beleza! Voltamos ao papo com o Guatá. O que você quer saber?");
+    replies.push(
+      'Beleza! Voltamos ao papo com o Guatá. O que você quer saber?\n\n(Digite *opções de áudio* se quiser resposta em voz ou só texto.)',
+    );
   } else {
     if (offered) {
       await supabaseAdmin.from("sessions").update({ intake_state: null }).eq("id", session.id);
@@ -585,15 +657,16 @@ export async function processMessage(
   const handoff =
     (after?.mode === "humano" || after?.mode === "aguardando") && after?.mode !== session.mode;
 
-  // Persiste e envia
-  for (const text of replies) {
-    await persistMessage(session.id, "out", "bot", text);
-    await new Promise((r) => setTimeout(r, typingDelayMs(text)));
-    const res = await sendWhatsAppText(waTarget, msg.phone, text).catch(
-      (e) => ({ ok: false, reason: String(e) }) as const,
+  const botOutbound = session.mode !== "humano";
+  if (replies.length > 0) {
+    await deliverTextReplies(
+      session.id,
+      msg.phone,
+      waTarget,
+      replies,
+      session.intake_data ?? {},
+      botOutbound,
     );
-    if (!res.ok) console.error("[meta] send falhou:", res.reason);
-    else console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
   }
 
   if (replies.length > 0 && session.mode !== "humano") {
