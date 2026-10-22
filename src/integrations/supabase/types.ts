@@ -91,6 +91,7 @@ export type Database = {
       }
       attendants: {
         Row: {
+          agent_gender: string
           ativo: boolean
           created_at: string
           criatividade: number
@@ -104,11 +105,13 @@ export type Database = {
           persona: string
           saudacao: string
           tom: string
+          tts_voice_profile: string
           updated_at: string
           usa_base_descubra: boolean
           usa_base_local: boolean
         }
         Insert: {
+          agent_gender?: string
           ativo?: boolean
           created_at?: string
           criatividade?: number
@@ -122,11 +125,13 @@ export type Database = {
           persona?: string
           saudacao?: string
           tom?: string
+          tts_voice_profile?: string
           updated_at?: string
           usa_base_descubra?: boolean
           usa_base_local?: boolean
         }
         Update: {
+          agent_gender?: string
           ativo?: boolean
           created_at?: string
           criatividade?: number
@@ -140,6 +145,7 @@ export type Database = {
           persona?: string
           saudacao?: string
           tom?: string
+          tts_voice_profile?: string
           updated_at?: string
           usa_base_descubra?: boolean
           usa_base_local?: boolean
@@ -483,8 +489,43 @@ export type Database = {
           },
         ]
       }
+      organization_tts_usage: {
+        Row: {
+          audio_count: number
+          characters_used: number
+          month_key: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          audio_count?: number
+          characters_used?: number
+          month_key: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          audio_count?: number
+          characters_used?: number
+          month_key?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_tts_usage_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
+          allow_bot_audio: boolean
+          bot_audio_client_default: boolean
+          bot_audio_monthly_cap: number | null
           created_at: string
           id: string
           is_guata: boolean
@@ -494,6 +535,9 @@ export type Database = {
           use_descubra_kb: boolean
         }
         Insert: {
+          allow_bot_audio?: boolean
+          bot_audio_client_default?: boolean
+          bot_audio_monthly_cap?: number | null
           created_at?: string
           id?: string
           is_guata?: boolean
@@ -503,6 +547,9 @@ export type Database = {
           use_descubra_kb?: boolean
         }
         Update: {
+          allow_bot_audio?: boolean
+          bot_audio_client_default?: boolean
+          bot_audio_monthly_cap?: number | null
           created_at?: string
           id?: string
           is_guata?: boolean

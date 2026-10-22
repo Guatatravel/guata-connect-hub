@@ -15,6 +15,7 @@ export interface BotAudioPrefs {
 
 const INTAKE_TEXT_ONLY = "bot_audio_text_only";
 const INTAKE_VOICE = "bot_voice_profile";
+const INTAKE_VOICE_CLIENT = "bot_voice_client_set";
 
 export function readBotAudioPrefs(
   intake: Record<string, unknown> | undefined,
@@ -33,6 +34,17 @@ export function shouldSendAudioReply(
 ): boolean {
   if (inboundKind !== "audio") return false;
   return !readBotAudioPrefs(intake).textOnly;
+}
+
+/** Voz TTS: preferência explícita do cliente no WhatsApp, senão padrão do atendente. */
+export function resolveTtsVoice(
+  intake: Record<string, unknown> | undefined,
+  attendantVoice: BotVoiceProfile | null | undefined,
+): BotVoiceProfile {
+  if (intake?.[INTAKE_VOICE_CLIENT] === true) {
+    return readBotAudioPrefs(intake).voice;
+  }
+  return attendantVoice ?? "male";
 }
 
 export type AudioPrefCommandResult =
@@ -159,6 +171,7 @@ export async function persistBotAudioPrefs(
     ...intake,
     [INTAKE_TEXT_ONLY]: next.textOnly,
     [INTAKE_VOICE]: next.voice,
+    ...(patch.voice !== undefined ? { [INTAKE_VOICE_CLIENT]: true } : {}),
     bot_audio_enabled: false,
     bot_audio_updated_at: new Date().toISOString(),
   };

@@ -14,6 +14,7 @@ import {
   sendWhatsAppText,
   sendWhatsAppImage,
   sendWhatsAppAudio,
+  sendWhatsAppAudioBytes,
   markReadAndTyping,
   typingDelayMs,
 } from "@/lib/meta-send.server";
@@ -21,6 +22,8 @@ import {
   handleBotAudioPreferenceMessage,
   readBotAudioPrefs,
   shouldSendAudioReply,
+  resolveTtsVoice,
+  type BotVoiceProfile,
 } from "@/lib/bot-audio-preference.server";
 import {
   getOrgBotAudioPolicy,
@@ -245,6 +248,8 @@ interface AttendantConfig {
   modelo: string;
   usa_base_local: boolean;
   usa_base_descubra: boolean;
+  agent_gender: "male" | "female";
+  tts_voice_profile: BotVoiceProfile;
 }
 
 async function loadAttendant(
@@ -253,13 +258,33 @@ async function loadAttendant(
 ): Promise<AttendantConfig | null> {
   const { data } = await supabaseAdmin
     .from("attendants")
-    .select("persona, criatividade, modelo, usa_base_local, usa_base_descubra")
+    .select(
+      "persona, criatividade, modelo, usa_base_local, usa_base_descubra, agent_gender, tts_voice_profile",
+    )
     .eq("line", line)
     .eq("organization_id", organizationId)
     .eq("ativo", true)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  return (data as unknown as AttendantConfig) ?? null;
+  if (!data) return null;
+  const row = data as Record<string, unknown>;
+  return {
+    persona: String(row.persona ?? ""),
+    criatividade: Number(row.criatividade ?? 0.6),
+    modelo: String(row.modelo ?? ""),
+    usa_base_local: Boolean(row.usa_base_local),
+    usa_base_descubra: Boolean(row.usa_base_descubra),
+    agent_gender: row.agent_gender === "female" ? "female" : "male",
+    tts_voice_profile: row.tts_voice_profile === "female" ? "female" : "male",
+  };
+}
+
+function agentGenderPrompt(gender: "male" | "female"): string {
+  if (gender === "female") {
+    return "\n- A agente é feminina: fale de si como eu/a assistente/dela, nunca como o Guatá masculino.";
+  }
+  return "\n- O agente é masculino (Guatá): fale de si como eu/o Guatá/dele, nunca feminino.";
 }
 
 async function sessionOrganizationId(sessionId: string): Promise<string> {
@@ -344,7 +369,9 @@ async function answerTurismo(
   const descubraAllowed = await organizationUsesDescubra(orgId);
   const official =
     line === "descubra" && descubraAllowed ? await getGuataPersona() : null;
-  const persona = buildSystemPersona(line, official, attendant);
+  const persona =
+    buildSystemPersona(line, official, attendant) +
+    agentGenderPrompt(attendant?.agent_gender ?? "male");
 
   let context = "";
 
@@ -399,7 +426,7 @@ async function answerTurismo(
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
     `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- MS é sua casa — destaque MS quando relevante; em assuntos internacionais, seja útil e breve e só então ligue à ${AGENCY_NAME} se for viagem sob medida.\n- Parceiros Descubra MS no contexto podem ser recomendados.\n` +
     `\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE (ex.: 'Quer que eu chame um consultor da ${AGENCY_NAME}?') e termine com [[OFERTA_HUMANO]].\n` +
-    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
+    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
       : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
@@ -437,8 +464,10 @@ async function deliverTextReplies(
   intake: Record<string, unknown>,
   botMode: boolean,
   inboundKind: IncomingMessage["inboundKind"],
+  attendantTtsVoice: BotVoiceProfile | null,
 ): Promise<void> {
   const audioPrefs = readBotAudioPrefs(intake);
+  const ttsVoice = resolveTtsVoice(intake, attendantTtsVoice);
   const orgPolicy = await getOrgBotAudioPolicy(waTarget.organizationId);
   const quotaOk = orgCanSendTtsNow(orgPolicy);
   const tryAudio =
@@ -449,34 +478,57 @@ async function deliverTextReplies(
     isBotTtsConfigured() &&
     replies.length > 0;
 
+  if (inboundKind === "audio" && !tryAudio) {
+    console.warn("[bot-audio] resposta em texto (áudio não tentado):", {
+      botMode,
+      allowBotAudio: orgPolicy.allowBotAudio,
+      quotaOk,
+      textOnly: audioPrefs.textOnly,
+      ttsConfigured: isBotTtsConfigured(),
+    });
+  }
+
   for (let i = 0; i < replies.length; i++) {
     const text = replies[i];
     await persistMessage(sessionId, "out", "bot", text);
 
     if (i === 0 && tryAudio) {
-      const speech = await synthesizeBotSpeech(text, audioPrefs.voice);
+      const speech = await synthesizeBotSpeech(text, ttsVoice);
       if (speech) {
         try {
-          const path = await storeChatMedia(phone, speech.bytes, speech.mimeType, "audio");
-          const url = await signedChatMediaUrl(path, 60 * 60);
-          if (url) {
-            await new Promise((r) => setTimeout(r, typingDelayMs(text)));
-            const audioRes = await sendWhatsAppAudio(waTarget, phone, url).catch(
-              (e) => ({ ok: false, reason: String(e) }) as const,
-            );
-            if (audioRes.ok) {
-              console.log("[meta] áudio enviado:", "messageId" in audioRes ? audioRes.messageId : "");
-              await recordOrganizationTtsUsage(
-                waTarget.organizationId,
-                plainTextForSpeech(text).length,
+          void storeChatMedia(phone, speech.bytes, speech.mimeType, "audio").catch((e) =>
+            console.error("[chat-media] áudio outbound:", e),
+          );
+          await new Promise((r) => setTimeout(r, typingDelayMs(text)));
+          let audioRes = await sendWhatsAppAudioBytes(
+            waTarget,
+            phone,
+            speech.bytes,
+            speech.mimeType,
+          ).catch((e) => ({ ok: false, reason: String(e) }) as const);
+          if (!audioRes.ok) {
+            const path = await storeChatMedia(phone, speech.bytes, speech.mimeType, "audio");
+            const url = await signedChatMediaUrl(path, 60 * 60);
+            if (url) {
+              audioRes = await sendWhatsAppAudio(waTarget, phone, url).catch(
+                (e) => ({ ok: false, reason: String(e) }) as const,
               );
-              continue;
             }
-            console.error("[meta] áudio falhou:", audioRes.reason);
           }
+          if (audioRes.ok) {
+            console.log("[meta] áudio enviado:", "messageId" in audioRes ? audioRes.messageId : "");
+            await recordOrganizationTtsUsage(
+              waTarget.organizationId,
+              plainTextForSpeech(text).length,
+            );
+            continue;
+          }
+          console.error("[meta] áudio falhou:", audioRes.reason);
         } catch (e) {
           console.error("[tts] envio:", e);
         }
+      } else {
+        console.error("[tts] síntese vazia para resposta em áudio");
       }
     }
 
@@ -682,6 +734,9 @@ export async function processMessage(
     (after?.mode === "humano" || after?.mode === "aguardando") && after?.mode !== session.mode;
 
   const botOutbound = session.mode !== "humano";
+  const activeAttendant = botOutbound
+    ? await loadAttendant(msg.line, msg.organizationId)
+    : null;
   if (replies.length > 0) {
     await deliverTextReplies(
       session.id,
@@ -691,6 +746,7 @@ export async function processMessage(
       session.intake_data ?? {},
       botOutbound,
       msg.inboundKind,
+      activeAttendant?.tts_voice_profile ?? null,
     );
   }
 

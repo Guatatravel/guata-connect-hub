@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+export type AgentGender = "male" | "female";
+export type TtsVoiceProfile = "male" | "female";
+
 export interface AttendantInput {
   id?: string;
   nome: string;
@@ -14,6 +17,8 @@ export interface AttendantInput {
   usa_base_descubra: boolean;
   criatividade: number;
   ativo: boolean;
+  agent_gender: AgentGender;
+  tts_voice_profile: TtsVoiceProfile;
 }
 
 function sanitize(input: AttendantInput): AttendantInput {
@@ -32,6 +37,8 @@ function sanitize(input: AttendantInput): AttendantInput {
     usa_base_descubra: Boolean(input?.usa_base_descubra),
     criatividade: Math.min(1, Math.max(0, Number(input?.criatividade ?? 0.6))),
     ativo: Boolean(input?.ativo),
+    agent_gender: input?.agent_gender === "female" ? "female" : "male",
+    tts_voice_profile: input?.tts_voice_profile === "female" ? "female" : "male",
   };
 }
 

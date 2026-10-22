@@ -34,11 +34,15 @@ function femaleVoiceId(): string | null {
   );
 }
 
+function elevenLabsTtsReady(): boolean {
+  return Boolean(
+    process.env.ELEVENLABS_API_KEY?.trim() && (maleVoiceId() || femaleVoiceId()),
+  );
+}
+
+/** True se OpenAI ou ElevenLabs (com voice id) estiverem prontos. */
 export function isBotTtsConfigured(): boolean {
-  if (process.env.ELEVENLABS_API_KEY?.trim()) {
-    return Boolean(maleVoiceId() || femaleVoiceId());
-  }
-  return Boolean(process.env.OPENAI_API_KEY?.trim());
+  return elevenLabsTtsReady() || Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 function voiceIdFor(profile: BotVoiceProfile): string | null {
@@ -114,7 +118,7 @@ export async function synthesizeBotSpeech(
   const spoken = plainTextForSpeech(text);
   if (!spoken || spoken.length < 3) return null;
 
-  if (process.env.ELEVENLABS_API_KEY?.trim()) {
+  if (elevenLabsTtsReady()) {
     const bytes = await synthesizeElevenLabs(spoken, profile);
     if (bytes?.length) return { bytes, mimeType: "audio/mpeg" };
   }

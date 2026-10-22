@@ -66,6 +66,8 @@ const EMPTY: AttendantInput = {
   usa_base_descubra: true,
   criatividade: 0.6,
   ativo: true,
+  agent_gender: "male",
+  tts_voice_profile: "male",
 };
 
 const TONS = [
@@ -146,6 +148,14 @@ function Atendentes() {
         usa_base_descubra: Boolean(found.usa_base_descubra),
         criatividade: Number(found.criatividade ?? 0.6),
         ativo: Boolean(found.ativo),
+        agent_gender:
+          (found as { agent_gender?: string }).agent_gender === "female"
+            ? "female"
+            : "male",
+        tts_voice_profile:
+          (found as { tts_voice_profile?: string }).tts_voice_profile === "female"
+            ? "female"
+            : "male",
       });
     }
   }, [data, selectedId]);
@@ -210,7 +220,7 @@ function Atendentes() {
           </CardHeader>
           <CardContent className="space-y-2">
             {isLoading && <Skeleton className="h-10 w-full" />}
-            {data?.filter((a) => a.ativo).map((a) => (
+            {data?.map((a) => (
               <button
                 key={a.id as string}
                 onClick={() => setSelectedId(a.id as string)}
@@ -319,6 +329,55 @@ function Atendentes() {
                     : form.criatividade >= 0.8
                       ? "Respostas mais livres e criativas"
                       : "Equilíbrio entre precisão e naturalidade"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Gênero do agente</Label>
+                <Select
+                  value={form.agent_gender}
+                  onValueChange={(v) => {
+                    const g = v as "male" | "female";
+                    setForm((f) => ({
+                      ...f,
+                      agent_gender: g,
+                      tts_voice_profile: g,
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Masculino</SelectItem>
+                    <SelectItem value="female">Feminino</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Como o agente se refere a si nas respostas.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Voz no WhatsApp (áudio)</Label>
+                <Select
+                  value={form.tts_voice_profile}
+                  onValueChange={(v) =>
+                    set("tts_voice_profile", v as "male" | "female")
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Voz masculina Guatá</SelectItem>
+                    <SelectItem value="female">Voz feminina Guatá</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Quando o cliente manda nota de voz. No chat ele pode pedir
+                  &quot;voz masculina&quot; ou &quot;voz feminina&quot;.
                 </p>
               </div>
             </div>

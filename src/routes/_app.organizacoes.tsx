@@ -61,7 +61,7 @@ function OrganizacoesPage() {
 
   if (!data.canManagePartners) {
     return (
-      <div className="max-w-lg space-y-3">
+      <div className="max-w-lg mx-auto space-y-3">
         <h1 className="font-display text-2xl font-semibold text-primary">Organização</h1>
         <p className="text-sm text-muted-foreground">
           Você está na organização ativa selecionada no topo do painel. Para trocar, use o seletor no
@@ -75,7 +75,7 @@ function OrganizacoesPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl mx-auto w-full">
       <div>
         <h1 className="font-display text-2xl font-semibold text-primary">Agências parceiras</h1>
         <p className="text-sm text-muted-foreground">

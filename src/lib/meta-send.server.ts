@@ -147,6 +147,92 @@ export async function sendWhatsAppImage(
   return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
+export async function uploadWhatsAppMedia(
+  target: WhatsAppTarget,
+  bytes: Uint8Array,
+  mimeType: string,
+  filename: string,
+): Promise<{ ok: true; mediaId: string } | { ok: false; reason: string }> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const form = new FormData();
+  form.set("messaging_product", "whatsapp");
+  form.set("type", mimeType);
+  form.set("file", new Blob([bytes], { type: mimeType }), filename);
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_upload_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as { id?: string };
+  if (!json.id) return { ok: false, reason: "meta_upload_no_id" };
+  return { ok: true, mediaId: json.id };
+}
+
+export async function sendWhatsAppAudioByMediaId(
+  target: WhatsAppTarget,
+  to: string,
+  mediaId: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: to.replace(/\D/g, ""),
+        type: "audio",
+        audio: { id: mediaId },
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as {
+    messages?: Array<{ id?: string }>;
+  };
+  return { ok: true, messageId: json.messages?.[0]?.id };
+}
+
+/** TTS → upload na Meta + envio por media id (mais confiável que link externo). */
+export async function sendWhatsAppAudioBytes(
+  target: WhatsAppTarget,
+  to: string,
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<SendResult> {
+  const ext = mimeType.includes("mpeg") ? "mp3" : mimeType.includes("ogg") ? "ogg" : "bin";
+  const uploaded = await uploadWhatsAppMedia(
+    target,
+    bytes,
+    mimeType,
+    `guata-reply.${ext}`,
+  );
+  if (!uploaded.ok) return { ok: false, reason: uploaded.reason };
+  return sendWhatsAppAudioByMediaId(target, to, uploaded.mediaId);
+}
+
 export async function sendWhatsAppAudio(
   target: WhatsAppTarget,
   to: string,
