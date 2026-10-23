@@ -164,6 +164,28 @@ export async function runDiagnostics(): Promise<DiagnosticCheck[]> {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const { getTtsConfigStatus, probeBotTts } = await import("@/lib/tts.server");
+  const ttsCfg = getTtsConfigStatus();
+  checks.push({
+    id: "tts-config",
+    label: "Voz WhatsApp (TTS) — variáveis",
+    state: ttsCfg.configured ? "ok" : "fail",
+    detail: ttsCfg.summary,
+    hint: !ttsCfg.configured
+      ? "No Lovable: ELEVENLABS_API_KEY + GUATA_TTS_VOICE_MALE_ID (ou OPENAI_API_KEY). Depois Publish."
+      : undefined,
+  });
+  const ttsProbe = await probeBotTts("male");
+  checks.push({
+    id: "tts-probe",
+    label: "Voz WhatsApp (TTS) — teste de síntese",
+    state: ttsProbe.ok ? "ok" : "fail",
+    detail: ttsProbe.detail,
+    hint: !ttsProbe.ok
+      ? "Corrija a chave ElevenLabs, o voice id ou a cota; confira os logs [tts] elevenlabs."
+      : undefined,
+  });
+
   const metaOk = await isGuataMetaConfigured("descubra");
   checks.push({
     id: "meta",

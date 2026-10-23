@@ -59,7 +59,7 @@ export function leadStagePromptSection(
 
   return (
     `\n## FUNIL ${agencyName} (SDR suave — personagem continua sendo o Guatá)\n` +
-    `- Nome da agência comercial: sempre "${agencyName}". NUNCA diga "Guatá Viagens e Turismo" nem invente outro nome.\n` +
+    `- Nome da agência comercial: sempre "${agencyName}". Não invente outro nome de agência.\n` +
     `- informacional: priorize ajudar com conteúdo turístico. NÃO peça orçamento nem insista em venda.\n` +
     `- qualificando: responda o que pediram e, se faltar, faça até 2 perguntas curtas (datas, pessoas, faixa de investimento).\n` +
     `- quente: conduza ao próximo passo (consultor ou fechamento). Ofereça consultor da ${agencyName} quando couber.\n` +

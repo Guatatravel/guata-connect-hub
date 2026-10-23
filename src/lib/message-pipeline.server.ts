@@ -31,7 +31,11 @@ import {
   recordOrganizationTtsUsage,
   defaultIntakeForNewSession,
 } from "@/lib/bot-audio-org.server";
-import { isBotTtsConfigured, plainTextForSpeech, synthesizeBotSpeech } from "@/lib/tts.server";
+import {
+  isBotTtsConfigured,
+  plainTextForSpeech,
+  synthesizeBotSpeechDetailed,
+} from "@/lib/tts.server";
 import { signedChatMediaUrl, storeChatMedia } from "@/lib/chat-media.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
 import {
@@ -47,7 +51,7 @@ import {
 } from "@/lib/organizations.server";
 
 /** Nome comercial da agência (não usar razão social completa no WhatsApp). */
-export const AGENCY_NAME = "Guatá Viagens";
+export const AGENCY_NAME = "Guatá Viagens e Turismo";
 
 export interface IncomingMessage {
   organizationId: string;
@@ -488,13 +492,15 @@ async function deliverTextReplies(
     });
   }
 
+  let audioFailReason: string | null = null;
+  let audioNoticeSent = false;
+
   for (let i = 0; i < replies.length; i++) {
     const text = replies[i];
-    await persistMessage(sessionId, "out", "bot", text);
 
     if (i === 0 && tryAudio) {
-      const speech = await synthesizeBotSpeech(text, ttsVoice);
-      if (speech) {
+      const speech = await synthesizeBotSpeechDetailed(text, ttsVoice);
+      if (speech.ok) {
         try {
           void storeChatMedia(phone, speech.bytes, speech.mimeType, "audio").catch((e) =>
             console.error("[chat-media] áudio outbound:", e),
@@ -517,20 +523,47 @@ async function deliverTextReplies(
           }
           if (audioRes.ok) {
             console.log("[meta] áudio enviado:", "messageId" in audioRes ? audioRes.messageId : "");
+            await persistMessage(sessionId, "out", "bot", text, {
+              outbound_kind: "audio",
+            });
             await recordOrganizationTtsUsage(
               waTarget.organizationId,
               plainTextForSpeech(text).length,
             );
             continue;
           }
-          console.error("[meta] áudio falhou:", audioRes.reason);
+          audioFailReason = audioRes.reason ?? "meta_audio_failed";
+          console.error("[meta] áudio falhou:", audioFailReason);
         } catch (e) {
+          audioFailReason = e instanceof Error ? e.message : String(e);
           console.error("[tts] envio:", e);
         }
       } else {
-        console.error("[tts] síntese vazia para resposta em áudio");
+        audioFailReason = speech.reason;
+        console.error("[tts] síntese falhou:", audioFailReason);
       }
     }
+
+    if (audioFailReason && !audioNoticeSent) {
+      audioNoticeSent = true;
+      const notice =
+        "Não consegui enviar áudio agora; segue a resposta em texto. (Equipe: ver Configurações → teste de voz.)";
+      await persistMessage(sessionId, "out", "bot", notice, {
+        system_notice: true,
+        tts_error: audioFailReason.slice(0, 500),
+      });
+      await new Promise((r) => setTimeout(r, 400));
+      const noticeRes = await sendWhatsAppText(waTarget, phone, notice).catch(
+        (e) => ({ ok: false, reason: String(e) }) as const,
+      );
+      if (!noticeRes.ok) console.error("[meta] aviso áudio falhou:", noticeRes.reason);
+    }
+
+    const outMeta =
+      i === 0 && audioFailReason
+        ? { tts_attempted: true, tts_error: audioFailReason.slice(0, 500) }
+        : undefined;
+    await persistMessage(sessionId, "out", "bot", text, outMeta);
 
     await new Promise((r) => setTimeout(r, typingDelayMs(text)));
     const res = await sendWhatsAppText(waTarget, phone, text).catch(

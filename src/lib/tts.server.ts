@@ -45,6 +45,40 @@ export function isBotTtsConfigured(): boolean {
   return elevenLabsTtsReady() || Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
+export interface TtsConfigStatus {
+  configured: boolean;
+  elevenLabsKey: boolean;
+  maleVoiceId: boolean;
+  femaleVoiceId: boolean;
+  openAiKey: boolean;
+  summary: string;
+}
+
+export function getTtsConfigStatus(): TtsConfigStatus {
+  const elevenLabsKey = Boolean(process.env.ELEVENLABS_API_KEY?.trim());
+  const male = Boolean(maleVoiceId());
+  const female = Boolean(femaleVoiceId());
+  const openAiKey = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const configured = isBotTtsConfigured();
+  let summary = "Nenhum provedor de voz configurado no servidor.";
+  if (elevenLabsKey && !male && !female) {
+    summary =
+      "ELEVENLABS_API_KEY presente, mas falta GUATA_TTS_VOICE_MALE_ID ou ELEVENLABS_VOICE_ID.";
+  } else if (elevenLabsTtsReady()) {
+    summary = `ElevenLabs pronto (voz${male && female ? " M+F" : male ? " M" : " F"}).`;
+  } else if (openAiKey) {
+    summary = "OpenAI TTS configurado (fallback).";
+  }
+  return {
+    configured,
+    elevenLabsKey,
+    maleVoiceId: male,
+    femaleVoiceId: female,
+    openAiKey,
+    summary,
+  };
+}
+
 function voiceIdFor(profile: BotVoiceProfile): string | null {
   if (profile === "female") return femaleVoiceId() || maleVoiceId();
   return maleVoiceId() || femaleVoiceId();
@@ -60,10 +94,12 @@ function openAiVoice(profile: BotVoiceProfile): string {
 async function synthesizeElevenLabs(
   text: string,
   profile: BotVoiceProfile,
-): Promise<Uint8Array | null> {
+): Promise<{ bytes: Uint8Array } | { error: string }> {
   const key = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = voiceIdFor(profile);
-  if (!key || !voiceId) return null;
+  if (!key || !voiceId) {
+    return { error: "elevenlabs_missing_key_or_voice_id" };
+  }
 
   const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
     method: "POST",
@@ -78,18 +114,19 @@ async function synthesizeElevenLabs(
     }),
   });
   if (!res.ok) {
-    console.error("[tts] elevenlabs:", res.status, await res.text().catch(() => ""));
-    return null;
+    const body = await res.text().catch(() => "");
+    console.error("[tts] elevenlabs:", res.status, body);
+    return { error: `elevenlabs_${res.status}: ${body.slice(0, 120)}` };
   }
-  return new Uint8Array(await res.arrayBuffer());
+  return { bytes: new Uint8Array(await res.arrayBuffer()) };
 }
 
 async function synthesizeOpenAi(
   text: string,
   profile: BotVoiceProfile,
-): Promise<Uint8Array | null> {
+): Promise<{ bytes: Uint8Array } | { error: string }> {
   const key = process.env.OPENAI_API_KEY?.trim();
-  if (!key) return null;
+  if (!key) return { error: "openai_key_missing" };
 
   const res = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
@@ -105,25 +142,67 @@ async function synthesizeOpenAi(
     }),
   });
   if (!res.ok) {
-    console.error("[tts] openai:", res.status, await res.text().catch(() => ""));
-    return null;
+    const body = await res.text().catch(() => "");
+    console.error("[tts] openai:", res.status, body);
+    return { error: `openai_${res.status}: ${body.slice(0, 120)}` };
   }
-  return new Uint8Array(await res.arrayBuffer());
+  return { bytes: new Uint8Array(await res.arrayBuffer()) };
+}
+
+export type SynthesizeResult =
+  | { ok: true; bytes: Uint8Array; mimeType: string }
+  | { ok: false; reason: string };
+
+export async function synthesizeBotSpeechDetailed(
+  text: string,
+  profile: BotVoiceProfile,
+): Promise<SynthesizeResult> {
+  const spoken = plainTextForSpeech(text);
+  if (!spoken || spoken.length < 3) {
+    return { ok: false, reason: "texto_curto_para_voz" };
+  }
+
+  if (elevenLabsTtsReady()) {
+    const el = await synthesizeElevenLabs(spoken, profile);
+    if ("bytes" in el && el.bytes.length > 0) {
+      return { ok: true, bytes: el.bytes, mimeType: "audio/mpeg" };
+    }
+    const elErr = "error" in el ? el.error : "elevenlabs_empty";
+    if (!process.env.OPENAI_API_KEY?.trim()) {
+      return { ok: false, reason: elErr };
+    }
+  }
+
+  const oa = await synthesizeOpenAi(spoken, profile);
+  if ("bytes" in oa && oa.bytes.length > 0) {
+    return { ok: true, bytes: oa.bytes, mimeType: "audio/mpeg" };
+  }
+  const oaErr = "error" in oa ? oa.error : "openai_empty";
+  return { ok: false, reason: oaErr };
 }
 
 export async function synthesizeBotSpeech(
   text: string,
   profile: BotVoiceProfile,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
-  const spoken = plainTextForSpeech(text);
-  if (!spoken || spoken.length < 3) return null;
+  const r = await synthesizeBotSpeechDetailed(text, profile);
+  return r.ok ? { bytes: r.bytes, mimeType: r.mimeType } : null;
+}
 
-  if (elevenLabsTtsReady()) {
-    const bytes = await synthesizeElevenLabs(spoken, profile);
-    if (bytes?.length) return { bytes, mimeType: "audio/mpeg" };
+/** Gera ~1s de áudio para diagnóstico no painel. */
+export async function probeBotTts(
+  profile: BotVoiceProfile = "male",
+): Promise<{ ok: boolean; detail: string }> {
+  const cfg = getTtsConfigStatus();
+  if (!cfg.configured) {
+    return { ok: false, detail: cfg.summary };
   }
-
-  const bytes = await synthesizeOpenAi(spoken, profile);
-  if (bytes?.length) return { bytes, mimeType: "audio/mpeg" };
-  return null;
+  const r = await synthesizeBotSpeechDetailed("Teste de voz do Guatá.", profile);
+  if (r.ok) {
+    return {
+      ok: true,
+      detail: `${cfg.summary} Áudio gerado (${r.bytes.length} bytes).`,
+    };
+  }
+  return { ok: false, detail: `${cfg.summary} Falha: ${r.reason}` };
 }

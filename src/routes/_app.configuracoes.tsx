@@ -228,6 +228,8 @@ function ConfigPage() {
       </Card>
       )}
 
+      <TtsDiagnosticsCard />
+
       {settings.useDescubraKb && <DiagnosticsCard />}
 
       <BrandingCard />
@@ -235,6 +237,65 @@ function ConfigPage() {
       <NotificationSettingsCard />
 
     </div>
+  );
+}
+
+function TtsDiagnosticsCard() {
+  const run = useServerFn(runDescubraDiagnostics);
+  const diag = useQuery({
+    queryKey: ["diagnostics-tts"],
+    queryFn: () => run({ data: undefined as never }),
+    staleTime: 60_000,
+  });
+
+  const ttsChecks =
+    diag.data?.checks.filter((c) => c.id === "tts-config" || c.id === "tts-probe") ?? [];
+
+  return (
+    <Card className="rounded-2xl border-amber-500/30">
+      <CardHeader>
+        <CardTitle className="font-display flex items-center justify-between gap-2 flex-wrap">
+          Áudio no WhatsApp (ElevenLabs / TTS)
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => diag.refetch()}
+            disabled={diag.isFetching}
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-1 ${diag.isFetching ? "animate-spin" : ""}`}
+            />
+            Testar voz
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground text-xs">
+          Roda no mesmo servidor do webhook. Se falhar aqui, notas de voz no WhatsApp só
+          recebem texto.
+        </p>
+        {diag.isLoading && <Skeleton className="h-24 rounded-xl" />}
+        {ttsChecks.map((c) => (
+          <div
+            key={c.id}
+            className="flex gap-3 items-start border border-border rounded-xl p-3 bg-secondary/30"
+          >
+            {c.state === "ok" ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className="font-medium">{c.label}</p>
+              <p className="text-muted-foreground mt-0.5">{c.detail}</p>
+              {c.hint && (
+                <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">{c.hint}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
