@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import {
   Trash2,
   Upload,
   Type,
+  Search,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { CampaignsTab } from "@/components/guata/campaigns-tab";
@@ -122,11 +123,33 @@ function KnowledgeBasePanel() {
   const [imgCaption, setImgCaption] = useState("");
   const [imgSendable, setImgSendable] = useState(true);
   const [imgFile, setImgFile] = useState<File | null>(null);
+  const [listSearch, setListSearch] = useState("");
+  const [filePdfSendable, setFilePdfSendable] = useState(false);
+  const [filePdfKeywords, setFilePdfKeywords] = useState("");
+  const [filePdfCaption, setFilePdfCaption] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["knowledge"],
     queryFn: () => fetchDocs(),
   });
+
+  const filteredDocs = useMemo(() => {
+    if (!data) return [];
+    const q = listSearch.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((doc) => {
+      const hay = [
+        doc.title,
+        doc.preview,
+        doc.url ?? "",
+        doc.source_type,
+        ...(doc.send_keywords ?? []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [data, listSearch]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["knowledge"] });
   const onError = (e: unknown) =>
@@ -201,7 +224,9 @@ function KnowledgeBasePanel() {
         }
       }
       if (editing.source_type === "arquivo") {
-        /* só título */
+        payload.sendable = editSendable;
+        payload.keywords = editKeywords;
+        payload.caption = editCaption;
       }
       return updateDoc({ data: payload as never });
     },
@@ -217,10 +242,27 @@ function KnowledgeBasePanel() {
     mutationFn: async (file: File) => {
       if (file.size > MAX_BYTES) throw new Error("Arquivo maior que 8 MB");
       const base64 = await fileToBase64(file);
-      return addFile({ data: { filename: file.name, base64, title: file.name } });
+      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+      return addFile({
+        data: {
+          filename: file.name,
+          base64,
+          title: file.name,
+          ...(isPdf
+            ? {
+                sendable: filePdfSendable,
+                keywords: filePdfKeywords,
+                caption: filePdfCaption,
+              }
+            : {}),
+        },
+      });
     },
     onSuccess: () => {
       toast.success("Arquivo processado e adicionado");
+      setFilePdfSendable(false);
+      setFilePdfKeywords("");
+      setFilePdfCaption("");
       invalidate();
     },
     onError,
@@ -296,6 +338,27 @@ function KnowledgeBasePanel() {
                 PDF, Word, planilhas, texto ou imagens (PNG/JPG), até 8 MB. Imagens
                 promocionais: use a aba &quot;Imagem WhatsApp&quot;.
               </p>
+              <div className="rounded-lg border p-3 space-y-3">
+                <p className="text-xs font-medium text-primary">PDF enviável no WhatsApp (opcional)</p>
+                <div className="flex items-center gap-2">
+                  <Switch checked={filePdfSendable} onCheckedChange={setFilePdfSendable} />
+                  <Label>Enviar PDF ao cliente quando relevante</Label>
+                </div>
+                {filePdfSendable && (
+                  <>
+                    <Input
+                      value={filePdfKeywords}
+                      onChange={(e) => setFilePdfKeywords(e.target.value)}
+                      placeholder="Palavras-chave (vírgula)"
+                    />
+                    <Input
+                      value={filePdfCaption}
+                      onChange={(e) => setFilePdfCaption(e.target.value)}
+                      placeholder="Legenda no WhatsApp (opcional)"
+                    />
+                  </>
+                )}
+              </div>
               <input
                 ref={inputRef}
                 type="file"
@@ -493,6 +556,24 @@ function KnowledgeBasePanel() {
                 </div>
               </>
             )}
+            {editing.source_type === "arquivo" &&
+              (editing.title.toLowerCase().endsWith(".pdf") ||
+                editing.preview.toLowerCase().includes(".pdf")) && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Palavras-chave</Label>
+                    <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Legenda WhatsApp</Label>
+                    <Input value={editCaption} onChange={(e) => setEditCaption(e.target.value)} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={editSendable} onCheckedChange={setEditSendable} />
+                    <Label>Bot pode enviar este PDF no WhatsApp</Label>
+                  </div>
+                </>
+              )}
             {editing.source_type === "imagem" && (
               <>
                 <div className="space-y-2">
@@ -529,10 +610,19 @@ function KnowledgeBasePanel() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-3">
           <CardTitle className="text-base">
-            Conteúdos cadastrados {data ? `(${data.length})` : ""}
+            Conteúdos cadastrados {data ? `(${filteredDocs.length}/${data.length})` : ""}
           </CardTitle>
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+              placeholder="Buscar por título, texto ou palavra-chave…"
+              className="pl-9"
+            />
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoading && (
@@ -546,7 +636,7 @@ function KnowledgeBasePanel() {
               Nada por aqui ainda. Comece anexando um documento ou colando um texto.
             </p>
           )}
-          {data?.map((doc) => (
+          {filteredDocs.map((doc) => (
             <div
               key={doc.id}
               className="flex items-start gap-3 rounded-lg border p-3"

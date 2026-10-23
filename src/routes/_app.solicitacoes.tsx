@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDate } from "@/lib/format";
+import { useServerFn } from "@tanstack/react-start";
+import { provisionAccessRequest } from "@/lib/organizations.functions";
 
 export const Route = createFileRoute("/_app/solicitacoes")({
   head: () => ({ meta: [{ title: "Solicitações de acesso — Guatá Channel" }] }),
@@ -23,6 +25,7 @@ const STATUS: Record<string, string> = {
 
 function SolicitacoesPage() {
   const qc = useQueryClient();
+  const provision = useServerFn(provisionAccessRequest);
   const { data, isLoading, error } = useQuery({
     queryKey: ["access-requests"],
     queryFn: async () => {
@@ -33,6 +36,24 @@ function SolicitacoesPage() {
       if (error) throw error;
       return data;
     },
+  });
+
+  const provisionMut = useMutation({
+    mutationFn: (requestId: string) => provision({ data: { requestId } }),
+    onSuccess: (res) => {
+      if (res.alreadyProvisioned) {
+        toast.info("Esta solicitação já foi liberada anteriormente.");
+      } else if (res.tempPassword) {
+        toast.success(
+          `Conta criada. Envie ao parceiro: ${res.email} / senha: ${res.tempPassword}`,
+          { duration: 20000 },
+        );
+      } else {
+        toast.success(`Usuário existente vinculado à org (${res.slug}).`);
+      }
+      qc.invalidateQueries({ queryKey: ["access-requests"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const upd = useMutation({
@@ -56,7 +77,8 @@ function SolicitacoesPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold text-primary">Solicitações de acesso</h1>
           <p className="text-muted-foreground">
-            Pedidos feitos em “Solicitar cadastro” no login. Após aprovar, crie o usuário em Usuários.
+            Pedidos em “Solicitar cadastro”. Use <strong>Aprovar e criar conta</strong> para criar org +
+            login automaticamente. Depois o parceiro só conecta o WhatsApp na Meta.
           </p>
         </div>
       </div>
@@ -88,8 +110,15 @@ function SolicitacoesPage() {
                   <Button size="sm" variant="outline" asChild>
                     <a href={wa} target="_blank" rel="noreferrer">Chamar no WhatsApp</a>
                   </Button>
-                  <Button size="sm" asChild>
-                    <Link to="/usuarios">Liberar acesso</Link>
+                  <Button
+                    size="sm"
+                    disabled={provisionMut.isPending || r.status === "liberado"}
+                    onClick={() => provisionMut.mutate(r.id)}
+                  >
+                    {r.status === "liberado" ? "Já liberado" : "Aprovar e criar conta"}
+                  </Button>
+                  <Button size="sm" variant="outline" asChild>
+                    <Link to="/usuarios">Usuários (manual)</Link>
                   </Button>
                 </div>
               </CardContent>

@@ -93,6 +93,29 @@ export async function resolveOrganizationForUser(userId: string): Promise<string
   return getGuataOrganizationId();
 }
 
+/** Admin global ou owner/admin da organização ativa podem configurar WhatsApp. */
+export async function userCanManageOrgWhatsApp(
+  userId: string,
+  organizationId: string,
+): Promise<boolean> {
+  const { data: globalAdmin } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (globalAdmin) return true;
+
+  const { data: mem } = await supabaseAdmin
+    .from("organization_members")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  const role = String(mem?.role ?? "");
+  return role === "owner" || role === "admin";
+}
+
 export async function userCanManagePartnerOrgs(userId: string): Promise<boolean> {
   const guataId = await getGuataOrganizationId();
   const { data: role } = await supabaseAdmin

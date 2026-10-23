@@ -10,17 +10,8 @@ import {
   resolveOrganizationForUser,
   setActiveOrganizationForUser,
   userCanManagePartnerOrgs,
+  userCanManageOrgWhatsApp,
 } from "@/lib/organizations.server";
-
-async function requireAdmin(userId: string) {
-  const { data } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (!data) throw new Error("Apenas administradores podem alterar canais WhatsApp.");
-}
 
 export const fetchMyOrganizations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -111,8 +102,12 @@ export const saveWhatsAppChannel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => saveChannelSchema.parse(i))
   .handler(async ({ data, context }) => {
-    await requireAdmin(context.userId);
     const orgId = await resolveOrganizationForUser(context.userId);
+    if (!(await userCanManageOrgWhatsApp(context.userId, orgId))) {
+      throw new Error(
+        "Sem permissão para alterar o WhatsApp desta organização. Peça a um administrador da agência.",
+      );
+    }
     const patch: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -183,4 +178,22 @@ export const saveOrgBotAudioSettings = createServerFn({ method: "POST" })
     }
     await persist(orgId, data);
     return { ok: true };
+  });
+
+export const provisionAccessRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ requestId: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { data: role } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (!role) throw new Error("Apenas administradores podem liberar solicitações.");
+
+    const { provisionPartnerFromAccessRequest } = await import(
+      "@/lib/access-provision.server"
+    );
+    return provisionPartnerFromAccessRequest(data.requestId);
   });

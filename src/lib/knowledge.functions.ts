@@ -106,22 +106,43 @@ export const updateKnowledgeDoc = createServerFn({ method: "POST" })
 
 export const addKnowledgeFileDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { filename: string; base64: string; title?: string }) => ({
-    filename: String(input?.filename ?? "arquivo"),
-    base64: String(input?.base64 ?? ""),
-    title: String(input?.title ?? ""),
-  }))
+  .inputValidator(
+    (input: {
+      filename: string;
+      base64: string;
+      title?: string;
+      sendable?: boolean;
+      keywords?: string;
+      caption?: string;
+    }) => ({
+      filename: String(input?.filename ?? "arquivo"),
+      base64: String(input?.base64 ?? ""),
+      title: String(input?.title ?? ""),
+      sendable: Boolean(input?.sendable),
+      keywords: String(input?.keywords ?? ""),
+      caption: String(input?.caption ?? "").slice(0, 1024),
+    }),
+  )
   .handler(async ({ data, context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { addKnowledgeFile } = await import("@/lib/knowledge.server");
     await requireStaffUser(context.userId);
     const orgId = await resolveOrganizationForUser(context.userId);
+    const keywords = data.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
     await addKnowledgeFile(
       context.userId,
       orgId,
       data.filename,
       data.base64,
       data.title || undefined,
+      {
+        whatsappSendable: data.sendable,
+        keywords,
+        caption: data.caption,
+      },
     );
     return { ok: true };
   });

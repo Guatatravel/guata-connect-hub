@@ -13,6 +13,7 @@ import {
   saveWhatsAppChannel,
 } from "@/lib/organizations.functions";
 import { useState } from "react";
+import { META_WHATSAPP_SETUP } from "@/lib/meta-setup-guide";
 
 export const Route = createFileRoute("/_app/conectar-meta")({
   head: () => ({
@@ -23,12 +24,6 @@ export const Route = createFileRoute("/_app/conectar-meta")({
   }),
   component: ConectarMeta,
 });
-
-const steps = [
-  ["Webhook", "Em WhatsApp > Configuração, cole a URL do webhook (em Configurações) e assine o campo messages."],
-  ["Token permanente", "Gere um token com whatsapp_business_messaging e whatsapp_business_management."],
-  ["Salvar aqui", "Preencha WABA ID, Phone Number ID e Access Token por linha. Se vazio, o servidor usa as variáveis de ambiente (Lovable Secrets)."],
-];
 
 function ChannelForm({
   line,
@@ -120,7 +115,8 @@ function ConectarMeta() {
           )}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          Novas agências parceiras usarão só fontes locais; Descubra MS é exclusivo da org Guatá.
+          O responsável da agência (ou a equipe Guatá) pode preencher os dados abaixo. Parceiros usam só
+          base local; Descubra MS é exclusivo da org Guatá.
         </p>
       </div>
 
@@ -143,17 +139,34 @@ function ConectarMeta() {
         ))
       )}
 
-      {steps.map(([t, d]) => (
-        <Card key={t} className="rounded-2xl">
+      {META_WHATSAPP_SETUP.map((step) => (
+        <Card key={step.title} className="rounded-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t}</CardTitle>
+            <CardTitle className="text-base">{step.title}</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {d}{" "}
-            {t === "Webhook" && (
-              <Link to="/configuracoes" className="text-primary underline">
-                Abrir Configurações
-              </Link>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>{step.body}</p>
+            {step.links.length > 0 && (
+              <ul className="list-disc pl-5 space-y-1">
+                {step.links.map((l) => (
+                  <li key={l.href}>
+                    {"internal" in l && l.internal ? (
+                      <Link to={l.href} className="text-primary underline">
+                        {l.label}
+                      </Link>
+                    ) : (
+                      <a
+                        href={l.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary underline"
+                      >
+                        {l.label}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>

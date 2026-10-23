@@ -15,6 +15,7 @@ import {
   sendWhatsAppImage,
   sendWhatsAppAudio,
   sendWhatsAppAudioBytes,
+  sendWhatsAppDocument,
   markReadAndTyping,
   typingDelayMs,
 } from "@/lib/meta-send.server";
@@ -434,7 +435,7 @@ async function answerTurismo(
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
     `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- MS é sua casa — destaque MS quando relevante; em assuntos internacionais, seja útil e breve e só então ligue à ${AGENCY_NAME} se for viagem sob medida.\n- Parceiros Descubra MS no contexto podem ser recomendados.\n` +
     `\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE (ex.: 'Quer que eu chame um consultor da ${AGENCY_NAME}?') e termine com [[OFERTA_HUMANO]].\n` +
-    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
+    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
       : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
@@ -776,6 +777,13 @@ export async function processMessage(
   }
 
   if (replies.length > 0 && session.mode !== "humano") {
+    const { collectUrlsSentInSession, normalizeOutboundUrl, extractHttpUrls } =
+      await import("@/lib/session-sent-urls.server");
+    const sentUrls = await collectUrlsSentInSession(session.id);
+    for (const r of replies) {
+      for (const u of extractHttpUrls(r)) sentUrls.add(u);
+    }
+
     const {
       pickSendableKnowledgeMedia,
       getSendableKnowledgeMediaById,
@@ -792,22 +800,34 @@ export async function processMessage(
       const url = await signedKnowledgeMediaUrl(media.file_path);
       if (url) {
         await new Promise((r) => setTimeout(r, 800));
-        const imgRes = await sendWhatsAppImage(
-          waTarget,
-          msg.phone,
-          url,
-          media.caption ?? undefined,
-        );
-        if (imgRes.ok) {
+        const sendRes =
+          media.delivery === "document"
+            ? await sendWhatsAppDocument(
+                waTarget,
+                msg.phone,
+                url,
+                media.filename,
+                media.caption ?? undefined,
+              )
+            : await sendWhatsAppImage(
+                waTarget,
+                msg.phone,
+                url,
+                media.caption ?? undefined,
+              );
+        if (sendRes.ok) {
           await persistMessage(
             session.id,
             "out",
             "bot",
             media.caption || `📎 ${media.title}`,
-            { knowledge_doc_id: media.id, media_kind: "image" },
+            {
+              knowledge_doc_id: media.id,
+              media_kind: media.delivery === "document" ? "document" : "image",
+            },
           );
         } else {
-          console.error("[meta] imagem base conhecimento:", imgRes.reason);
+          console.error("[meta] mídia base conhecimento:", sendRes.reason);
         }
       }
     }
@@ -821,8 +841,12 @@ export async function processMessage(
     }
 
     const { pickSendableKnowledgeLink } = await import("@/lib/knowledge.server");
-    const link = await pickSendableKnowledgeLink(msg.text, msg.organizationId);
-    if (link && !replies.some((r) => r.includes(link.url))) {
+    const link = await pickSendableKnowledgeLink(msg.text, msg.organizationId, 2, sentUrls);
+    if (
+      link &&
+      !replies.some((r) => r.includes(link.url)) &&
+      !sentUrls.has(normalizeOutboundUrl(link.url))
+    ) {
       const linkMsg = `Confira: ${link.title}\n${link.url}`;
       await persistMessage(session.id, "out", "bot", linkMsg, {
         knowledge_link: link.url,

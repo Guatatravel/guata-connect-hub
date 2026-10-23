@@ -79,9 +79,10 @@ function OrganizacoesPage() {
       <div>
         <h1 className="font-display text-2xl font-semibold text-primary">Agências parceiras</h1>
         <p className="text-sm text-muted-foreground">
-          Crie uma org para cada parceiro. Eles configuram o WhatsApp em{" "}
-          <Link to="/conectar-meta" className="text-primary underline">Conectar WhatsApp</Link> (sem
-          base Descubra MS).
+          Preferencial: o parceiro usa <strong>Solicitar cadastro</strong> e você aprova em{" "}
+          <Link to="/solicitacoes" className="text-primary underline">Solicitações</Link>. Use esta
+          página só para criar org manualmente ou vincular usuário. WhatsApp:{" "}
+          <Link to="/conectar-meta" className="text-primary underline">Conectar WhatsApp</Link>.
         </p>
       </div>
 

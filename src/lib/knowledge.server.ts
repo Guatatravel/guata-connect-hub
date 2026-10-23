@@ -3,6 +3,7 @@
  * Extrai texto de PDF, Word, planilhas, texto puro e links.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { normalizeOutboundUrl } from "@/lib/session-sent-urls.server";
 
 const MAX_CONTENT = 200_000;
 
@@ -114,6 +115,19 @@ function isImageFilename(filename: string): boolean {
   return IMAGE_EXT.has(ext);
 }
 
+function isPdfPath(pathOrName: string): boolean {
+  return pathOrName.toLowerCase().endsWith(".pdf");
+}
+
+export function knowledgeFileDelivery(
+  filePath: string,
+): "image" | "document" | "unsupported" {
+  const lower = filePath.toLowerCase();
+  if (IMAGE_EXT.has(lower.split(".").pop() ?? "")) return "image";
+  if (isPdfPath(lower)) return "document";
+  return "unsupported";
+}
+
 export async function listKnowledgeDocs(organizationId: string): Promise<KnowledgeDoc[]> {
   const { data, error } = await supabaseAdmin
     .from("knowledge_documents")
@@ -216,6 +230,11 @@ export async function addKnowledgeFile(
   filename: string,
   base64: string,
   title?: string,
+  opts?: {
+    whatsappSendable?: boolean;
+    keywords?: string[];
+    caption?: string;
+  },
 ): Promise<void> {
   const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const path = `${userId}/${Date.now()}-${filename.replace(/[^\w.\-]/g, "_")}`;
@@ -244,6 +263,12 @@ export async function addKnowledgeFile(
     .upload(path, binary, { upsert: true })
     .catch(() => undefined);
 
+  const pdfSendable =
+    source_type === "arquivo" &&
+    isPdfPath(filename) &&
+    Boolean(opts?.whatsappSendable) &&
+    status === "pronto";
+
   const { error } = await supabaseAdmin.from("knowledge_documents").insert({
     title: title || filename,
     source_type,
@@ -254,6 +279,15 @@ export async function addKnowledgeFile(
     error: err,
     created_by: userId,
     organization_id: organizationId,
+    ...(pdfSendable
+      ? {
+          whatsapp_sendable: true,
+          send_keywords: (opts?.keywords ?? [])
+            .map((k) => k.trim().toLowerCase())
+            .filter(Boolean),
+          whatsapp_caption: opts?.caption?.trim().slice(0, 1024) || null,
+        }
+      : {}),
   });
   if (error) throw new Error(error.message);
 }
@@ -419,8 +453,18 @@ export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Prom
     }
   }
 
-  if (existing.source_type === "arquivo" && input.title !== undefined) {
-    patch.title = input.title.trim().slice(0, 160);
+  if (existing.source_type === "arquivo") {
+    if (input.title !== undefined) patch.title = input.title.trim().slice(0, 160);
+    const path = existing.file_path ?? "";
+    if (isPdfPath(path) || isPdfPath(existing.title)) {
+      if (input.whatsappSendable !== undefined) patch.whatsapp_sendable = input.whatsappSendable;
+      if (input.keywords !== undefined) {
+        patch.send_keywords = input.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
+      }
+      if (input.caption !== undefined) {
+        patch.whatsapp_caption = input.caption.slice(0, 1024) || null;
+      }
+    }
   }
 
   const { error } = await supabaseAdmin
@@ -505,6 +549,8 @@ export interface SendableKnowledgeMedia {
   file_path: string;
   caption: string | null;
   score: number;
+  delivery: "image" | "document";
+  filename: string;
 }
 
 function scoreSendableMatch(
@@ -546,12 +592,18 @@ export async function getSendableKnowledgeMediaById(
     .not("file_path", "is", null)
     .maybeSingle();
   if (!data?.file_path) return null;
+  const file_path = data.file_path as string;
+  const delivery = knowledgeFileDelivery(file_path);
+  if (delivery === "unsupported") return null;
+  const filename = file_path.split("/").pop() ?? "arquivo.pdf";
   return {
     id: data.id as string,
     title: String(data.title ?? ""),
-    file_path: data.file_path as string,
+    file_path,
     caption: (data.whatsapp_caption as string) ?? null,
     score: 99,
+    delivery,
+    filename,
   };
 }
 
@@ -571,6 +623,9 @@ export async function pickSendableKnowledgeMedia(
 
   const ranked = (data ?? [])
     .map((d) => {
+      const file_path = String(d.file_path ?? "");
+      const delivery = knowledgeFileDelivery(file_path);
+      if (delivery === "unsupported") return null;
       const keywords = Array.isArray(d.send_keywords)
         ? (d.send_keywords as string[])
         : [];
@@ -582,12 +637,17 @@ export async function pickSendableKnowledgeMedia(
       return {
         id: d.id as string,
         title: String(d.title ?? ""),
-        file_path: d.file_path as string,
+        file_path,
         caption: (d.whatsapp_caption as string) ?? null,
         score,
+        delivery,
+        filename: file_path.split("/").pop() ?? "arquivo",
       };
     })
-    .filter((d) => d.score >= minScore)
+    .filter(
+      (d): d is SendableKnowledgeMedia =>
+        d !== null && d.score >= minScore,
+    )
     .sort((a, b) => b.score - a.score);
 
   return ranked[0] ?? null;
@@ -597,6 +657,7 @@ export async function pickSendableKnowledgeLink(
   userText: string,
   organizationId: string,
   minScore = 2,
+  excludeUrls: Set<string> = new Set(),
 ): Promise<{ title: string; url: string } | null> {
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
@@ -623,8 +684,11 @@ export async function pickSendableKnowledgeLink(
     .filter((d): d is { title: string; url: string; score: number } => d !== null && d.score >= minScore)
     .sort((a, b) => b.score - a.score);
 
-  const top = ranked[0];
-  return top ? { title: top.title, url: top.url } : null;
+  for (const top of ranked) {
+    const norm = normalizeOutboundUrl(top.url);
+    if (!excludeUrls.has(norm)) return { title: top.title, url: top.url };
+  }
+  return null;
 }
 
 export async function listSendableKnowledgeForPrompt(
