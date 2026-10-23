@@ -28,11 +28,18 @@ export async function sendWhatsAppText(
   target: WhatsAppTarget,
   to: string,
   text: string,
+  options?: { previewUrl?: boolean },
 ): Promise<SendResult> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
     return { ok: false, reason: "not_configured" };
   }
+
+  const body = text.slice(0, 4000);
+  const previewUrl =
+    options?.previewUrl ?? /https?:\/\/\S+/i.test(body);
+  const textPayload: { body: string; preview_url?: boolean } = { body };
+  if (previewUrl) textPayload.preview_url = true;
 
   const res = await fetch(
     `https://graph.facebook.com/v21.0/${phoneId}/messages`,
@@ -46,7 +53,7 @@ export async function sendWhatsAppText(
         messaging_product: "whatsapp",
         to: to.replace(/\D/g, ""),
         type: "text",
-        text: { body: text.slice(0, 4000) },
+        text: textPayload,
       }),
     },
   );

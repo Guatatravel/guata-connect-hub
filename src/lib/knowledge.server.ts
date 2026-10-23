@@ -830,13 +830,24 @@ export async function getSendableKnowledgeMediaById(
   };
 }
 
+function mediaOutboundAllowed(
+  userText: string,
+  title: string,
+  keywords: string[],
+): boolean {
+  const kwHit = linkKeywordHit(userText, keywords);
+  const wantsFile = clientWantsKnowledgeFile(userText);
+  const mapBoost = mapDocumentBoost(userText, title, keywords);
+
+  if (keywords.length > 0 && kwHit) return true;
+  if (wantsFile && mapBoost >= 4) return true;
+  return false;
+}
+
 export async function pickSendableKnowledgeMedia(
   userText: string,
   organizationId: string,
-  minScore = 2,
 ): Promise<SendableKnowledgeMedia | null> {
-  const wantsFile = clientWantsKnowledgeFile(userText);
-  const effectiveMin = wantsFile ? 1 : minScore;
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
     .select("id,title,content,file_path,whatsapp_caption,send_keywords")
@@ -855,12 +866,13 @@ export async function pickSendableKnowledgeMedia(
         ? (d.send_keywords as string[])
         : [];
       const title = String(d.title ?? "");
-      const score =
-        scoreSendableMatch(userText, {
-          title,
-          content: String(d.content ?? ""),
-          send_keywords: keywords,
-        }) + mapDocumentBoost(userText, title, keywords);
+      if (!mediaOutboundAllowed(userText, title, keywords)) return null;
+
+      const kwHit = linkKeywordHit(userText, keywords);
+      let score = kwHit ? 6 : 0;
+      score += mapDocumentBoost(userText, title, keywords);
+      if (clientWantsKnowledgeFile(userText)) score += 2;
+
       return {
         id: d.id as string,
         title,
@@ -873,7 +885,7 @@ export async function pickSendableKnowledgeMedia(
     })
     .filter(
       (d): d is SendableKnowledgeMedia =>
-        d !== null && d.score >= effectiveMin,
+        d !== null && d.score >= 4,
     )
     .sort((a, b) => b.score - a.score);
 
@@ -929,9 +941,9 @@ export async function pickSendableKnowledgeLink(
   for (const top of ranked) {
     const norm = normalizeOutboundUrl(top.url);
     if (excludeUrls.has(norm)) continue;
+    if (top.keywords.length === 0) continue;
+    if (!linkKeywordHit(userText, top.keywords)) continue;
     if (isCommercialAgencyUrl(top.url) && !commercialIntent) continue;
-    if (top.keywords.length > 0 && !linkKeywordHit(userText, top.keywords)) continue;
-    if (top.keywords.length === 0 && isCommercialAgencyUrl(top.url)) continue;
     return { title: top.title, url: top.url };
   }
   return null;

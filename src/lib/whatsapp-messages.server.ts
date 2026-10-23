@@ -7,7 +7,7 @@ import { normalizeAgencyNameInText } from "@/lib/agency-branding";
 export const WHATSAPP_BUBBLE_MAX = 600;
 
 /** Alvo de balões antes de agrupar o restante (sem descartar texto). */
-export const WHATSAPP_BUBBLE_MAX_COUNT = 8;
+export const WHATSAPP_BUBBLE_MAX_COUNT = 3;
 
 /** Remove eco de anexo (📎 título) que a IA copia do catálogo — o PDF vai em mensagem separada. */
 export function stripAutoMediaEcho(text: string): string {
