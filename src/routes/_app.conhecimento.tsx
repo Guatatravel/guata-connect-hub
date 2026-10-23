@@ -26,6 +26,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { CampaignsTab } from "@/components/guata/campaigns-tab";
 import {
+  isKnowledgePdf,
+  matchesKnowledgeListFilter,
+  type KnowledgeListFilter,
+} from "@/lib/knowledge-doc-ui";
+import {
   listKnowledge,
   addKnowledgeTextDoc,
   addKnowledgeLinkDoc,
@@ -127,6 +132,19 @@ function KnowledgeBasePanel() {
   const [filePdfSendable, setFilePdfSendable] = useState(false);
   const [filePdfKeywords, setFilePdfKeywords] = useState("");
   const [filePdfCaption, setFilePdfCaption] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [fileTitle, setFileTitle] = useState("");
+  const [fileDescription, setFileDescription] = useState("");
+  const [listFilter, setListFilter] = useState<KnowledgeListFilter>("all");
+
+  const LIST_FILTERS: { id: KnowledgeListFilter; label: string }[] = [
+    { id: "all", label: "Todos" },
+    { id: "link", label: "Links" },
+    { id: "pdf", label: "PDFs" },
+    { id: "imagem", label: "Imagens" },
+    { id: "texto", label: "Textos" },
+    { id: "arquivo", label: "Outros arquivos" },
+  ];
 
   const { data, isLoading } = useQuery({
     queryKey: ["knowledge"],
@@ -135,9 +153,15 @@ function KnowledgeBasePanel() {
 
   const filteredDocs = useMemo(() => {
     if (!data) return [];
+    let rows = data.filter((doc) =>
+      matchesKnowledgeListFilter(
+        { source_type: doc.source_type, title: doc.title },
+        listFilter,
+      ),
+    );
     const q = listSearch.trim().toLowerCase();
-    if (!q) return data;
-    return data.filter((doc) => {
+    if (!q) return rows;
+    return rows.filter((doc) => {
       const hay = [
         doc.title,
         doc.preview,
@@ -149,7 +173,7 @@ function KnowledgeBasePanel() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [data, listSearch]);
+  }, [data, listSearch, listFilter]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["knowledge"] });
   const onError = (e: unknown) =>
@@ -227,6 +251,9 @@ function KnowledgeBasePanel() {
         payload.sendable = editSendable;
         payload.keywords = editKeywords;
         payload.caption = editCaption;
+        if (isKnowledgePdf({ source_type: editing.source_type, title: editing.title })) {
+          payload.content = editContent;
+        }
       }
       return updateDoc({ data: payload as never });
     },
@@ -239,20 +266,23 @@ function KnowledgeBasePanel() {
   });
 
   const fileMutation = useMutation({
-    mutationFn: async (file: File) => {
-      if (file.size > MAX_BYTES) throw new Error("Arquivo maior que 8 MB");
-      const base64 = await fileToBase64(file);
-      const isPdf = file.name.toLowerCase().endsWith(".pdf");
+    mutationFn: async () => {
+      if (!pendingFile) throw new Error("Escolha um arquivo primeiro");
+      if (pendingFile.size > MAX_BYTES) throw new Error("Arquivo maior que 8 MB");
+      const base64 = await fileToBase64(pendingFile);
+      const isPdf = pendingFile.name.toLowerCase().endsWith(".pdf");
+      const title = fileTitle.trim() || pendingFile.name;
       return addFile({
         data: {
-          filename: file.name,
+          filename: pendingFile.name,
           base64,
-          title: file.name,
+          title,
           ...(isPdf
             ? {
                 sendable: filePdfSendable,
                 keywords: filePdfKeywords,
                 caption: filePdfCaption,
+                description: fileDescription.trim(),
               }
             : {}),
         },
@@ -260,6 +290,9 @@ function KnowledgeBasePanel() {
     },
     onSuccess: () => {
       toast.success("Arquivo processado e adicionado");
+      setPendingFile(null);
+      setFileTitle("");
+      setFileDescription("");
       setFilePdfSendable(false);
       setFilePdfKeywords("");
       setFilePdfCaption("");
@@ -335,30 +368,9 @@ function KnowledgeBasePanel() {
 
             <TabsContent value="arquivo" className="space-y-3 pt-4">
               <p className="text-sm text-muted-foreground">
-                PDF, Word, planilhas, texto ou imagens (PNG/JPG), até 8 MB. Imagens
-                promocionais: use a aba &quot;Imagem WhatsApp&quot;.
+                PDF, Word, planilhas ou texto, até 8 MB. Escolha o arquivo, preencha o
+                título e envie. Imagens promocionais: aba &quot;Imagem WhatsApp&quot;.
               </p>
-              <div className="rounded-lg border p-3 space-y-3">
-                <p className="text-xs font-medium text-primary">PDF enviável no WhatsApp (opcional)</p>
-                <div className="flex items-center gap-2">
-                  <Switch checked={filePdfSendable} onCheckedChange={setFilePdfSendable} />
-                  <Label>Enviar PDF ao cliente quando relevante</Label>
-                </div>
-                {filePdfSendable && (
-                  <>
-                    <Input
-                      value={filePdfKeywords}
-                      onChange={(e) => setFilePdfKeywords(e.target.value)}
-                      placeholder="Palavras-chave (vírgula)"
-                    />
-                    <Input
-                      value={filePdfCaption}
-                      onChange={(e) => setFilePdfCaption(e.target.value)}
-                      placeholder="Legenda no WhatsApp (opcional)"
-                    />
-                  </>
-                )}
-              </div>
               <input
                 ref={inputRef}
                 type="file"
@@ -366,16 +378,68 @@ function KnowledgeBasePanel() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) fileMutation.mutate(file);
+                  if (file) {
+                    setPendingFile(file);
+                    setFileTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "));
+                  }
                   e.target.value = "";
                 }}
               />
-              <Button
-                onClick={() => inputRef.current?.click()}
-                disabled={fileMutation.isPending}
-              >
+              <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
                 <Upload className="h-4 w-4 mr-2" />
-                {fileMutation.isPending ? "Processando..." : "Escolher arquivo"}
+                Escolher arquivo
+              </Button>
+              {pendingFile && (
+                <p className="text-sm text-muted-foreground">
+                  Arquivo: <span className="font-medium text-foreground">{pendingFile.name}</span>{" "}
+                  ({formatSize(pendingFile.size)})
+                </p>
+              )}
+              <div className="space-y-2">
+                <Label>Título na base</Label>
+                <Input
+                  value={fileTitle}
+                  onChange={(e) => setFileTitle(e.target.value)}
+                  placeholder="Ex.: Mapa turístico Campo Grande 2025"
+                />
+              </div>
+              {pendingFile?.name.toLowerCase().endsWith(".pdf") && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  <p className="text-xs font-medium text-primary">PDF no WhatsApp (opcional)</p>
+                  <div className="space-y-2">
+                    <Label>Descrição para a IA</Label>
+                    <Textarea
+                      rows={2}
+                      value={fileDescription}
+                      onChange={(e) => setFileDescription(e.target.value)}
+                      placeholder="Ex.: Mapa turístico oficial de Campo Grande — pontos culturais e parques."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={filePdfSendable} onCheckedChange={setFilePdfSendable} />
+                    <Label>Enviar PDF ao cliente quando relevante</Label>
+                  </div>
+                  {filePdfSendable && (
+                    <>
+                      <Input
+                        value={filePdfKeywords}
+                        onChange={(e) => setFilePdfKeywords(e.target.value)}
+                        placeholder="Palavras-chave (vírgula): mapa, campo grande"
+                      />
+                      <Input
+                        value={filePdfCaption}
+                        onChange={(e) => setFilePdfCaption(e.target.value)}
+                        placeholder="Legenda no WhatsApp (opcional)"
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+              <Button
+                onClick={() => fileMutation.mutate()}
+                disabled={fileMutation.isPending || !pendingFile}
+              >
+                {fileMutation.isPending ? "Processando..." : "Enviar para a base"}
               </Button>
             </TabsContent>
 
@@ -557,9 +621,12 @@ function KnowledgeBasePanel() {
               </>
             )}
             {editing.source_type === "arquivo" &&
-              (editing.title.toLowerCase().endsWith(".pdf") ||
-                editing.preview.toLowerCase().includes(".pdf")) && (
+              isKnowledgePdf({ source_type: editing.source_type, title: editing.title }) && (
                 <>
+                  <div className="space-y-2">
+                    <Label>Descrição para a IA</Label>
+                    <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+                  </div>
                   <div className="space-y-2">
                     <Label>Palavras-chave</Label>
                     <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
@@ -614,6 +681,19 @@ function KnowledgeBasePanel() {
           <CardTitle className="text-base">
             Conteúdos cadastrados {data ? `(${filteredDocs.length}/${data.length})` : ""}
           </CardTitle>
+          <div className="flex flex-wrap gap-2">
+            {LIST_FILTERS.map((f) => (
+              <Button
+                key={f.id}
+                type="button"
+                size="sm"
+                variant={listFilter === f.id ? "default" : "outline"}
+                onClick={() => setListFilter(f.id)}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -648,7 +728,11 @@ function KnowledgeBasePanel() {
                   <Badge variant="outline">{doc.source_type}</Badge>
                   {doc.whatsapp_sendable && (
                     <Badge className="bg-emerald-600">
-                      {doc.source_type === "link" ? "envia link" : "envia no WhatsApp"}
+                      {doc.source_type === "link"
+                        ? "envia link"
+                        : isKnowledgePdf({ source_type: doc.source_type, title: doc.title })
+                          ? "envia PDF"
+                          : "envia no WhatsApp"}
                     </Badge>
                   )}
                   {doc.url && (

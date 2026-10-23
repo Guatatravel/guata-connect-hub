@@ -435,7 +435,7 @@ async function answerTurismo(
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
     `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- MS é sua casa — destaque MS quando relevante; em assuntos internacionais, seja útil e breve e só então ligue à ${AGENCY_NAME} se for viagem sob medida.\n- Parceiros Descubra MS no contexto podem ser recomendados.\n` +
     `\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE (ex.: 'Quer que eu chame um consultor da ${AGENCY_NAME}?') e termine com [[OFERTA_HUMANO]].\n` +
-    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
+    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- NUNCA diga que não pode enviar PDF, mapa, imagem ou arquivo no WhatsApp — o sistema pode anexar após sua resposta.\n- Se o cliente pedir mapa/PDF/arquivo, responda com conteúdo útil; não invente bloqueio técnico.\n- Não cite link de agência comercial em pergunta só informativa (mapa, atração, roteiro).\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
       : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
@@ -444,9 +444,16 @@ async function answerTurismo(
       : "") +
     leadStagePromptSection(leadStage, AGENCY_NAME, { mayOfferTravelHook }) +
     (sendableCatalog.length > 0
-      ? "\n\n## MÍDIAS NO WHATSAPP\n" +
-        "Se o cliente pedir promoção, cartaz, flyer ou o assunto bater com um item abaixo, você pode enviar a imagem automaticamente — termine a resposta com [[ENVIAR_MIDIA:ID]] (um ID só, da lista). Não envie mídia sem necessidade.\n" +
-        sendableCatalog.map((s) => `- ${s.id}: ${s.title} — ${s.hint}`).join("\n")
+      ? "\n\n## ARQUIVOS NO WHATSAPP\n" +
+        "Itens marcados para envio automático após sua mensagem (não diga que é impossível):\n" +
+        sendableCatalog
+          .map((s) => {
+            if (s.kind === "pdf") {
+              return `- PDF ${s.id}: ${s.title} — ${s.hint} (o sistema envia o PDF; não use [[ENVIAR_MIDIA]] para este item)`;
+            }
+            return `- Imagem ${s.id}: ${s.title} — ${s.hint} (se for o caso, termine com [[ENVIAR_MIDIA:${s.id}]])`;
+          })
+          .join("\n")
       : "");
 
   const raw = await chatCompletion(

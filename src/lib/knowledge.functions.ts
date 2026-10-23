@@ -114,6 +114,7 @@ export const addKnowledgeFileDoc = createServerFn({ method: "POST" })
       sendable?: boolean;
       keywords?: string;
       caption?: string;
+      description?: string;
     }) => ({
       filename: String(input?.filename ?? "arquivo"),
       base64: String(input?.base64 ?? ""),
@@ -121,6 +122,7 @@ export const addKnowledgeFileDoc = createServerFn({ method: "POST" })
       sendable: Boolean(input?.sendable),
       keywords: String(input?.keywords ?? ""),
       caption: String(input?.caption ?? "").slice(0, 1024),
+      description: String(input?.description ?? "").slice(0, 4000),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -142,6 +144,7 @@ export const addKnowledgeFileDoc = createServerFn({ method: "POST" })
         whatsappSendable: data.sendable,
         keywords,
         caption: data.caption,
+        description: data.description,
       },
     );
     return { ok: true };

@@ -119,6 +119,32 @@ function isPdfPath(pathOrName: string): boolean {
   return pathOrName.toLowerCase().endsWith(".pdf");
 }
 
+/** Cliente pede arquivo (mapa, PDF, envio). */
+export function clientWantsKnowledgeFile(userText: string): boolean {
+  return /\b(mapa|pdf|arquivo|folheto|cartaz|anexo)\b/i.test(userText) ||
+    /\b(mand(ar|e)|envi(ar|e)|manda)\b.*\b(mapa|pdf|arquivo|folheto)\b/i.test(userText) ||
+    /\b(mapa|pdf|arquivo)\b.*\b(aqui|whatsapp|chat|por\s+aqui)\b/i.test(userText);
+}
+
+function isCommercialAgencyUrl(url: string): boolean {
+  return /agenciaguata\.com/i.test(url);
+}
+
+function linkKeywordHit(userText: string, keywords: string[]): boolean {
+  if (keywords.length === 0) return false;
+  const q = userText.toLowerCase();
+  return keywords.some((kw) => kw.length > 0 && q.includes(kw.toLowerCase()));
+}
+
+function mapDocumentBoost(userText: string, title: string, keywords: string[]): number {
+  if (!/\bmapa\b/i.test(userText)) return 0;
+  let b = 0;
+  const hay = `${title} ${keywords.join(" ")}`.toLowerCase();
+  if (hay.includes("mapa")) b += 4;
+  if (/\b(campo\s*grande|cg)\b/i.test(userText) && hay.includes("campo")) b += 3;
+  return b;
+}
+
 export function knowledgeFileDelivery(
   filePath: string,
 ): "image" | "document" | "unsupported" {
@@ -234,6 +260,7 @@ export async function addKnowledgeFile(
     whatsappSendable?: boolean;
     keywords?: string[];
     caption?: string;
+    description?: string;
   },
 ): Promise<void> {
   const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -253,8 +280,14 @@ export async function addKnowledgeFile(
       content = await extractFromFile(filename, binary);
       if (!content) throw new Error("Nenhum texto legível encontrado no arquivo");
     } catch (e) {
-      status = "erro";
-      err = e instanceof Error ? e.message : String(e);
+      if (isPdfPath(filename)) {
+        status = "pronto";
+        content = clean(title?.trim() || "Mapa ou documento em PDF");
+        err = null;
+      } else {
+        status = "erro";
+        err = e instanceof Error ? e.message : String(e);
+      }
     }
   }
 
@@ -262,6 +295,10 @@ export async function addKnowledgeFile(
     .from("knowledge")
     .upload(path, binary, { upsert: true })
     .catch(() => undefined);
+
+  if (opts?.description?.trim() && isPdfPath(filename) && status === "pronto") {
+    content = clean(opts.description.trim());
+  }
 
   const pdfSendable =
     source_type === "arquivo" &&
@@ -457,6 +494,13 @@ export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Prom
     if (input.title !== undefined) patch.title = input.title.trim().slice(0, 160);
     const path = existing.file_path ?? "";
     if (isPdfPath(path) || isPdfPath(existing.title)) {
+      if (input.content !== undefined) {
+        const text = clean(input.content);
+        if (text) {
+          patch.content = text;
+          patch.size_bytes = text.length;
+        }
+      }
       if (input.whatsappSendable !== undefined) patch.whatsapp_sendable = input.whatsappSendable;
       if (input.keywords !== undefined) {
         patch.send_keywords = input.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
@@ -612,6 +656,8 @@ export async function pickSendableKnowledgeMedia(
   organizationId: string,
   minScore = 2,
 ): Promise<SendableKnowledgeMedia | null> {
+  const wantsFile = clientWantsKnowledgeFile(userText);
+  const effectiveMin = wantsFile ? 1 : minScore;
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
     .select("id,title,content,file_path,whatsapp_caption,send_keywords")
@@ -629,14 +675,16 @@ export async function pickSendableKnowledgeMedia(
       const keywords = Array.isArray(d.send_keywords)
         ? (d.send_keywords as string[])
         : [];
-      const score = scoreSendableMatch(userText, {
-        title: String(d.title ?? ""),
-        content: String(d.content ?? ""),
-        send_keywords: keywords,
-      });
+      const title = String(d.title ?? "");
+      const score =
+        scoreSendableMatch(userText, {
+          title,
+          content: String(d.content ?? ""),
+          send_keywords: keywords,
+        }) + mapDocumentBoost(userText, title, keywords);
       return {
         id: d.id as string,
-        title: String(d.title ?? ""),
+        title,
         file_path,
         caption: (d.whatsapp_caption as string) ?? null,
         score,
@@ -646,7 +694,7 @@ export async function pickSendableKnowledgeMedia(
     })
     .filter(
       (d): d is SendableKnowledgeMedia =>
-        d !== null && d.score >= minScore,
+        d !== null && d.score >= effectiveMin,
     )
     .sort((a, b) => b.score - a.score);
 
@@ -659,6 +707,8 @@ export async function pickSendableKnowledgeLink(
   minScore = 2,
   excludeUrls: Set<string> = new Set(),
 ): Promise<{ title: string; url: string } | null> {
+  if (clientWantsKnowledgeFile(userText)) return null;
+
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
     .select("title,content,url,send_keywords")
@@ -679,36 +729,64 @@ export async function pickSendableKnowledgeLink(
         content: `${String(d.content ?? "")} ${url}`,
         send_keywords: keywords,
       });
-      return { title: String(d.title ?? ""), url, score };
+      return {
+        title: String(d.title ?? ""),
+        url,
+        score,
+        keywords,
+      };
     })
-    .filter((d): d is { title: string; url: string; score: number } => d !== null && d.score >= minScore)
+    .filter((d): d is { title: string; url: string; score: number; keywords: string[] } => {
+      if (d === null || d.score < minScore) return false;
+      return true;
+    })
     .sort((a, b) => b.score - a.score);
+
+  const commercialIntent =
+    /\b(pacote|orçamento|orcamento|reservar|comprar|contratar|agência|agencia|viagem\s+sob\s+medida)\b/i.test(
+      userText,
+    );
 
   for (const top of ranked) {
     const norm = normalizeOutboundUrl(top.url);
-    if (!excludeUrls.has(norm)) return { title: top.title, url: top.url };
+    if (excludeUrls.has(norm)) continue;
+    if (isCommercialAgencyUrl(top.url) && !commercialIntent) continue;
+    if (top.keywords.length > 0 && !linkKeywordHit(userText, top.keywords)) continue;
+    if (top.keywords.length === 0 && isCommercialAgencyUrl(top.url)) continue;
+    return { title: top.title, url: top.url };
   }
   return null;
 }
 
 export async function listSendableKnowledgeForPrompt(
   organizationId: string,
-): Promise<Array<{ id: string; title: string; hint: string }>> {
+): Promise<Array<{ id: string; title: string; hint: string; kind: "image" | "pdf" }>> {
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
-    .select("id,title,content,send_keywords")
+    .select("id,title,content,send_keywords,source_type,file_path")
     .eq("organization_id", organizationId)
     .eq("status", "pronto")
     .eq("whatsapp_sendable", true)
     .limit(12);
-  return (data ?? []).map((d) => {
-    const kws = Array.isArray(d.send_keywords) ? (d.send_keywords as string[]).join(", ") : "";
-    return {
-      id: d.id as string,
-      title: String(d.title ?? ""),
-      hint: [String(d.content ?? "").slice(0, 120), kws ? `Palavras: ${kws}` : ""]
-        .filter(Boolean)
-        .join(" — "),
-    };
-  });
+  return (data ?? [])
+    .map((d) => {
+      const file_path = String(d.file_path ?? "");
+      const delivery =
+        d.source_type === "imagem" || knowledgeFileDelivery(file_path) === "image"
+          ? "image"
+          : knowledgeFileDelivery(file_path) === "document"
+            ? "pdf"
+            : null;
+      if (!delivery) return null;
+      const kws = Array.isArray(d.send_keywords) ? (d.send_keywords as string[]).join(", ") : "";
+      return {
+        id: d.id as string,
+        title: String(d.title ?? ""),
+        hint: [String(d.content ?? "").slice(0, 120), kws ? `Palavras: ${kws}` : ""]
+          .filter(Boolean)
+          .join(" — "),
+        kind: delivery,
+      };
+    })
+    .filter((x): x is { id: string; title: string; hint: string; kind: "image" | "pdf" } => x !== null);
 }
