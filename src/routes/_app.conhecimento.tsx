@@ -26,6 +26,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { CampaignsTab } from "@/components/guata/campaigns-tab";
 import {
+  defaultKnowledgeTitleFromFilename,
   isKnowledgePdf,
   matchesKnowledgeListFilter,
   type KnowledgeListFilter,
@@ -304,6 +305,7 @@ function KnowledgeBasePanel() {
           storagePath,
           filename: pendingFile.name,
           title,
+          expectedSizeBytes: pendingFile.size,
           ...(isPdf
             ? {
                 sendable: filePdfSendable,
@@ -408,7 +410,7 @@ function KnowledgeBasePanel() {
                   const file = e.target.files?.[0];
                   if (file) {
                     setPendingFile(file);
-                    setFileTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "));
+                    setFileTitle(defaultKnowledgeTitleFromFilename(file.name));
                   }
                   e.target.value = "";
                 }}

@@ -137,6 +137,7 @@ export const registerKnowledgeFileDoc = createServerFn({ method: "POST" })
       keywords?: string;
       caption?: string;
       description?: string;
+      expectedSizeBytes?: number;
     }) => ({
       storagePath: String(input?.storagePath ?? ""),
       filename: String(input?.filename ?? "arquivo"),
@@ -145,6 +146,7 @@ export const registerKnowledgeFileDoc = createServerFn({ method: "POST" })
       keywords: String(input?.keywords ?? ""),
       caption: String(input?.caption ?? "").slice(0, 1024),
       description: String(input?.description ?? "").slice(0, 4000),
+      expectedSizeBytes: Math.max(0, Number(input?.expectedSizeBytes ?? 0)),
     }),
   )
   .handler(async ({ data, context }) => {
@@ -168,6 +170,7 @@ export const registerKnowledgeFileDoc = createServerFn({ method: "POST" })
         caption: data.caption,
         description: data.description,
       },
+      data.expectedSizeBytes > 0 ? data.expectedSizeBytes : 1,
     );
     return { ok: true };
   });

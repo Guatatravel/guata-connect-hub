@@ -3,6 +3,7 @@
  * Extrai texto de PDF, Word, planilhas, texto puro e links.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { defaultKnowledgeTitleFromFilename } from "@/lib/knowledge-doc-ui";
 import { normalizeOutboundUrl } from "@/lib/session-sent-urls.server";
 
 const MAX_CONTENT = 200_000;
@@ -138,6 +139,61 @@ type KnowledgeFileInsertOpts = {
   description?: string;
 };
 
+function normalizeKnowledgeTitle(title?: string, filename?: string): string {
+  const t = title?.trim() ?? "";
+  const f = filename?.trim() ?? "";
+  if (!t || /\.pdf(\s+\d+)?$/i.test(t) || (f && t === f)) {
+    return defaultKnowledgeTitleFromFilename(f || t || "documento.pdf");
+  }
+  return t.slice(0, 160);
+}
+
+/** Legenda enviada à Meta — ignora título/nome de arquivo duplicado. */
+export function knowledgeWhatsappDocumentCaption(
+  caption: string | null | undefined,
+  title: string,
+): string | undefined {
+  const c = caption?.trim();
+  if (!c) return undefined;
+  const t = title.trim();
+  if (c === t) return undefined;
+  if (/\.pdf(\s+\d+)?$/i.test(c)) return undefined;
+  return c.slice(0, 1024);
+}
+
+export function knowledgeWhatsappDocumentFilename(
+  storageBasename: string,
+  title: string,
+): string {
+  const dash = storageBasename.indexOf("-");
+  const fromStorage =
+    dash >= 0 ? storageBasename.slice(dash + 1) : storageBasename;
+  if (fromStorage.toLowerCase().endsWith(".pdf")) {
+    return fromStorage.slice(0, 240);
+  }
+  const t = normalizeKnowledgeTitle(title, fromStorage);
+  const safe = t.replace(/[^\w\s.\-àáâãéêíóôõúçÀÁÂÃÉÊÍÓÔÕÚÇ]/g, "").trim();
+  return `${safe || "documento"}.pdf`.slice(0, 240);
+}
+
+async function downloadKnowledgeMediaBytesWithRetry(
+  filePath: string,
+  expectedMinBytes = 1,
+): Promise<Uint8Array> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const bytes = await downloadKnowledgeMediaBytes(filePath);
+    if (bytes && bytes.length >= expectedMinBytes) return bytes;
+    await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
+  }
+  throw new Error(
+    "Arquivo ainda não apareceu no storage. Aguarde um instante e clique em Enviar para a base de novo.",
+  );
+}
+
+function storeWhatsappCaption(caption?: string, title?: string): string | null {
+  return knowledgeWhatsappDocumentCaption(caption, title ?? "") ?? null;
+}
+
 async function insertKnowledgeFileRecord(
   userId: string,
   organizationId: string,
@@ -186,8 +242,10 @@ async function insertKnowledgeFileRecord(
     Boolean(opts?.whatsappSendable) &&
     status === "pronto";
 
+  const docTitle = normalizeKnowledgeTitle(title, filename);
+
   const { error } = await supabaseAdmin.from("knowledge_documents").insert({
-    title: title || filename,
+    title: docTitle,
     source_type,
     file_path: path,
     content,
@@ -202,7 +260,7 @@ async function insertKnowledgeFileRecord(
           send_keywords: (opts?.keywords ?? [])
             .map((k) => k.trim().toLowerCase())
             .filter(Boolean),
-          whatsapp_caption: opts?.caption?.trim().slice(0, 1024) || null,
+          whatsapp_caption: storeWhatsappCaption(opts?.caption, docTitle),
         }
       : {}),
   });
@@ -403,14 +461,10 @@ export async function addKnowledgeFileFromStorage(
   filename: string,
   title?: string,
   opts?: KnowledgeFileInsertOpts,
+  expectedMinBytes = 1,
 ): Promise<void> {
   assertKnowledgeStoragePathOwned(storagePath, userId);
-  const binary = await downloadKnowledgeMediaBytes(storagePath);
-  if (!binary || binary.length === 0) {
-    throw new Error(
-      "Arquivo não encontrado no storage ou está vazio. Confira o bucket knowledge e envie de novo.",
-    );
-  }
+  const binary = await downloadKnowledgeMediaBytesWithRetry(storagePath, expectedMinBytes);
   await insertKnowledgeFileRecord(
     userId,
     organizationId,
@@ -599,7 +653,8 @@ export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Prom
         patch.send_keywords = input.keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
       }
       if (input.caption !== undefined) {
-        patch.whatsapp_caption = input.caption.slice(0, 1024) || null;
+        const docTitle = String(patch.title ?? existing.title ?? "");
+        patch.whatsapp_caption = storeWhatsappCaption(input.caption, docTitle);
       }
       if (input.replaceStoragePath && input.replaceFilename && input.userId) {
         assertKnowledgeStoragePathOwned(input.replaceStoragePath, input.userId);
