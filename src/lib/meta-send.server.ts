@@ -106,6 +106,119 @@ export async function sendWhatsAppDocument(
   return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
+export async function sendWhatsAppDocumentByMediaId(
+  target: WhatsAppTarget,
+  to: string,
+  mediaId: string,
+  filename = "documento.pdf",
+  caption?: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const document: { id: string; filename: string; caption?: string } = {
+    id: mediaId,
+    filename: filename.slice(0, 240),
+  };
+  if (caption?.trim()) document.caption = caption.trim().slice(0, 1024);
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: to.replace(/\D/g, ""),
+        type: "document",
+        document,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as {
+    messages?: Array<{ id?: string }>;
+  };
+  return { ok: true, messageId: json.messages?.[0]?.id };
+}
+
+/** PDF/documento via upload na Meta (mais confiável que link externo). */
+export async function sendWhatsAppDocumentBytes(
+  target: WhatsAppTarget,
+  to: string,
+  bytes: Uint8Array,
+  filename: string,
+  caption?: string,
+  mimeType = "application/pdf",
+): Promise<SendResult> {
+  const uploaded = await uploadWhatsAppMedia(target, bytes, mimeType, filename);
+  if (!uploaded.ok) return { ok: false, reason: uploaded.reason };
+  return sendWhatsAppDocumentByMediaId(target, to, uploaded.mediaId, filename, caption);
+}
+
+export async function sendWhatsAppImageByMediaId(
+  target: WhatsAppTarget,
+  to: string,
+  mediaId: string,
+  caption?: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const image: { id: string; caption?: string } = { id: mediaId };
+  if (caption?.trim()) image.caption = caption.trim().slice(0, 1024);
+
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${phoneId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: to.replace(/\D/g, ""),
+        type: "image",
+        image,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as {
+    messages?: Array<{ id?: string }>;
+  };
+  return { ok: true, messageId: json.messages?.[0]?.id };
+}
+
+export async function sendWhatsAppImageBytes(
+  target: WhatsAppTarget,
+  to: string,
+  bytes: Uint8Array,
+  filename: string,
+  caption?: string,
+  mimeType = "image/jpeg",
+): Promise<SendResult> {
+  const uploaded = await uploadWhatsAppMedia(target, bytes, mimeType, filename);
+  if (!uploaded.ok) return { ok: false, reason: uploaded.reason };
+  return sendWhatsAppImageByMediaId(target, to, uploaded.mediaId, caption);
+}
+
 export async function sendWhatsAppImage(
   target: WhatsAppTarget,
   to: string,

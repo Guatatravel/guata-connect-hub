@@ -38,6 +38,7 @@ import {
   removeKnowledgeDoc,
   addKnowledgeWhatsAppImageDoc,
   updateKnowledgeDoc,
+  getKnowledgeFileUrl,
 } from "@/lib/knowledge.functions";
 
 type EditDoc = {
@@ -104,6 +105,7 @@ function KnowledgeBasePanel() {
   const addImage = useServerFn(addKnowledgeWhatsAppImageDoc);
   const updateDoc = useServerFn(updateKnowledgeDoc);
   const removeDoc = useServerFn(removeKnowledgeDoc);
+  const fetchFileUrl = useServerFn(getKnowledgeFileUrl);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -178,6 +180,15 @@ function KnowledgeBasePanel() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["knowledge"] });
   const onError = (e: unknown) =>
     toast.error(e instanceof Error ? e.message : "Não foi possível concluir");
+
+  const openStoredFile = async (docId: string) => {
+    try {
+      const { url } = await fetchFileUrl({ data: { id: docId } });
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      onError(e);
+    }
+  };
 
   const textMutation = useMutation({
     mutationFn: () => addText({ data: { title: textTitle, content: textBody } }),
@@ -752,6 +763,27 @@ function KnowledgeBasePanel() {
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                   {doc.error ?? doc.preview ?? ""}
                 </p>
+                {doc.file_path &&
+                  (isKnowledgePdf({
+                    source_type: doc.source_type,
+                    title: doc.title,
+                    file_path: doc.file_path,
+                  }) ||
+                    doc.source_type === "imagem") && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-xs mt-1"
+                      onClick={() => openStoredFile(doc.id)}
+                    >
+                      {doc.source_type === "imagem" ? "Abrir imagem" : "Abrir PDF"}
+                    </Button>
+                  )}
+                {doc.file_path && doc.size_bytes === 0 && doc.source_type === "arquivo" && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Arquivo pode estar ausente no storage — use Abrir PDF para conferir ou envie de novo.
+                  </p>
+                )}
               </div>
               <div className="flex gap-1">
                 <Button

@@ -192,6 +192,23 @@ export const addKnowledgeWhatsAppImageDoc = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const getKnowledgeFileUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { id: string }) => ({ id: String(input?.id ?? "") }))
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { signedKnowledgeMediaUrlForDoc } = await import("@/lib/knowledge.server");
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const url = await signedKnowledgeMediaUrlForDoc(data.id, orgId);
+    if (!url) {
+      throw new Error(
+        "Arquivo não está no storage. Remova este item e envie o PDF de novo (após aplicar a migration do bucket knowledge).",
+      );
+    }
+    return { url };
+  });
+
 export const removeKnowledgeDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { id: string }) => ({ id: String(input?.id ?? "") }))

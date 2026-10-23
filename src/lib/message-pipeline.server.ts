@@ -16,6 +16,8 @@ import {
   sendWhatsAppAudio,
   sendWhatsAppAudioBytes,
   sendWhatsAppDocument,
+  sendWhatsAppDocumentBytes,
+  sendWhatsAppImageBytes,
   markReadAndTyping,
   typingDelayMs,
 } from "@/lib/meta-send.server";
@@ -435,7 +437,7 @@ async function answerTurismo(
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
     `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- MS é sua casa — destaque MS quando relevante; em assuntos internacionais, seja útil e breve e só então ligue à ${AGENCY_NAME} se for viagem sob medida.\n- Parceiros Descubra MS no contexto podem ser recomendados.\n` +
     `\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria. Só ofereça um consultor quando o cliente demonstrar intenção clara de comprar/reservar/fechar, ou quando você realmente não souber resolver.\n- Ao oferecer, PERGUNTE (ex.: 'Quer que eu chame um consultor da ${AGENCY_NAME}?') e termine com [[OFERTA_HUMANO]].\n` +
-    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- NUNCA diga que não pode enviar PDF, mapa, imagem ou arquivo no WhatsApp — o sistema pode anexar após sua resposta.\n- Se o cliente pedir mapa/PDF/arquivo, responda com conteúdo útil; não invente bloqueio técnico.\n- Não cite link de agência comercial em pergunta só informativa (mapa, atração, roteiro).\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
+    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- NUNCA diga que não pode enviar PDF, mapa, imagem ou arquivo no WhatsApp — o sistema pode anexar após sua resposta.\n- Não diga que o arquivo \"já está anexado\" ou \"segue em anexo\" — o sistema envia o arquivo sozinho depois do seu texto; só explique o que é o material.\n- Se o cliente pedir mapa/PDF/arquivo, responda com conteúdo útil; não invente bloqueio técnico.\n- Não cite link de agência comercial em pergunta só informativa (mapa, atração, roteiro).\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
       : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
@@ -794,6 +796,7 @@ export async function processMessage(
     const {
       pickSendableKnowledgeMedia,
       getSendableKnowledgeMediaById,
+      downloadKnowledgeMediaBytes,
       signedKnowledgeMediaUrl,
     } = await import("@/lib/knowledge.server");
     const taggedId = session.intake_data?.["_pending_media_doc"] as string | undefined;
@@ -804,11 +807,31 @@ export async function processMessage(
       media = await pickSendableKnowledgeMedia(msg.text, msg.organizationId);
     }
     if (media?.file_path) {
-      const url = await signedKnowledgeMediaUrl(media.file_path);
-      if (url) {
-        await new Promise((r) => setTimeout(r, 800));
-        const sendRes =
+      const bytes = await downloadKnowledgeMediaBytes(media.file_path);
+      await new Promise((r) => setTimeout(r, 800));
+      let sendRes: { ok: boolean; reason?: string };
+      if (bytes && bytes.length > 0) {
+        sendRes =
           media.delivery === "document"
+            ? await sendWhatsAppDocumentBytes(
+                waTarget,
+                msg.phone,
+                bytes,
+                media.filename,
+                media.caption ?? undefined,
+              )
+            : await sendWhatsAppImageBytes(
+                waTarget,
+                msg.phone,
+                bytes,
+                media.filename,
+                media.caption ?? undefined,
+                imageMimeFromFilename(media.filename),
+              );
+      } else {
+        const url = await signedKnowledgeMediaUrl(media.file_path);
+        sendRes = url
+          ? media.delivery === "document"
             ? await sendWhatsAppDocument(
                 waTarget,
                 msg.phone,
@@ -821,21 +844,27 @@ export async function processMessage(
                 msg.phone,
                 url,
                 media.caption ?? undefined,
-              );
-        if (sendRes.ok) {
-          await persistMessage(
-            session.id,
-            "out",
-            "bot",
-            media.caption || `📎 ${media.title}`,
-            {
-              knowledge_doc_id: media.id,
-              media_kind: media.delivery === "document" ? "document" : "image",
-            },
-          );
-        } else {
-          console.error("[meta] mídia base conhecimento:", sendRes.reason);
-        }
+              )
+          : { ok: false, reason: "storage_missing" };
+      }
+      if (sendRes.ok) {
+        await persistMessage(
+          session.id,
+          "out",
+          "bot",
+          media.caption || `📎 ${media.title}`,
+          {
+            knowledge_doc_id: media.id,
+            media_kind: media.delivery === "document" ? "document" : "image",
+          },
+        );
+      } else {
+        console.error("[meta] mídia base conhecimento:", sendRes.reason);
+        await sendWhatsAppText(
+          waTarget,
+          msg.phone,
+          "Não consegui enviar o arquivo agora. Peça de novo em instantes ou fale com um atendente.",
+        );
       }
     }
     if (taggedId) {
@@ -873,4 +902,11 @@ export async function processMessage(
   }
 
   return { replies, sessionId: session.id };
+}
+
+function imageMimeFromFilename(filename: string): string {
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return "image/jpeg";
 }

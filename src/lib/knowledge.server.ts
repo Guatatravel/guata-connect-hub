@@ -192,6 +192,41 @@ export async function signedKnowledgeMediaUrl(filePath: string): Promise<string 
   return data.signedUrl;
 }
 
+export async function uploadKnowledgeObject(
+  path: string,
+  binary: Uint8Array,
+  contentType?: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin.storage.from("knowledge").upload(path, binary, {
+    upsert: true,
+    ...(contentType ? { contentType } : {}),
+  });
+  if (error) throw new Error(`Falha ao salvar arquivo no storage: ${error.message}`);
+}
+
+export async function downloadKnowledgeMediaBytes(
+  filePath: string,
+): Promise<Uint8Array | null> {
+  const { data, error } = await supabaseAdmin.storage.from("knowledge").download(filePath);
+  if (error || !data) return null;
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+export async function signedKnowledgeMediaUrlForDoc(
+  docId: string,
+  organizationId: string,
+): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("knowledge_documents")
+    .select("file_path")
+    .eq("id", docId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  const path = data?.file_path as string | undefined;
+  if (!path) return null;
+  return signedKnowledgeMediaUrl(path);
+}
+
 export async function addKnowledgeText(
   userId: string,
   organizationId: string,
@@ -291,10 +326,8 @@ export async function addKnowledgeFile(
     }
   }
 
-  await supabaseAdmin.storage
-    .from("knowledge")
-    .upload(path, binary, { upsert: true })
-    .catch(() => undefined);
+  const pdfMime = isPdfPath(filename) ? "application/pdf" : undefined;
+  await uploadKnowledgeObject(path, binary, pdfMime);
 
   if (opts?.description?.trim() && isPdfPath(filename) && status === "pronto") {
     content = clean(opts.description.trim());
@@ -496,10 +529,7 @@ export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Prom
     if (isPdfPath(path) || isPdfPath(existing.title)) {
       if (input.content !== undefined) {
         const text = clean(input.content);
-        if (text) {
-          patch.content = text;
-          patch.size_bytes = text.length;
-        }
+        if (text) patch.content = text;
       }
       if (input.whatsappSendable !== undefined) patch.whatsapp_sendable = input.whatsappSendable;
       if (input.keywords !== undefined) {
