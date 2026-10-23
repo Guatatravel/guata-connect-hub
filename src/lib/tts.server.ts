@@ -5,17 +5,19 @@
  * - ELEVENLABS_API_KEY + GUATA_TTS_VOICE_MALE_ID / GUATA_TTS_VOICE_FEMALE_ID
  * - OPENAI_API_KEY + GUATA_TTS_OPENAI_VOICE_MALE (default onyx) / GUATA_TTS_OPENAI_VOICE_FEMALE (default nova)
  */
+import { normalizeAgencyNameInText } from "@/lib/agency-branding";
 import type { BotVoiceProfile } from "@/lib/bot-audio-preference.server";
 
 const MAX_SPEECH_CHARS = 700;
 
 export function plainTextForSpeech(text: string): string {
-  return text
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/https?:\/\/[^\s]+/gi, " link na mensagem ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, MAX_SPEECH_CHARS);
+  return normalizeAgencyNameInText(
+    text
+      .replace(/\*([^*]+)\*/g, "$1")
+      .replace(/https?:\/\/[^\s]+/gi, " link na mensagem ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  ).slice(0, MAX_SPEECH_CHARS);
 }
 
 function maleVoiceId(): string | null {

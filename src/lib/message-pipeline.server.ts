@@ -50,8 +50,10 @@ import {
   organizationUsesDescubra,
 } from "@/lib/organizations.server";
 
-/** Nome comercial da agência (não usar razão social completa no WhatsApp). */
-export const AGENCY_NAME = "Guatá Viagens e Turismo";
+import { AGENCY_COMMERCIAL_NAME } from "@/lib/agency-branding";
+
+/** Nome comercial da agência em prompts e mensagens fixas do bot. */
+export const AGENCY_NAME = AGENCY_COMMERCIAL_NAME;
 
 export interface IncomingMessage {
   organizationId: string;
@@ -89,7 +91,9 @@ async function countUserTurns(sessionId: string): Promise<number> {
 }
 
 function mayTravelHookInReply(text: string): boolean {
-  return /\b(monte isso para você|monte (essa|a) viagem|Guatá Viagens monte)\b/i.test(text);
+  return /\b(monte isso para você|monte (essa|a) viagem|Guat[aá] Viagens(?: e Turismo)? monte)\b/i.test(
+    text,
+  );
 }
 
 async function refreshLeadStage(
@@ -493,7 +497,6 @@ async function deliverTextReplies(
   }
 
   let audioFailReason: string | null = null;
-  let audioNoticeSent = false;
 
   for (let i = 0; i < replies.length; i++) {
     const text = replies[i];
@@ -544,19 +547,8 @@ async function deliverTextReplies(
       }
     }
 
-    if (audioFailReason && !audioNoticeSent) {
-      audioNoticeSent = true;
-      const notice =
-        "Não consegui enviar áudio agora; segue a resposta em texto. (Equipe: ver Configurações → teste de voz.)";
-      await persistMessage(sessionId, "out", "bot", notice, {
-        system_notice: true,
-        tts_error: audioFailReason.slice(0, 500),
-      });
-      await new Promise((r) => setTimeout(r, 400));
-      const noticeRes = await sendWhatsAppText(waTarget, phone, notice).catch(
-        (e) => ({ ok: false, reason: String(e) }) as const,
-      );
-      if (!noticeRes.ok) console.error("[meta] aviso áudio falhou:", noticeRes.reason);
+    if (audioFailReason && i === 0) {
+      console.warn("[bot-audio] TTS/envio falhou; resposta só em texto:", audioFailReason);
     }
 
     const outMeta =

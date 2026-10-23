@@ -1,6 +1,7 @@
 /**
  * Formatação e divisão de texto para envio no WhatsApp (bot e consultor).
  */
+import { normalizeAgencyNameInText } from "@/lib/agency-branding";
 
 /** Tamanho confortável por balão no WhatsApp (várias mensagens em respostas longas). */
 export const WHATSAPP_BUBBLE_MAX = 600;
@@ -9,13 +10,15 @@ export const WHATSAPP_BUBBLE_MAX = 600;
 export const WHATSAPP_BUBBLE_MAX_COUNT = 8;
 
 export function formatForWhatsApp(text: string): string {
-  return text
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/^\s*[*-]\s+/gm, "• ")
-    .replace(/\*\*(.+?)\*\*/g, "*$1*")
-    .replace(/__(.+?)__/g, "_$1_")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return normalizeAgencyNameInText(
+    text
+      .replace(/^#{1,6}\s*/gm, "")
+      .replace(/^\s*[*-]\s+/gm, "• ")
+      .replace(/\*\*(.+?)\*\*/g, "*$1*")
+      .replace(/__(.+?)__/g, "_$1_")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  );
 }
 
 /** Quebra trecho longo em palavras, sem cortar no meio. */
