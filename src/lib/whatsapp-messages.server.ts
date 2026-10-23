@@ -9,15 +9,25 @@ export const WHATSAPP_BUBBLE_MAX = 600;
 /** Alvo de balões antes de agrupar o restante (sem descartar texto). */
 export const WHATSAPP_BUBBLE_MAX_COUNT = 8;
 
+/** Remove eco de anexo (📎 título) que a IA copia do catálogo — o PDF vai em mensagem separada. */
+export function stripAutoMediaEcho(text: string): string {
+  return text
+    .replace(/\s*📎\s*[^\n]+/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function formatForWhatsApp(text: string): string {
   return normalizeAgencyNameInText(
-    text
-      .replace(/^#{1,6}\s*/gm, "")
-      .replace(/^\s*[*-]\s+/gm, "• ")
-      .replace(/\*\*(.+?)\*\*/g, "*$1*")
-      .replace(/__(.+?)__/g, "_$1_")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim(),
+    stripAutoMediaEcho(
+      text
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/^\s*[*-]\s+/gm, "• ")
+        .replace(/\*\*(.+?)\*\*/g, "*$1*")
+        .replace(/__(.+?)__/g, "_$1_")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim(),
+    ),
   );
 }
 

@@ -140,8 +140,9 @@ type KnowledgeFileInsertOpts = {
 };
 
 function normalizeKnowledgeTitle(title?: string, filename?: string): string {
-  const t = title?.trim() ?? "";
+  let t = title?.trim() ?? "";
   const f = filename?.trim() ?? "";
+  if (t) t = t.replace(/\s+\d+$/i, "").trim();
   if (!t || /\.pdf(\s+\d+)?$/i.test(t) || (f && t === f)) {
     return defaultKnowledgeTitleFromFilename(f || t || "documento.pdf");
   }
@@ -149,14 +150,19 @@ function normalizeKnowledgeTitle(title?: string, filename?: string): string {
 }
 
 /** Legenda enviada à Meta — ignora título/nome de arquivo duplicado. */
+function normalizeCaptionCompare(s: string): string {
+  return s.replace(/^\s*📎\s*/i, "").replace(/\s+\d+$/i, "").trim().toLowerCase();
+}
+
 export function knowledgeWhatsappDocumentCaption(
   caption: string | null | undefined,
   title: string,
 ): string | undefined {
-  const c = caption?.trim();
+  const c = caption?.replace(/^\s*📎\s*/i, "").trim();
   if (!c) return undefined;
   const t = title.trim();
   if (c === t) return undefined;
+  if (normalizeCaptionCompare(c) === normalizeCaptionCompare(t)) return undefined;
   if (/\.pdf(\s+\d+)?$/i.test(c)) return undefined;
   return c.slice(0, 1024);
 }
