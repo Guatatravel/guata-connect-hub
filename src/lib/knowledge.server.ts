@@ -119,6 +119,96 @@ function isPdfPath(pathOrName: string): boolean {
   return pathOrName.toLowerCase().endsWith(".pdf");
 }
 
+export function buildKnowledgeStoragePath(userId: string, filename: string): string {
+  const safe = filename.replace(/[^\w.\-]/g, "_").slice(0, 120) || "arquivo";
+  return `${userId}/${Date.now()}-${safe}`;
+}
+
+export function assertKnowledgeStoragePathOwned(storagePath: string, userId: string): void {
+  const prefix = `${userId}/`;
+  if (!storagePath.startsWith(prefix) || storagePath.includes("..")) {
+    throw new Error("Caminho de arquivo inválido.");
+  }
+}
+
+type KnowledgeFileInsertOpts = {
+  whatsappSendable?: boolean;
+  keywords?: string[];
+  caption?: string;
+  description?: string;
+};
+
+async function insertKnowledgeFileRecord(
+  userId: string,
+  organizationId: string,
+  path: string,
+  binary: Uint8Array,
+  filename: string,
+  title?: string,
+  opts?: KnowledgeFileInsertOpts,
+): Promise<void> {
+  if (binary.length === 0) {
+    throw new Error("Arquivo vazio. Envie o PDF de novo.");
+  }
+
+  let content = "";
+  let status = "pronto";
+  let err: string | null = null;
+  let source_type = "arquivo";
+
+  if (isImageFilename(filename)) {
+    source_type = "imagem";
+    content = clean(title ?? filename);
+    if (!content) content = "Imagem promocional";
+  } else {
+    try {
+      content = await extractFromFile(filename, binary);
+      if (!content) throw new Error("Nenhum texto legível encontrado no arquivo");
+    } catch (e) {
+      if (isPdfPath(filename)) {
+        status = "pronto";
+        content = clean(title?.trim() || "Mapa ou documento em PDF");
+        err = null;
+      } else {
+        status = "erro";
+        err = e instanceof Error ? e.message : String(e);
+      }
+    }
+  }
+
+  if (opts?.description?.trim() && isPdfPath(filename) && status === "pronto") {
+    content = clean(opts.description.trim());
+  }
+
+  const pdfSendable =
+    source_type === "arquivo" &&
+    isPdfPath(filename) &&
+    Boolean(opts?.whatsappSendable) &&
+    status === "pronto";
+
+  const { error } = await supabaseAdmin.from("knowledge_documents").insert({
+    title: title || filename,
+    source_type,
+    file_path: path,
+    content,
+    size_bytes: binary.length,
+    status,
+    error: err,
+    created_by: userId,
+    organization_id: organizationId,
+    ...(pdfSendable
+      ? {
+          whatsapp_sendable: true,
+          send_keywords: (opts?.keywords ?? [])
+            .map((k) => k.trim().toLowerCase())
+            .filter(Boolean),
+          whatsapp_caption: opts?.caption?.trim().slice(0, 1024) || null,
+        }
+      : {}),
+  });
+  if (error) throw new Error(error.message);
+}
+
 /** Cliente pede arquivo (mapa, PDF, envio). */
 export function clientWantsKnowledgeFile(userText: string): boolean {
   return /\b(mapa|pdf|arquivo|folheto|cartaz|anexo)\b/i.test(userText) ||
@@ -291,75 +381,45 @@ export async function addKnowledgeFile(
   filename: string,
   base64: string,
   title?: string,
-  opts?: {
-    whatsappSendable?: boolean;
-    keywords?: string[];
-    caption?: string;
-    description?: string;
-  },
+  opts?: KnowledgeFileInsertOpts,
 ): Promise<void> {
   const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const path = `${userId}/${Date.now()}-${filename.replace(/[^\w.\-]/g, "_")}`;
-
-  let content = "";
-  let status = "pronto";
-  let err: string | null = null;
-  let source_type = "arquivo";
-
-  if (isImageFilename(filename)) {
-    source_type = "imagem";
-    content = clean(title ?? filename);
-    if (!content) content = "Imagem promocional";
-  } else {
-    try {
-      content = await extractFromFile(filename, binary);
-      if (!content) throw new Error("Nenhum texto legível encontrado no arquivo");
-    } catch (e) {
-      if (isPdfPath(filename)) {
-        status = "pronto";
-        content = clean(title?.trim() || "Mapa ou documento em PDF");
-        err = null;
-      } else {
-        status = "erro";
-        err = e instanceof Error ? e.message : String(e);
-      }
-    }
+  if (binary.length === 0) {
+    throw new Error(
+      "O servidor não recebeu o arquivo (limite de upload). Tente de novo; o painel envia direto ao Storage.",
+    );
   }
-
+  const path = buildKnowledgeStoragePath(userId, filename);
   const pdfMime = isPdfPath(filename) ? "application/pdf" : undefined;
   await uploadKnowledgeObject(path, binary, pdfMime);
+  await insertKnowledgeFileRecord(userId, organizationId, path, binary, filename, title, opts);
+}
 
-  if (opts?.description?.trim() && isPdfPath(filename) && status === "pronto") {
-    content = clean(opts.description.trim());
+/** Arquivo já enviado ao bucket pelo navegador (evita base64 na server function). */
+export async function addKnowledgeFileFromStorage(
+  userId: string,
+  organizationId: string,
+  storagePath: string,
+  filename: string,
+  title?: string,
+  opts?: KnowledgeFileInsertOpts,
+): Promise<void> {
+  assertKnowledgeStoragePathOwned(storagePath, userId);
+  const binary = await downloadKnowledgeMediaBytes(storagePath);
+  if (!binary || binary.length === 0) {
+    throw new Error(
+      "Arquivo não encontrado no storage ou está vazio. Confira o bucket knowledge e envie de novo.",
+    );
   }
-
-  const pdfSendable =
-    source_type === "arquivo" &&
-    isPdfPath(filename) &&
-    Boolean(opts?.whatsappSendable) &&
-    status === "pronto";
-
-  const { error } = await supabaseAdmin.from("knowledge_documents").insert({
-    title: title || filename,
-    source_type,
-    file_path: path,
-    content,
-    size_bytes: binary.length,
-    status,
-    error: err,
-    created_by: userId,
-    organization_id: organizationId,
-    ...(pdfSendable
-      ? {
-          whatsapp_sendable: true,
-          send_keywords: (opts?.keywords ?? [])
-            .map((k) => k.trim().toLowerCase())
-            .filter(Boolean),
-          whatsapp_caption: opts?.caption?.trim().slice(0, 1024) || null,
-        }
-      : {}),
-  });
-  if (error) throw new Error(error.message);
+  await insertKnowledgeFileRecord(
+    userId,
+    organizationId,
+    storagePath,
+    binary,
+    filename,
+    title,
+    opts,
+  );
 }
 
 export async function addKnowledgeWhatsAppImage(
@@ -443,6 +503,7 @@ export async function getKnowledgeDoc(
 export type KnowledgeUpdateInput = {
   id: string;
   organizationId: string;
+  userId?: string;
   title?: string;
   content?: string;
   url?: string;
@@ -452,6 +513,8 @@ export type KnowledgeUpdateInput = {
   whatsappSendable?: boolean;
   imageBase64?: string;
   imageFilename?: string;
+  replaceStoragePath?: string;
+  replaceFilename?: string;
 };
 
 export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Promise<void> {
@@ -537,6 +600,31 @@ export async function updateKnowledgeDocument(input: KnowledgeUpdateInput): Prom
       }
       if (input.caption !== undefined) {
         patch.whatsapp_caption = input.caption.slice(0, 1024) || null;
+      }
+      if (input.replaceStoragePath && input.replaceFilename && input.userId) {
+        assertKnowledgeStoragePathOwned(input.replaceStoragePath, input.userId);
+        const binary = await downloadKnowledgeMediaBytes(input.replaceStoragePath);
+        if (!binary?.length) {
+          throw new Error("Novo PDF não encontrado no storage. Envie o arquivo de novo.");
+        }
+        if (existing.file_path && existing.file_path !== input.replaceStoragePath) {
+          await supabaseAdmin.storage
+            .from("knowledge")
+            .remove([existing.file_path])
+            .catch(() => undefined);
+        }
+        patch.file_path = input.replaceStoragePath;
+        patch.size_bytes = binary.length;
+        patch.status = "pronto";
+        patch.error = null;
+        if (input.content === undefined) {
+          try {
+            const extracted = await extractFromFile(input.replaceFilename, binary);
+            if (extracted) patch.content = extracted;
+          } catch {
+            /* mantém descrição manual */
+          }
+        }
       }
     }
   }

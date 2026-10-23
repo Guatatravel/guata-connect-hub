@@ -34,12 +34,14 @@ import {
   listKnowledge,
   addKnowledgeTextDoc,
   addKnowledgeLinkDoc,
-  addKnowledgeFileDoc,
+  prepareKnowledgeFileUpload,
+  registerKnowledgeFileDoc,
   removeKnowledgeDoc,
   addKnowledgeWhatsAppImageDoc,
   updateKnowledgeDoc,
   getKnowledgeFileUrl,
 } from "@/lib/knowledge.functions";
+import { uploadFileToKnowledgeBucket } from "@/lib/knowledge-upload.client";
 
 type EditDoc = {
   id: string;
@@ -101,7 +103,8 @@ function KnowledgeBasePanel() {
   const fetchDocs = useServerFn(listKnowledge);
   const addText = useServerFn(addKnowledgeTextDoc);
   const addLink = useServerFn(addKnowledgeLinkDoc);
-  const addFile = useServerFn(addKnowledgeFileDoc);
+  const prepareFileUpload = useServerFn(prepareKnowledgeFileUpload);
+  const registerFile = useServerFn(registerKnowledgeFileDoc);
   const addImage = useServerFn(addKnowledgeWhatsAppImageDoc);
   const updateDoc = useServerFn(updateKnowledgeDoc);
   const removeDoc = useServerFn(removeKnowledgeDoc);
@@ -124,6 +127,7 @@ function KnowledgeBasePanel() {
   const [editSendable, setEditSendable] = useState(false);
   const [editRefreshLink, setEditRefreshLink] = useState(false);
   const [editReplaceImage, setEditReplaceImage] = useState<File | null>(null);
+  const [editReplacePdf, setEditReplacePdf] = useState<File | null>(null);
   const [imgTitle, setImgTitle] = useState("");
   const [imgDesc, setImgDesc] = useState("");
   const [imgKeywords, setImgKeywords] = useState("");
@@ -131,7 +135,7 @@ function KnowledgeBasePanel() {
   const [imgSendable, setImgSendable] = useState(true);
   const [imgFile, setImgFile] = useState<File | null>(null);
   const [listSearch, setListSearch] = useState("");
-  const [filePdfSendable, setFilePdfSendable] = useState(false);
+  const [filePdfSendable, setFilePdfSendable] = useState(true);
   const [filePdfKeywords, setFilePdfKeywords] = useState("");
   const [filePdfCaption, setFilePdfCaption] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -231,6 +235,7 @@ function KnowledgeBasePanel() {
     setEditSendable(doc.whatsapp_sendable);
     setEditRefreshLink(false);
     setEditReplaceImage(null);
+    setEditReplacePdf(null);
   };
 
   const updateMutation = useMutation({
@@ -264,6 +269,14 @@ function KnowledgeBasePanel() {
         payload.caption = editCaption;
         if (isKnowledgePdf({ source_type: editing.source_type, title: editing.title })) {
           payload.content = editContent;
+          if (editReplacePdf) {
+            const { storagePath } = await prepareFileUpload({
+              data: { filename: editReplacePdf.name },
+            });
+            await uploadFileToKnowledgeBucket(storagePath, editReplacePdf);
+            payload.replaceStoragePath = storagePath;
+            payload.replaceFilename = editReplacePdf.name;
+          }
         }
       }
       return updateDoc({ data: payload as never });
@@ -280,13 +293,16 @@ function KnowledgeBasePanel() {
     mutationFn: async () => {
       if (!pendingFile) throw new Error("Escolha um arquivo primeiro");
       if (pendingFile.size > MAX_BYTES) throw new Error("Arquivo maior que 8 MB");
-      const base64 = await fileToBase64(pendingFile);
       const isPdf = pendingFile.name.toLowerCase().endsWith(".pdf");
       const title = fileTitle.trim() || pendingFile.name;
-      return addFile({
+      const { storagePath } = await prepareFileUpload({
+        data: { filename: pendingFile.name },
+      });
+      await uploadFileToKnowledgeBucket(storagePath, pendingFile);
+      return registerFile({
         data: {
+          storagePath,
           filename: pendingFile.name,
-          base64,
           title,
           ...(isPdf
             ? {
@@ -304,7 +320,7 @@ function KnowledgeBasePanel() {
       setPendingFile(null);
       setFileTitle("");
       setFileDescription("");
-      setFilePdfSendable(false);
+      setFilePdfSendable(true);
       setFilePdfKeywords("");
       setFilePdfCaption("");
       invalidate();
@@ -379,8 +395,9 @@ function KnowledgeBasePanel() {
 
             <TabsContent value="arquivo" className="space-y-3 pt-4">
               <p className="text-sm text-muted-foreground">
-                PDF, Word, planilhas ou texto, até 8 MB. Escolha o arquivo, preencha o
-                título e envie. Imagens promocionais: aba &quot;Imagem WhatsApp&quot;.
+                PDF, Word, planilhas ou texto, até 8 MB. O arquivo vai direto ao Supabase
+                Storage (sem passar pelo servidor). Imagens promocionais: aba &quot;Imagem
+                WhatsApp&quot;.
               </p>
               <input
                 ref={inputRef}
@@ -649,6 +666,19 @@ function KnowledgeBasePanel() {
                   <div className="flex items-center gap-2">
                     <Switch checked={editSendable} onCheckedChange={setEditSendable} />
                     <Label>Bot pode enviar este PDF no WhatsApp</Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Substituir PDF (opcional)</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => setEditReplacePdf(e.target.files?.[0] ?? null)}
+                    />
+                    {editReplacePdf && (
+                      <p className="text-xs text-muted-foreground">
+                        Novo arquivo: {editReplacePdf.name} ({formatSize(editReplacePdf.size)})
+                      </p>
+                    )}
                   </div>
                 </>
               )}

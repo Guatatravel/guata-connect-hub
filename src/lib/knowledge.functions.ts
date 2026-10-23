@@ -66,6 +66,8 @@ export const updateKnowledgeDoc = createServerFn({ method: "POST" })
       sendable?: boolean;
       imageBase64?: string;
       imageFilename?: string;
+      replaceStoragePath?: string;
+      replaceFilename?: string;
     }) => ({
       id: String(input?.id ?? ""),
       title: input?.title !== undefined ? String(input.title).slice(0, 160) : undefined,
@@ -77,6 +79,10 @@ export const updateKnowledgeDoc = createServerFn({ method: "POST" })
       sendable: input?.sendable !== undefined ? Boolean(input.sendable) : undefined,
       imageBase64: input?.imageBase64 ? String(input.imageBase64) : undefined,
       imageFilename: input?.imageFilename ? String(input.imageFilename) : undefined,
+      replaceStoragePath: input?.replaceStoragePath
+        ? String(input.replaceStoragePath)
+        : undefined,
+      replaceFilename: input?.replaceFilename ? String(input.replaceFilename) : undefined,
     }),
   )
   .handler(async ({ data, context }) => {
@@ -91,6 +97,7 @@ export const updateKnowledgeDoc = createServerFn({ method: "POST" })
     await updateKnowledgeDocument({
       id: data.id,
       organizationId: orgId,
+      userId: context.userId,
       title: data.title,
       content: data.content,
       url: data.url,
@@ -100,7 +107,68 @@ export const updateKnowledgeDoc = createServerFn({ method: "POST" })
       whatsappSendable: data.sendable,
       imageBase64: data.imageBase64,
       imageFilename: data.imageFilename,
+      replaceStoragePath: data.replaceStoragePath,
+      replaceFilename: data.replaceFilename,
     });
+    return { ok: true };
+  });
+
+export const prepareKnowledgeFileUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { filename: string }) => ({
+    filename: String(input?.filename ?? "arquivo"),
+  }))
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { buildKnowledgeStoragePath } = await import("@/lib/knowledge.server");
+    await requireStaffUser(context.userId);
+    const storagePath = buildKnowledgeStoragePath(context.userId, data.filename);
+    return { storagePath };
+  });
+
+export const registerKnowledgeFileDoc = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      storagePath: string;
+      filename: string;
+      title?: string;
+      sendable?: boolean;
+      keywords?: string;
+      caption?: string;
+      description?: string;
+    }) => ({
+      storagePath: String(input?.storagePath ?? ""),
+      filename: String(input?.filename ?? "arquivo"),
+      title: String(input?.title ?? ""),
+      sendable: Boolean(input?.sendable),
+      keywords: String(input?.keywords ?? ""),
+      caption: String(input?.caption ?? "").slice(0, 1024),
+      description: String(input?.description ?? "").slice(0, 4000),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { addKnowledgeFileFromStorage } = await import("@/lib/knowledge.server");
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const keywords = data.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    await addKnowledgeFileFromStorage(
+      context.userId,
+      orgId,
+      data.storagePath,
+      data.filename,
+      data.title || undefined,
+      {
+        whatsappSendable: data.sendable,
+        keywords,
+        caption: data.caption,
+        description: data.description,
+      },
+    );
     return { ok: true };
   });
 
