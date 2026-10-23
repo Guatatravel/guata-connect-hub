@@ -41,7 +41,7 @@ import {
   updateKnowledgeDoc,
   getKnowledgeFileUrl,
 } from "@/lib/knowledge.functions";
-import { uploadFileToKnowledgeBucket } from "@/lib/knowledge-upload.client";
+import { uploadFileToKnowledgeBucket } from "@/lib/knowledge-storage-upload";
 
 type EditDoc = {
   id: string;
