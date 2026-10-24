@@ -48,6 +48,14 @@ export interface ChatMessage {
   mediaUrl?: string;
   mediaMime?: string;
   mediaFilename?: string;
+  /** Id da mensagem na Meta. Sem ele, o painel não consegue citar no WhatsApp. */
+  waMessageId?: string;
+  /** sent | delivered | read | failed — recibo da Meta, qualquer tipo de mensagem. */
+  deliveryStatus?: "sent" | "delivered" | "read" | "failed";
+  deliveryError?: string;
+  /** Áudio de voz gerado pelo Guatá, mesmo quando o arquivo antigo não foi guardado. */
+  outboundKind?: string;
+  replyTo?: { authorLabel: string; text: string };
 }
 
 export interface Conversation {

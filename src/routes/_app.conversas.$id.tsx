@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, Paperclip, Send } from "lucide-react";
+import { ArrowLeft, FileAudio, Mic, Paperclip, Send, Square, X } from "lucide-react";
 import { DossieCard } from "@/components/guata/dossie-card";
 import { HandoffControls } from "@/components/guata/handoff-controls";
 import { CopilotCard } from "@/components/guata/copilot-card";
+import type { ChatMessage } from "@/types/guata";
 
 export const Route = createFileRoute("/_app/conversas/$id")({
   component: ConversaDetail,
@@ -38,7 +39,22 @@ function ConversaDetail() {
   const qc = useQueryClient();
   const [reply, setReply] = useState("");
   const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [recording, setRecording] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLInputElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+
+  useEffect(() => {
+    if (!attachFile || !attachFile.type.startsWith("image/")) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(attachFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [attachFile]);
 
   const { data: conv, isLoading } = useQuery({
     queryKey: ["conversation", id],
@@ -53,27 +69,30 @@ function ConversaDetail() {
   const replyMut = useMutation({
     mutationFn: async () => {
       let attachment:
-        | { base64: string; contentType: string; filename?: string; kind: "image" | "document" }
+        | { base64: string; contentType: string; filename?: string; kind: "image" | "document" | "audio" }
         | undefined;
       if (attachFile) {
         const file = await fileToBase64(attachFile);
         const isPdf =
           attachFile.type === "application/pdf" ||
           attachFile.name.toLowerCase().endsWith(".pdf");
+        const isAudio = attachFile.type.startsWith("audio/");
         attachment = {
           base64: file.base64,
           contentType: file.type,
           filename: attachFile.name,
-          kind: isPdf ? "document" : "image",
+          kind: isAudio ? "audio" : isPdf ? "document" : "image",
         };
       }
       if (!reply.trim() && !attachment) throw new Error("Informe texto ou anexo.");
-      return api.replyConversation(id, reply.trim(), attachment);
+      return api.replyConversation(id, reply.trim(), attachment, replyTo?.id);
     },
     onSuccess: () => {
       toast.success("Mensagem enviada");
       setReply("");
       setAttachFile(null);
+      setReplyTo(null);
+      if (fileRef.current) fileRef.current.value = "";
       qc.invalidateQueries({ queryKey: ["conversation", id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
       qc.invalidateQueries({ queryKey: ["unread-counts"] });
@@ -107,7 +126,18 @@ function ConversaDetail() {
         <CardContent className="space-y-4">
           <HandoffControls sessionId={conv.id} mode={conv.mode} />
           <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-xl bg-secondary/30 p-4">
-            <ChatTimeline messages={conv.messages} />
+            <ChatTimeline
+              messages={conv.messages}
+              onReply={(message) => {
+                if (!message.waMessageId) {
+                  toast.error(
+                    "Essa mensagem é anterior ao ajuste e não tem o id do WhatsApp para citar.",
+                  );
+                  return;
+                }
+                setReplyTo(message);
+              }}
+            />
           </div>
           <input
             ref={fileRef}
@@ -116,7 +146,73 @@ function ConversaDetail() {
             className="hidden"
             onChange={(e) => setAttachFile(e.target.files?.[0] ?? null)}
           />
-          <div className="flex flex-wrap gap-2 items-center">
+          <input
+            ref={audioRef}
+            type="file"
+            accept="audio/ogg,audio/mpeg,audio/mp4,audio/aac,audio/webm,.mp3,.m4a,.ogg"
+            className="hidden"
+            onChange={(e) => setAttachFile(e.target.files?.[0] ?? null)}
+          />
+          {replyTo && (
+            <div className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs">
+              <div className="min-w-0 flex-1 border-l-2 border-primary pl-2">
+                <div className="font-medium">
+                  Respondendo{" "}
+                  {replyTo.role === "user" ? "o cliente" : replyTo.role === "bot" ? "o Guatá" : "o consultor"}
+                </div>
+                <div className="truncate opacity-70">{replyTo.text || "Mídia"}</div>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyTo(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          {attachFile && (
+            <div className="flex items-start gap-3 rounded-lg border border-border p-2">
+              {previewUrl ? (
+                <img src={previewUrl} alt="Prévia" className="h-20 w-20 rounded-md object-cover" />
+              ) : (
+                <span className="text-xs text-muted-foreground truncate max-w-[200px]">{attachFile.name}</span>
+              )}
+              <div className="min-w-0 flex-1 text-xs text-muted-foreground">
+                {previewUrl
+                  ? "Escreva a legenda abaixo e envie. A imagem e o texto vão juntos, como no WhatsApp."
+                  : attachFile.name}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => {
+                  setAttachFile(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          <div
+            className="flex flex-wrap gap-2 items-center"
+            onPaste={(e) => {
+              const items = e.clipboardData?.items;
+              if (!items) return;
+              for (const item of items) {
+                if (!item.type.startsWith("image/")) continue;
+                const file = item.getAsFile();
+                if (!file) continue;
+                e.preventDefault();
+                const named = new File(
+                  [file],
+                  file.name || `colagem-${Date.now()}.png`,
+                  { type: file.type || "image/png" },
+                );
+                setAttachFile(named);
+                break;
+              }
+            }}
+          >
             <Button
               type="button"
               variant="outline"
@@ -126,14 +222,69 @@ function ConversaDetail() {
             >
               <Paperclip className="h-4 w-4" />
             </Button>
-            {attachFile && (
-              <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                {attachFile.name}
-              </span>
-            )}
+            <Button
+              type="button"
+              variant={recording ? "destructive" : "outline"}
+              size="icon"
+              title={recording ? "Parar gravação" : "Gravar áudio"}
+              onClick={async () => {
+                if (recording && recorderRef.current) {
+                  recorderRef.current.stop();
+                  return;
+                }
+                if (!navigator.mediaDevices?.getUserMedia) {
+                  toast.error("Este navegador não grava áudio. Anexe um MP3 ou OGG.");
+                  return;
+                }
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                  const preferred = [
+                    "audio/ogg;codecs=opus",
+                    "audio/mp4",
+                    "audio/webm;codecs=opus",
+                    "audio/webm",
+                  ].find((t) => MediaRecorder.isTypeSupported(t));
+                  const rec = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+                  const chunks: Blob[] = [];
+                  rec.ondataavailable = (ev) => {
+                    if (ev.data.size > 0) chunks.push(ev.data);
+                  };
+                  rec.onstop = () => {
+                    stream.getTracks().forEach((t) => t.stop());
+                    setRecording(false);
+                    recorderRef.current = null;
+                    const type = (rec.mimeType || "audio/webm").split(";")[0];
+                    const ext = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
+                    setAttachFile(new File(chunks, `audio-${Date.now()}.${ext}`, { type }));
+                  };
+                  recorderRef.current = rec;
+                  rec.start();
+                  setRecording(true);
+                } catch {
+                  toast.error("Não foi possível usar o microfone.");
+                }
+              }}
+            >
+              {recording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => audioRef.current?.click()}
+              title="Anexar áudio"
+            >
+              <FileAudio className="h-4 w-4" />
+            </Button>
             <Input
               className="flex-1 min-w-[200px]"
-              placeholder="Mensagem (legenda se houver anexo)..."
+              placeholder={
+                attachFile?.type.startsWith("audio/")
+                  ? "Texto opcional, enviado depois do áudio..."
+                  : attachFile?.type.startsWith("image/")
+                    ? "Legenda da imagem..."
+                    : "Mensagem (legenda se houver anexo). Cole uma imagem com Ctrl+V."
+              }
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               onKeyDown={(e) => {

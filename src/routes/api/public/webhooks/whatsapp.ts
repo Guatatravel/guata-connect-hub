@@ -141,6 +141,8 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
           if (!normalized?.text) continue;
 
           try {
+            const quotedWaMessageId =
+              typeof msg?.context?.id === "string" ? msg.context.id : undefined;
             await processMessage({
               organizationId,
               line,
@@ -148,10 +150,12 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               contactName,
               text: normalized.text,
               messageId: msgId || undefined,
+              quotedWaMessageId,
               inboundKind: normalized.inboundKind,
               mediaPath: normalized.attachment?.storagePath,
               mediaMime: normalized.attachment?.mimeType,
               mediaKind: normalized.attachment?.mediaKind,
+              mediaFilename: normalized.attachment?.filename,
             });
           } catch (err) {
             const m = err instanceof Error ? err.message : String(err);
@@ -160,12 +164,23 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
           }
         }
 
-        // 3) Registra falhas de envio informadas pela Meta.
+        // 3) Recibos: enviada, entregue, visualizada ou falha — em qualquer tipo de mensagem.
+        const { applyWhatsAppDeliveryStatus } = await import(
+          "@/lib/whatsapp-status.server"
+        );
         for (const st of statuses) {
-          if (st?.status === "failed") {
-            const detail =
-              st?.errors?.[0]?.title ?? st?.errors?.[0]?.message ?? "falha";
-            errors.push(`envio falhou para ${st.recipient_id}: ${detail}`);
+          const waId = String(st?.id ?? "");
+          const status = String(st?.status ?? "");
+          if (!waId || !status) continue;
+          const detail =
+            st?.errors?.[0]?.title ?? st?.errors?.[0]?.message ?? undefined;
+          if (status === "failed") {
+            errors.push(`envio falhou para ${st.recipient_id}: ${detail ?? "falha"}`);
+          }
+          try {
+            await applyWhatsAppDeliveryStatus(waId, status, detail);
+          } catch (err) {
+            console.error("[whatsapp-webhook] status:", err);
           }
         }
 

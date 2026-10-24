@@ -56,8 +56,9 @@ export const api = {
       base64: string;
       contentType: string;
       filename?: string;
-      kind: "image" | "document";
+      kind: "image" | "document" | "audio";
     },
+    replyToMessageId?: string,
   ) {
     return replyAsAgent({
       data: {
@@ -70,6 +71,10 @@ export const api = {
         documentContentType:
           attachment?.kind === "document" ? attachment.contentType : undefined,
         documentFilename: attachment?.filename,
+        audioBase64: attachment?.kind === "audio" ? attachment.base64 : undefined,
+        audioContentType:
+          attachment?.kind === "audio" ? attachment.contentType : undefined,
+        replyToMessageId,
       },
     });
   },

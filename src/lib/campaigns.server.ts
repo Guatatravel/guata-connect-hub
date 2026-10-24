@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   isGuataMetaConfigured,
   sendWhatsAppImage,
+  sendWhatsAppTemplate,
   sendWhatsAppText,
   typingDelayMs,
 } from "@/lib/meta-send.server";
@@ -18,6 +19,7 @@ import type {
   CampaignAudience,
   CampaignLine,
   CampaignRow,
+  CampaignSendMode,
 } from "@/lib/campaigns.types";
 
 export type { CampaignAudience, CampaignLine, CampaignRow } from "@/lib/campaigns.types";
@@ -64,6 +66,40 @@ function withinAudience(lastIn: Date | null, audience: CampaignAudience): boolea
 function withinMetaSessionWindow(lastIn: Date | null): boolean {
   if (!lastIn) return false;
   return Date.now() - lastIn.getTime() <= 24 * 60 * 60 * 1000;
+}
+
+export function parsePhoneList(raw: string | null | undefined): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of (raw ?? "").split(/[\s,;]+/)) {
+    let phone = part.replace(/\D/g, "");
+    if (phone.length === 10 || phone.length === 11) phone = "55" + phone;
+    if (phone.length < 12 || phone.length > 15 || seen.has(phone)) continue;
+    seen.add(phone);
+    out.push(phone);
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
+function campaignFields(input: {
+  sendMode?: CampaignSendMode;
+  templateName?: string;
+  templateLanguage?: string;
+  templateUsesName?: boolean;
+  extraPhones?: string;
+}) {
+  return {
+    send_mode: input.sendMode === "template" ? "template" : "sessao",
+    template_name: input.templateName?.trim() || null,
+    template_language: (input.templateLanguage?.trim() || "pt_BR").slice(0, 16),
+    template_uses_name: input.templateUsesName !== false,
+    extra_phones: input.extraPhones?.trim() || null,
+  };
+}
+
+function renderName(body: string, name: string): string {
+  return body.replaceAll("{nome}", name).replaceAll("{{1}}", name);
 }
 
 export async function listCampaigns(): Promise<CampaignRow[]> {
@@ -122,6 +158,11 @@ export async function updateCampaignDraft(
     imageBase64?: string;
     imageContentType?: string;
     removeImage?: boolean;
+    sendMode?: CampaignSendMode;
+    templateName?: string;
+    templateLanguage?: string;
+    templateUsesName?: boolean;
+    extraPhones?: string;
   },
 ): Promise<CampaignRow> {
   const existing = await getCampaign(id);
@@ -148,6 +189,7 @@ export async function updateCampaignDraft(
       audience: input.audience,
       image_path: imagePath,
       updated_at: new Date().toISOString(),
+      ...campaignFields(input),
     })
     .eq("id", id)
     .select("*")
@@ -181,6 +223,11 @@ export async function duplicateAndLaunchCampaign(
     body: String(src.body ?? ""),
     audience: src.audience as CampaignAudience,
     imagePathReuse: src.image_path,
+    sendMode: src.send_mode === "template" ? "template" : "sessao",
+    templateName: src.template_name ?? undefined,
+    templateLanguage: src.template_language ?? undefined,
+    templateUsesName: src.template_uses_name !== false,
+    extraPhones: src.extra_phones ?? undefined,
   });
   return launchCampaign(draft.id);
 }
@@ -194,7 +241,7 @@ export async function saveCampaignDraft(
   }
   if (input.id) {
     const existing = await getCampaign(input.id);
-    if (!input.body.trim() && !input.imageBase64 && !existing.image_path) {
+    if (input.sendMode !== "template" && !input.body.trim() && !input.imageBase64 && !existing.image_path) {
       throw new Error("Informe o texto ou anexe um cartaz.");
     }
     return updateCampaignDraft(input.id, userId, {
@@ -205,9 +252,14 @@ export async function saveCampaignDraft(
       imageBase64: input.imageBase64,
       imageContentType: input.imageContentType,
       removeImage: false,
+      sendMode: input.sendMode,
+      templateName: input.templateName,
+      templateLanguage: input.templateLanguage,
+      templateUsesName: input.templateUsesName,
+      extraPhones: input.extraPhones,
     });
   }
-  if (!input.body.trim() && !input.imageBase64) {
+  if (input.sendMode !== "template" && !input.body.trim() && !input.imageBase64) {
     throw new Error("Informe o texto ou anexe um cartaz.");
   }
   return createCampaignDraft(userId, {
@@ -217,6 +269,11 @@ export async function saveCampaignDraft(
     audience: input.audience,
     imageBase64: input.imageBase64,
     imageContentType: input.imageContentType,
+    sendMode: input.sendMode,
+    templateName: input.templateName,
+    templateLanguage: input.templateLanguage,
+    templateUsesName: input.templateUsesName,
+    extraPhones: input.extraPhones,
   });
 }
 
@@ -317,6 +374,11 @@ export async function createCampaignDraft(
     imageContentType?: string;
     imagePathReuse?: string | null;
     titleSuffix?: string;
+    sendMode?: CampaignSendMode;
+    templateName?: string;
+    templateLanguage?: string;
+    templateUsesName?: boolean;
+    extraPhones?: string;
   },
 ): Promise<CampaignRow> {
   let imagePath: string | null = input.imagePathReuse ?? null;
@@ -339,6 +401,7 @@ export async function createCampaignDraft(
       image_path: imagePath,
       status: "rascunho",
       created_by: userId,
+      ...campaignFields(input),
     })
     .select("*")
     .single();
@@ -351,6 +414,7 @@ async function persistOutbound(
   text: string,
   meta: Record<string, unknown>,
 ) {
+  if (meta.wa_message_id && !meta.delivery_status) meta.delivery_status = "sent";
   await supabaseAdmin.from("messages").insert({
     session_id: sessionId,
     direction: "out",
@@ -362,6 +426,61 @@ async function persistOutbound(
     .from("sessions")
     .update({ last_message_at: new Date().toISOString() })
     .eq("id", sessionId);
+}
+
+async function ensureSessionForPhone(
+  orgId: string,
+  line: CampaignLine,
+  phone: string,
+): Promise<string> {
+  const { data: existing } = await supabaseAdmin
+    .from("sessions")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("line", line)
+    .eq("phone", phone)
+    .order("last_message_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) return existing.id as string;
+  const { data: created, error } = await supabaseAdmin
+    .from("sessions")
+    .insert({
+      phone,
+      line,
+      organization_id: orgId,
+      mode: "humano",
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id as string;
+}
+
+async function targetsForLaunch(
+  orgId: string,
+  line: CampaignLine,
+  audience: CampaignAudience,
+  extraPhones: string | null,
+): Promise<Array<{ phone: string; session_id: string }>> {
+  const phones = parsePhoneList(extraPhones);
+  if (phones.length === 0) return resolveAudience(line, audience);
+  const out: Array<{ phone: string; session_id: string }> = [];
+  for (const phone of phones) {
+    const session_id = await ensureSessionForPhone(orgId, line, phone);
+    out.push({ phone, session_id });
+  }
+  return out;
+}
+
+async function sessionFirstName(sessionId: string): Promise<string> {
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("contact_name")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const name = String(data?.contact_name ?? "").trim().split(/\s+/)[0];
+  return name || "olá";
 }
 
 export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
@@ -381,7 +500,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
   const audience = campaign.audience as CampaignAudience;
 
   if (campaign.status === "rascunho") {
-    const targets = await resolveAudience(line, audience);
+    const targets = await targetsForLaunch(guataOrgId, line, audience, campaign.extra_phones as string | null);
     if (targets.length === 0) {
       throw new Error(
         "Nenhum contato no público selecionado. Escolha “Todas as conversas da linha” ou garanta que clientes já falaram com esse número (sessões no painel Conversas).",
@@ -404,6 +523,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     throw new Error("Campanha não pode ser enviada neste status.");
   }
 
+  const sendMode = campaign.send_mode === "template" ? "template" : "sessao";
   const imageUrl = campaign.image_path
     ? await campaignImageUrl(campaign.image_path as string)
     : null;
@@ -424,6 +544,66 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     const sessionId = rec.session_id as string;
     const phone = rec.phone as string;
     const lastIn = await lastUserMessageAt(sessionId);
+
+    if (sendMode === "template") {
+      const templateName = String(campaign.template_name ?? "").trim();
+      if (!templateName) {
+        sentFail += 1;
+        await supabaseAdmin
+          .from("broadcast_recipients")
+          .update({
+            status: "falhou",
+            error: "template_sem_nome",
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", rec.id);
+        continue;
+      }
+      try {
+        const first = campaign.template_uses_name === false ? "" : await sessionFirstName(sessionId);
+        const tplRes = await sendWhatsAppTemplate(wa, phone, {
+          name: templateName,
+          language: String(campaign.template_language || "pt_BR"),
+          bodyParams: first ? [first] : undefined,
+        });
+        if (!tplRes.ok) {
+          sentFail += 1;
+          await supabaseAdmin
+            .from("broadcast_recipients")
+            .update({
+              status: "falhou",
+              error: (tplRes.reason ?? "template_failed").slice(0, 500),
+              sent_at: new Date().toISOString(),
+            })
+            .eq("id", rec.id);
+          continue;
+        }
+        const shown = body ? renderName(body, first || "olá") : `Template ${templateName}`;
+        await persistOutbound(sessionId, shown, {
+          campaign_id: campaignId,
+          kind: "campaign_template",
+          template_name: templateName,
+          wa_message_id: tplRes.messageId,
+        });
+        sentOk += 1;
+        await supabaseAdmin
+          .from("broadcast_recipients")
+          .update({ status: "enviado", error: null, sent_at: new Date().toISOString() })
+          .eq("id", rec.id);
+      } catch (e) {
+        sentFail += 1;
+        await supabaseAdmin
+          .from("broadcast_recipients")
+          .update({
+            status: "falhou",
+            error: e instanceof Error ? e.message : String(e),
+            sent_at: new Date().toISOString(),
+          })
+          .eq("id", rec.id);
+      }
+      await new Promise((r) => setTimeout(r, SEND_GAP_MS));
+      continue;
+    }
 
     if (!withinMetaSessionWindow(lastIn)) {
       sentSkip += 1;
@@ -447,7 +627,12 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
           await persistOutbound(
             sessionId,
             body ? `[cartaz] ${body}` : "[cartaz]",
-            { campaign_id: campaignId, kind: "campaign_image" },
+            {
+              campaign_id: campaignId,
+              kind: "campaign_image",
+              wa_message_id: imgRes.messageId,
+              media_kind: "image",
+            },
           );
           if (body && body.length > 0) {
             await new Promise((r) => setTimeout(r, typingDelayMs(body)));
@@ -460,6 +645,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
               campaign_id: campaignId,
               kind: "campaign_text_fallback",
               image_error: imgRes.reason,
+              wa_message_id: txtRes.messageId,
             });
           }
         }
@@ -494,6 +680,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
         await persistOutbound(sessionId, body, {
           campaign_id: campaignId,
           kind: "campaign_text",
+          wa_message_id: txtRes.messageId,
         });
         delivered = true;
       }
@@ -564,7 +751,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     (row.sent_fail ?? 0) === 0
   ) {
     throw new Error(
-      `Nenhuma mensagem entregue: ${row.sent_skip} contato(s) fora da janela de 24h da Meta. Peça para o cliente mandar um oi no WhatsApp hoje e tente de novo.`,
+      `Nenhuma mensagem entregue: ${row.sent_skip} contato(s) fora da janela de 24h da Meta. No modo template, use um modelo aprovado. No modo sessão, a pessoa precisa ter falado hoje.`,
     );
   }
   return row;
@@ -577,6 +764,11 @@ export interface CreateCampaignInput {
   audience: CampaignAudience;
   imageBase64?: string;
   imageContentType?: string;
+  sendMode?: CampaignSendMode;
+  templateName?: string;
+  templateLanguage?: string;
+  templateUsesName?: boolean;
+  extraPhones?: string;
 }
 
 /** Cria e envia (1 ou 2 campanhas quando line === both). */
@@ -608,6 +800,11 @@ export async function createAndLaunchCampaigns(
         imageBase64: i === 0 ? input.imageBase64 : undefined,
         imageContentType: i === 0 ? input.imageContentType : undefined,
         imagePathReuse: i > 0 ? sharedImagePath : undefined,
+        sendMode: input.sendMode,
+        templateName: input.templateName,
+        templateLanguage: input.templateLanguage,
+        templateUsesName: input.templateUsesName,
+        extraPhones: input.extraPhones,
       });
       if (draft.image_path) sharedImagePath = draft.image_path;
       results.push(await launchCampaign(draft.id));

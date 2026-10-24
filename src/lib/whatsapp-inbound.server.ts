@@ -13,6 +13,7 @@ export interface InboundAttachment {
   storagePath: string;
   mimeType: string;
   mediaKind: ChatMediaKind;
+  filename?: string;
 }
 
 export interface NormalizedInbound {
@@ -153,9 +154,10 @@ export async function normalizeWhatsAppInbound(
         };
       }
     }
-    const attachment = await attachStored(phone, media, "document");
     const filename =
       (doc as { filename?: string }).filename?.trim() || "documento.pdf";
+    const attachment = await attachStored(phone, media, "document");
+    attachment.filename = filename;
     let text = cap || `Documento: ${filename}`;
     if (mime === "application/pdf") {
       try {
@@ -179,13 +181,49 @@ export async function normalizeWhatsAppInbound(
     };
   }
 
+  if (type === "button") {
+    const button = msg.button as { text?: string; payload?: string };
+    const text = button?.text?.trim() || button?.payload?.trim();
+    if (!text) return null;
+    return { text, inboundKind: "text" };
+  }
+
+  if (type === "interactive") {
+    const interactive = msg.interactive as {
+      button_reply?: { title?: string; id?: string };
+      list_reply?: { title?: string; id?: string };
+    };
+    const text =
+      interactive?.button_reply?.title?.trim() ||
+      interactive?.list_reply?.title?.trim() ||
+      interactive?.button_reply?.id?.trim() ||
+      interactive?.list_reply?.id?.trim();
+    if (!text) return null;
+    return { text, inboundKind: "text" };
+  }
+
   if (type === "video") {
-    const cap = (msg.video as { caption?: string })?.caption?.trim();
+    const video = msg.video as { id?: string; caption?: string };
+    const cap = video?.caption?.trim();
+    const mediaId = video?.id;
+    if (!mediaId) {
+      return {
+        text: cap || "(Cliente enviou um vídeo.)",
+        inboundKind: "unsupported",
+      };
+    }
+    const media = await downloadWhatsAppMedia(line, mediaId);
+    if (!media) {
+      return {
+        text: cap || "(Cliente enviou um vídeo — não foi possível baixar o arquivo.)",
+        inboundKind: "unsupported",
+      };
+    }
+    const attachment = await attachStored(phone, media, "video");
     return {
-      text:
-        cap ||
-        "(Cliente enviou um vídeo — ainda não consigo assistir. Pode mandar em texto ou foto?)",
+      text: cap || "(Cliente enviou um vídeo.)",
       inboundKind: "unsupported",
+      attachment,
     };
   }
 

@@ -17,6 +17,11 @@ const createSchema = z.object({
   audience: audienceSchema,
   imageBase64: z.string().optional(),
   imageContentType: z.string().optional(),
+  sendMode: z.enum(["sessao", "template"]).optional(),
+  templateName: z.string().max(512).optional(),
+  templateLanguage: z.string().max(16).optional(),
+  templateUsesName: z.boolean().optional(),
+  extraPhones: z.string().max(4000).optional(),
 });
 
 export const listCampaignsFn = createServerFn({ method: "POST" })
@@ -56,7 +61,10 @@ export const createAndLaunchCampaignFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { createAndLaunchCampaigns } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    if (!data.body.trim() && !data.imageBase64) {
+    if (data.sendMode === "template" && !data.templateName?.trim()) {
+      throw new Error("Informe o nome do template aprovado na Meta (WhatsApp Manager).");
+    }
+    if (data.sendMode !== "template" && !data.body.trim() && !data.imageBase64) {
       throw new Error("Informe o texto ou anexe um cartaz.");
     }
     return createAndLaunchCampaigns(context.userId, data);

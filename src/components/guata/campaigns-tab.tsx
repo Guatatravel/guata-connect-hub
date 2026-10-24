@@ -41,6 +41,7 @@ import type {
   CampaignLine,
   CampaignLineSelect,
   CampaignRow,
+  CampaignSendMode,
 } from "@/lib/campaigns.types";
 
 const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
@@ -106,6 +107,11 @@ export function CampaignsTab() {
   const [audience, setAudience] = useState<CampaignAudience>("active_7d");
   const [body, setBody] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [sendMode, setSendMode] = useState<CampaignSendMode>("sessao");
+  const [templateName, setTemplateName] = useState("");
+  const [templateLanguage, setTemplateLanguage] = useState("pt_BR");
+  const [templateUsesName, setTemplateUsesName] = useState(true);
+  const [extraPhones, setExtraPhones] = useState("");
 
   const resetForm = () => {
     setEditingDraftId(null);
@@ -115,6 +121,11 @@ export function CampaignsTab() {
     setImageFile(null);
     setLine("descubra");
     setAudience("active_7d");
+    setSendMode("sessao");
+    setTemplateName("");
+    setTemplateLanguage("pt_BR");
+    setTemplateUsesName(true);
+    setExtraPhones("");
   };
 
   const loadCampaignIntoForm = (c: CampaignRow) => {
@@ -124,6 +135,11 @@ export function CampaignsTab() {
     setLine(c.line as CampaignLine);
     setAudience(c.audience as CampaignAudience);
     setBody(c.body ?? "");
+    setSendMode(c.send_mode === "template" ? "template" : "sessao");
+    setTemplateName(c.template_name ?? "");
+    setTemplateLanguage(c.template_language ?? "pt_BR");
+    setTemplateUsesName(c.template_uses_name !== false);
+    setExtraPhones(c.extra_phones ?? "");
     setImageFile(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -168,6 +184,11 @@ export function CampaignsTab() {
         line,
         body,
         audience,
+        sendMode,
+        templateName,
+        templateLanguage,
+        templateUsesName,
+        extraPhones,
         ...images,
       };
       if (editingDraftId) {
@@ -224,6 +245,11 @@ export function CampaignsTab() {
           line: line === "both" ? "descubra" : line,
           body,
           audience,
+          sendMode,
+          templateName,
+          templateLanguage,
+          templateUsesName,
+          extraPhones,
           ...images,
         },
       });
@@ -328,6 +354,63 @@ export function CampaignsTab() {
           </div>
 
           <div className="space-y-2">
+            <Label>Modo de envio</Label>
+            <Select value={sendMode} onValueChange={(v) => setSendMode(v as CampaignSendMode)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sessao">Sessão — texto livre, só quem falou nas últimas 24h</SelectItem>
+                <SelectItem value="template">Template — modelo aprovado, mesmo sem conversa aberta</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {sendMode === "template"
+                ? "O texto do modelo fica travado na Meta. Aqui você informa o nome aprovado. {nome} vira o primeiro nome da pessoa. A Meta cobra cada mensagem de marketing e exige que a pessoa tenha aceitado receber."
+                : "Mensagem livre (texto ou cartaz). A Meta só entrega se a pessoa falou com este número nas últimas 24 horas."}
+            </p>
+          </div>
+
+          {sendMode === "template" && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nome do template na Meta</Label>
+                <Input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="ex.: convite_evento"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Idioma</Label>
+                <Input
+                  value={templateLanguage}
+                  onChange={(e) => setTemplateLanguage(e.target.value)}
+                  placeholder="pt_BR"
+                />
+              </div>
+              <label className="sm:col-span-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={templateUsesName}
+                  onChange={(e) => setTemplateUsesName(e.target.checked)}
+                />
+                O template tem uma variável de nome ({`{{1}}`})
+              </label>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Telefones avulsos (opcional)</Label>
+            <Textarea
+              rows={3}
+              value={extraPhones}
+              onChange={(e) => setExtraPhones(e.target.value)}
+              placeholder={"Um número por linha, com DDD.\nSe preencher, só estes números recebem — inclusive quem nunca chamou o Guatá."}
+            />
+          </div>
+
+          <div className="space-y-2">
             <Label>Público (conversas existentes)</Label>
             <Select
               value={audience}
@@ -345,13 +428,11 @@ export function CampaignsTab() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              ~{preview?.filterCount ?? "…"} no filtro ·{" "}
-              <strong>{preview?.eligible24h ?? "…"} podem receber agora</strong> (falaram nas
-              últimas 24h). Máx. 80 por linha por clique.
-              {(preview?.filterCount ?? 0) === 0 &&
-                " Nenhuma sessão nessa linha — use Descubra MS se suas conversas estão lá, ou “Todas as conversas”."}
-              {(preview?.filterCount ?? 0) > 0 && (preview?.eligible24h ?? 0) === 0 &&
-                " Ninguém na janela de 24h: mande um oi no WhatsApp hoje e dispare de novo."}
+              {extraPhones.trim()
+                ? "A lista de telefones substitui o público. Máx. 80 números."
+                : sendMode === "template"
+                  ? `~${preview?.filterCount ?? "…"} conversas podem receber o template, mesmo fora das 24h. Máx. 80 por clique.`
+                  : `~${preview?.filterCount ?? "…"} no filtro · ${preview?.eligible24h ?? "…"} podem receber agora (falaram nas últimas 24h). Máx. 80 por linha por clique.`}
             </p>
           </div>
 
@@ -361,11 +442,15 @@ export function CampaignsTab() {
               rows={4}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Texto curto da promoção (vira legenda se houver cartaz)."
+              placeholder={
+                sendMode === "template"
+                  ? "Texto só para o painel. Use {nome} onde entra o primeiro nome."
+                  : "Texto curto da promoção (vira legenda se houver cartaz)."
+              }
             />
           </div>
 
-          <div className="space-y-2">
+          {sendMode === "sessao" && <div className="space-y-2">
             <Label>Cartaz (opcional)</Label>
             <input
               ref={imageRef}
@@ -388,7 +473,7 @@ export function CampaignsTab() {
                 <span className="text-xs text-muted-foreground">Cartaz salvo no rascunho</span>
               )}
             </div>
-          </div>
+          </div>}
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -396,7 +481,9 @@ export function CampaignsTab() {
               disabled={
                 createMut.isPending ||
                 !lineReady ||
-                (!body.trim() && !imageFile && !savedImagePath)
+                (sendMode === "template"
+                  ? !templateName.trim()
+                  : !body.trim() && !imageFile && !savedImagePath)
               }
             >
               <Send className="h-4 w-4 mr-2" />
@@ -435,6 +522,7 @@ export function CampaignsTab() {
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Badge variant="outline">{STATUS_LABEL[c.status] ?? c.status}</Badge>
                   <Badge variant="outline">{LINE_LABEL[c.line as CampaignLine]}</Badge>
+                  <Badge variant="outline">{c.send_mode === "template" ? "Template" : "Sessão 24h"}</Badge>
                   <Badge variant="secondary">
                     {AUDIENCE_LABEL[c.audience as CampaignAudience]}
                   </Badge>

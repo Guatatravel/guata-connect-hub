@@ -172,6 +172,11 @@ export type Database = {
           sent_fail: number
           sent_ok: number
           sent_skip: number
+          send_mode: string
+          template_name: string | null
+          template_language: string
+          template_uses_name: boolean
+          extra_phones: string | null
           status: string
           title: string
           updated_at: string
@@ -187,6 +192,11 @@ export type Database = {
           sent_fail?: number
           sent_ok?: number
           sent_skip?: number
+          send_mode?: string
+          template_name?: string | null
+          template_language?: string
+          template_uses_name?: boolean
+          extra_phones?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -202,6 +212,11 @@ export type Database = {
           sent_fail?: number
           sent_ok?: number
           sent_skip?: number
+          send_mode?: string
+          template_name?: string | null
+          template_language?: string
+          template_uses_name?: boolean
+          extra_phones?: string | null
           status?: string
           title?: string
           updated_at?: string

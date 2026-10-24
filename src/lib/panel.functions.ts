@@ -8,6 +8,7 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  sendWhatsAppAudioBytes,
   sendWhatsAppDocument,
   sendWhatsAppImage,
   sendWhatsAppText,
@@ -164,7 +165,21 @@ type MessageMeta = {
   media_mime?: string;
   media_kind?: string;
   filename?: string;
+  wa_message_id?: string;
+  quoted_wa_message_id?: string;
+  reply_to_wa_message_id?: string;
+  reply_preview?: string;
+  outbound_kind?: string;
+  delivery_status?: "sent" | "delivered" | "read" | "failed";
+  delivery_error?: string;
 };
+
+function quoteLabel(author: string): string {
+  if (author === "user") return "Cliente";
+  if (author === "bot") return "Guatá";
+  if (author === "agent") return "Consultor";
+  return "Mensagem";
+}
 
 async function mapMessagesForPanel(
   msgs: Array<{
@@ -175,6 +190,13 @@ async function mapMessagesForPanel(
     metadata: unknown;
   }>,
 ) {
+  const byWaId = new Map<string, { author: string; text: string }>();
+  for (const m of msgs) {
+    const meta = (m.metadata ?? {}) as MessageMeta;
+    if (meta.wa_message_id) {
+      byWaId.set(meta.wa_message_id, { author: m.author, text: m.text });
+    }
+  }
   const nameCache = new Map<string, string | null>();
   return Promise.all(
     msgs.map(async (m) => {
@@ -187,6 +209,13 @@ async function mapMessagesForPanel(
         if (!nameCache.has(meta.sent_by)) nameCache.set(meta.sent_by, await resolveStaffName(meta.sent_by));
         authorName = nameCache.get(meta.sent_by) ?? undefined;
       }
+      const quotedWaId = meta.reply_to_wa_message_id || meta.quoted_wa_message_id;
+      const quoted = quotedWaId ? byWaId.get(quotedWaId) : undefined;
+      const replyTo = quoted
+        ? { authorLabel: quoteLabel(quoted.author), text: quoted.text.slice(0, 180) }
+        : meta.reply_preview
+          ? { authorLabel: "Mensagem", text: meta.reply_preview }
+          : undefined;
       return {
         id: m.id,
         role: (m.author === "user" ? "user" : m.author === "bot" ? "bot" : "human") as
@@ -200,6 +229,11 @@ async function mapMessagesForPanel(
         mediaUrl: mediaUrl ?? undefined,
         mediaMime: meta.media_mime,
         mediaFilename: meta.filename,
+        waMessageId: meta.wa_message_id,
+        outboundKind: meta.outbound_kind,
+        deliveryStatus: meta.delivery_status,
+        deliveryError: meta.delivery_error,
+        replyTo,
       };
     }),
   );
@@ -366,11 +400,17 @@ const replySchema = z
     documentBase64: z.string().optional(),
     documentContentType: z.string().optional(),
     documentFilename: z.string().max(240).optional(),
+    audioBase64: z.string().optional(),
+    audioContentType: z.string().optional(),
+    replyToMessageId: z.string().uuid().optional(),
   })
   .refine(
     (d) =>
-      Boolean(d.text?.trim()) || Boolean(d.imageBase64) || Boolean(d.documentBase64),
-    { message: "Informe texto, imagem ou documento." },
+      Boolean(d.text?.trim()) ||
+      Boolean(d.imageBase64) ||
+      Boolean(d.documentBase64) ||
+      Boolean(d.audioBase64),
+    { message: "Informe texto, imagem, áudio ou documento." },
   );
 
 export const replyAsAgent = createServerFn({ method: "POST" })
@@ -401,8 +441,27 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       .eq("id", s.id);
 
     let sent = false;
+    let sentWaId: string | undefined;
     let mediaPath: string | undefined;
     const meta: Record<string, unknown> = { sent_by: context.userId };
+
+    if (data.replyToMessageId) {
+      const { data: quoted } = await supabaseAdmin
+        .from("messages")
+        .select("id, text, metadata")
+        .eq("id", data.replyToMessageId)
+        .eq("session_id", s.id)
+        .maybeSingle();
+      const quotedWaId = ((quoted?.metadata ?? {}) as MessageMeta).wa_message_id;
+      if (!quoted || !quotedWaId) {
+        throw new Error(
+          "Essa mensagem não pode ser citada. Só mensagens novas, já entregues ao WhatsApp, têm o id da citação.",
+        );
+      }
+      meta.reply_to_wa_message_id = quotedWaId;
+      meta.reply_preview = String(quoted.text ?? "").slice(0, 180);
+    }
+    const replyToWaId = meta.reply_to_wa_message_id as string | undefined;
 
     if (data.imageBase64) {
       mediaPath = await storeChatMediaFromBase64(
@@ -421,8 +480,10 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         s.phone,
         imageUrl,
         caption ? agentWhatsAppCaption(staffName, caption) : undefined,
+        replyToWaId,
       );
       sent = imgRes.ok;
+      if (imgRes.ok) sentWaId = imgRes.messageId;
       if (!imgRes.ok) {
         await supabaseAdmin.from("messages").insert({
           session_id: s.id,
@@ -447,8 +508,10 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         docUrl,
         data.documentFilename ?? "documento.pdf",
         caption ? agentWhatsAppCaption(staffName, caption) : undefined,
+        replyToWaId,
       );
       sent = docRes.ok;
+      if (docRes.ok) sentWaId = docRes.messageId;
       if (!docRes.ok) {
         await supabaseAdmin.from("messages").insert({
           session_id: s.id,
@@ -458,12 +521,39 @@ export const replyAsAgent = createServerFn({ method: "POST" })
           metadata: { error: docRes.reason } as never,
         });
       }
-    } else if (caption) {
+    } else if (data.audioBase64) {
+      const mime = (data.audioContentType ?? "audio/ogg").split(";")[0].trim() || "audio/ogg";
+      mediaPath = await storeChatMediaFromBase64(s.phone, data.audioBase64, mime, "audio");
+      meta.media_path = mediaPath;
+      meta.media_mime = mime;
+      meta.media_kind = "audio";
+      const bytes = Uint8Array.from(atob(data.audioBase64), (c) => c.charCodeAt(0));
+      const audioRes = await sendWhatsAppAudioBytes(wa, s.phone, bytes, mime);
+      sent = audioRes.ok;
+      if (audioRes.ok) sentWaId = audioRes.messageId;
+      if (!audioRes.ok) {
+        await supabaseAdmin.from("messages").insert({
+          session_id: s.id,
+          direction: "out",
+          author: "system",
+          text: `(falha no envio do áudio: ${audioRes.reason ?? "desconhecida"})`,
+          metadata: { error: audioRes.reason } as never,
+        });
+      }
+    }
+
+    if (!data.imageBase64 && !data.documentBase64 && !data.audioBase64 && caption) {
       const parts = agentWhatsAppParts(staffName, caption);
-      for (const part of parts) {
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
         await new Promise((r) => setTimeout(r, typingDelayMs(part)));
-        const send = await sendWhatsAppText(wa, s.phone, part);
-        if (send.ok) sent = true;
+        const send = await sendWhatsAppText(wa, s.phone, part, {
+          replyToWaId: i === 0 ? replyToWaId : undefined,
+        });
+        if (send.ok) {
+          sent = true;
+          if (!sentWaId) sentWaId = send.messageId;
+        }
         else {
           await supabaseAdmin.from("messages").insert({
             session_id: s.id,
@@ -477,9 +567,14 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       }
     }
 
-    const displayText =
-      caption ||
-      (data.imageBase64 ? "[imagem]" : data.documentBase64 ? "[documento]" : "");
+    const displayText = data.audioBase64
+      ? "[áudio]"
+      : caption ||
+        (data.imageBase64 ? "[imagem]" : data.documentBase64 ? "[documento]" : "");
+    if (sentWaId) {
+      meta.wa_message_id = sentWaId;
+      meta.delivery_status = "sent";
+    }
     const { error: msgErr } = await supabaseAdmin.from("messages").insert({
       session_id: s.id,
       direction: "out",
@@ -488,6 +583,35 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       metadata: meta as never,
     });
     if (msgErr) throw new Error(msgErr.message);
+
+    if (data.audioBase64 && caption && sent) {
+      const parts = agentWhatsAppParts(staffName, caption);
+      for (const part of parts) {
+        await new Promise((r) => setTimeout(r, typingDelayMs(part)));
+        const send = await sendWhatsAppText(wa, s.phone, part);
+        if (!send.ok) {
+          await supabaseAdmin.from("messages").insert({
+            session_id: s.id,
+            direction: "out",
+            author: "system",
+            text: `(falha no envio do texto: ${send.reason ?? "desconhecida"})`,
+            metadata: { error: send.reason } as never,
+          });
+          break;
+        }
+        await supabaseAdmin.from("messages").insert({
+          session_id: s.id,
+          direction: "out",
+          author: "agent",
+          text: part,
+          metadata: {
+            sent_by: context.userId,
+            wa_message_id: send.messageId,
+            delivery_status: "sent",
+          } as never,
+        });
+      }
+    }
 
     return { ok: true, sent };
   });

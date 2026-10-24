@@ -69,6 +69,9 @@ export interface IncomingMessage {
   mediaPath?: string;
   mediaMime?: string;
   mediaKind?: "image" | "audio" | "video" | "document";
+  mediaFilename?: string;
+  /** wamid da mensagem que o cliente citou, se houver. */
+  quotedWaMessageId?: string;
 }
 
 interface SessionRow {
@@ -157,18 +160,46 @@ async function persistMessage(
   author: "user" | "bot" | "agent" | "system",
   text: string,
   metadata?: Record<string, unknown>,
-) {
-  await supabaseAdmin.from("messages").insert({
-    session_id: sessionId,
-    direction,
-    author,
-    text,
-    ...(metadata ? { metadata: metadata as never } : {}),
-  });
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("messages")
+    .insert({
+      session_id: sessionId,
+      direction,
+      author,
+      text,
+      ...(metadata ? { metadata: metadata as never } : {}),
+    })
+    .select("id")
+    .single();
+  if (error) {
+    console.error("[persist] mensagem:", error.message);
+    return null;
+  }
   await supabaseAdmin
     .from("sessions")
     .update({ last_message_at: new Date().toISOString() })
     .eq("id", sessionId);
+  return data.id as string;
+}
+
+async function attachWaMessageId(rowId: string | null, waMessageId?: string) {
+  if (!rowId || !waMessageId) return;
+  const { data } = await supabaseAdmin
+    .from("messages")
+    .select("metadata")
+    .eq("id", rowId)
+    .maybeSingle();
+  const metadata = {
+    ...((data?.metadata as Record<string, unknown> | null) ?? {}),
+    wa_message_id: waMessageId,
+    delivery_status:
+      (data?.metadata as { delivery_status?: string } | null)?.delivery_status || "sent",
+  };
+  await supabaseAdmin
+    .from("messages")
+    .update({ metadata: metadata as never })
+    .eq("id", rowId);
 }
 
 const INTAKE_STEPS = [
@@ -515,9 +546,12 @@ async function deliverTextReplies(
       const speech = await synthesizeBotSpeechDetailed(text, ttsVoice);
       if (speech.ok) {
         try {
-          void storeChatMedia(phone, speech.bytes, speech.mimeType, "audio").catch((e) =>
-            console.error("[chat-media] áudio outbound:", e),
-          );
+          let audioPath: string | undefined;
+          try {
+            audioPath = await storeChatMedia(phone, speech.bytes, speech.mimeType, "audio");
+          } catch (e) {
+            console.error("[chat-media] áudio outbound:", e);
+          }
           await new Promise((r) => setTimeout(r, typingDelayMs(text)));
           let audioRes = await sendWhatsAppAudioBytes(
             waTarget,
@@ -525,9 +559,8 @@ async function deliverTextReplies(
             speech.bytes,
             speech.mimeType,
           ).catch((e) => ({ ok: false, reason: String(e) }) as const);
-          if (!audioRes.ok) {
-            const path = await storeChatMedia(phone, speech.bytes, speech.mimeType, "audio");
-            const url = await signedChatMediaUrl(path, 60 * 60);
+          if (!audioRes.ok && audioPath) {
+            const url = await signedChatMediaUrl(audioPath, 60 * 60);
             if (url) {
               audioRes = await sendWhatsAppAudio(waTarget, phone, url).catch(
                 (e) => ({ ok: false, reason: String(e) }) as const,
@@ -538,6 +571,12 @@ async function deliverTextReplies(
             console.log("[meta] áudio enviado:", "messageId" in audioRes ? audioRes.messageId : "");
             await persistMessage(sessionId, "out", "bot", text, {
               outbound_kind: "audio",
+              media_kind: "audio",
+              media_mime: speech.mimeType,
+              ...(audioPath ? { media_path: audioPath } : {}),
+              ...("messageId" in audioRes && audioRes.messageId
+                ? { wa_message_id: audioRes.messageId, delivery_status: "sent" }
+                : {}),
             });
             await recordOrganizationTtsUsage(
               waTarget.organizationId,
@@ -565,14 +604,17 @@ async function deliverTextReplies(
       i === 0 && audioFailReason
         ? { tts_attempted: true, tts_error: audioFailReason.slice(0, 500) }
         : undefined;
-    await persistMessage(sessionId, "out", "bot", text, outMeta);
+    const rowId = await persistMessage(sessionId, "out", "bot", text, outMeta);
 
     await new Promise((r) => setTimeout(r, typingDelayMs(text)));
     const res = await sendWhatsAppText(waTarget, phone, text).catch(
       (e) => ({ ok: false, reason: String(e) }) as const,
     );
     if (!res.ok) console.error("[meta] send falhou:", res.reason);
-    else console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
+    else {
+      console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
+      await attachWaMessageId(rowId, "messageId" in res ? res.messageId : undefined);
+    }
   }
 }
 
@@ -617,11 +659,14 @@ export async function processMessage(
   }
   await persistMessage(session.id, "in", "user", msg.text, {
     inbound_kind: msg.inboundKind ?? "text",
+    ...(msg.messageId ? { wa_message_id: msg.messageId } : {}),
+    ...(msg.quotedWaMessageId ? { quoted_wa_message_id: msg.quotedWaMessageId } : {}),
     ...(msg.mediaPath
       ? {
           media_path: msg.mediaPath,
           media_mime: msg.mediaMime,
           media_kind: msg.mediaKind,
+          ...(msg.mediaFilename ? { filename: msg.mediaFilename } : {}),
         }
       : {}),
   });
@@ -819,7 +864,18 @@ export async function processMessage(
           : media.filename;
       const bytes = await downloadKnowledgeMediaBytes(media.file_path);
       await new Promise((r) => setTimeout(r, 800));
-      let sendRes: { ok: boolean; reason?: string };
+      let chatMediaPath: string | undefined;
+      const chatMime =
+        media.delivery === "document" ? "application/pdf" : imageMimeFromFilename(media.filename);
+      const chatKind = media.delivery === "document" ? "document" : "image";
+      if (bytes && bytes.length > 0) {
+        try {
+          chatMediaPath = await storeChatMedia(msg.phone, bytes, chatMime, chatKind);
+        } catch (e) {
+          console.error("[chat-media] mídia outbound:", e);
+        }
+      }
+      let sendRes: { ok: boolean; reason?: string; messageId?: string };
       if (bytes && bytes.length > 0) {
         sendRes =
           media.delivery === "document"
@@ -866,7 +922,13 @@ export async function processMessage(
             waCaption || (media.delivery === "document" ? "📎 Documento" : `📎 ${media.title}`),
           {
             knowledge_doc_id: media.id,
-            media_kind: media.delivery === "document" ? "document" : "image",
+            media_kind: chatKind,
+            media_mime: chatMime,
+            filename: waFilename,
+            ...(chatMediaPath ? { media_path: chatMediaPath } : {}),
+            ...(sendRes.messageId
+              ? { wa_message_id: sendRes.messageId, delivery_status: "sent" }
+              : {}),
           },
         );
       } else {
@@ -897,7 +959,7 @@ export async function processMessage(
         !sentUrls.has(normalizeOutboundUrl(link.url))
       ) {
         const linkMsg = formatKnowledgeLinkWhatsAppMessage(link.title, link.url);
-        await persistMessage(session.id, "out", "bot", linkMsg, {
+        const linkRowId = await persistMessage(session.id, "out", "bot", linkMsg, {
           knowledge_link: link.url,
         });
         await new Promise((r) => setTimeout(r, typingDelayMs(linkMsg)));
@@ -905,6 +967,7 @@ export async function processMessage(
           previewUrl: true,
         }).catch((e) => ({ ok: false, reason: String(e) }) as const);
         if (!linkRes.ok) console.error("[meta] link falhou:", linkRes.reason);
+        else await attachWaMessageId(linkRowId, "messageId" in linkRes ? linkRes.messageId : undefined);
       }
     }
   }

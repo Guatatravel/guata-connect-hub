@@ -3,7 +3,8 @@
  */
 import type { Line } from "@/lib/meta-send.server";
 
-const MAX_BYTES = 5 * 1024 * 1024;
+/** Vídeo do WhatsApp chega a 16 MB. Abaixo disso o painel guarda o arquivo. */
+const MAX_BYTES = 16 * 1024 * 1024;
 
 function lineEnv(line: Line, key: "ACCESS_TOKEN"): string | undefined {
   const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";

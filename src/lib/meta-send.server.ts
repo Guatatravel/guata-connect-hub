@@ -24,11 +24,29 @@ export interface SendResult {
   messageId?: string;
 }
 
+/** Citação do WhatsApp (responder uma mensagem específica). */
+function waPayload(
+  to: string,
+  type: string,
+  content: object,
+  replyToWaId?: string,
+): string {
+  const body: Record<string, unknown> = {
+    messaging_product: "whatsapp",
+    to: to.replace(/\D/g, ""),
+    type,
+    [type]: content,
+  };
+  const quoted = replyToWaId?.trim();
+  if (quoted) body.context = { message_id: quoted };
+  return JSON.stringify(body);
+}
+
 export async function sendWhatsAppText(
   target: WhatsAppTarget,
   to: string,
   text: string,
-  options?: { previewUrl?: boolean },
+  options?: { previewUrl?: boolean; replyToWaId?: string },
 ): Promise<SendResult> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
@@ -49,12 +67,7 @@ export async function sendWhatsAppText(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to.replace(/\D/g, ""),
-        type: "text",
-        text: textPayload,
-      }),
+      body: waPayload(to, "text", textPayload, options?.replyToWaId),
     },
   );
 
@@ -74,6 +87,7 @@ export async function sendWhatsAppDocument(
   documentUrl: string,
   filename = "documento.pdf",
   caption?: string,
+  replyToWaId?: string,
 ): Promise<SendResult> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
@@ -94,12 +108,7 @@ export async function sendWhatsAppDocument(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to.replace(/\D/g, ""),
-        type: "document",
-        document,
-      }),
+      body: waPayload(to, "document", document, replyToWaId),
     },
   );
 
@@ -231,6 +240,7 @@ export async function sendWhatsAppImage(
   to: string,
   imageUrl: string,
   caption?: string,
+  replyToWaId?: string,
 ): Promise<SendResult> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
@@ -248,12 +258,7 @@ export async function sendWhatsAppImage(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to.replace(/\D/g, ""),
-        type: "image",
-        image,
-      }),
+      body: waPayload(to, "image", image, replyToWaId),
     },
   );
 
@@ -346,7 +351,17 @@ export async function sendWhatsAppAudioBytes(
   bytes: Uint8Array,
   mimeType: string,
 ): Promise<SendResult> {
-  const ext = mimeType.includes("mpeg") ? "mp3" : mimeType.includes("ogg") ? "ogg" : "bin";
+  const ext = mimeType.includes("mpeg")
+    ? "mp3"
+    : mimeType.includes("ogg")
+      ? "ogg"
+      : mimeType.includes("mp4")
+        ? "m4a"
+        : mimeType.includes("webm")
+          ? "webm"
+          : mimeType.includes("aac")
+            ? "aac"
+            : "bin";
   const uploaded = await uploadWhatsAppMedia(
     target,
     bytes,
@@ -355,6 +370,56 @@ export async function sendWhatsAppAudioBytes(
   );
   if (!uploaded.ok) return { ok: false, reason: uploaded.reason };
   return sendWhatsAppAudioByMediaId(target, to, uploaded.mediaId);
+}
+
+/** Template aprovado na Meta. Único tipo que sai fora da janela de 24h. */
+export async function sendWhatsAppTemplate(
+  target: WhatsAppTarget,
+  to: string,
+  template: {
+    name: string;
+    language?: string;
+    bodyParams?: string[];
+    replyToWaId?: string;
+  },
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const payload: {
+    name: string;
+    language: { code: string };
+    components?: Array<{ type: string; parameters: Array<{ type: string; text: string }> }>;
+  } = {
+    name: template.name.trim(),
+    language: { code: (template.language || "pt_BR").trim() || "pt_BR" },
+  };
+  const params = (template.bodyParams ?? [])
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .slice(0, 10)
+    .map((text) => ({ type: "text", text: text.slice(0, 1024) }));
+  if (params.length > 0) {
+    payload.components = [{ type: "body", parameters: params }];
+  }
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: waPayload(to, "template", payload, template.replyToWaId),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 300)}` };
+  }
+  const json = (await res.json()) as { messages?: Array<{ id?: string }> };
+  return { ok: true, messageId: json.messages?.[0]?.id };
 }
 
 export async function sendWhatsAppAudio(

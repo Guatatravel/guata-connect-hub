@@ -16,6 +16,11 @@ function extFromMime(mime: string): string {
   if (m === "audio/ogg") return "ogg";
   if (m === "audio/mpeg") return "mp3";
   if (m === "audio/mp4") return "m4a";
+  if (m === "audio/webm") return "webm";
+  if (m === "audio/aac") return "aac";
+  if (m === "video/mp4") return "mp4";
+  if (m === "video/3gpp") return "3gp";
+  if (m === "video/webm") return "webm";
   if (m === "application/pdf") return "pdf";
   return "bin";
 }
