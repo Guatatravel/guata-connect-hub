@@ -1,7 +1,7 @@
 import type { ChatMessage } from "@/types/guata";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
-import { FileText, Reply } from "lucide-react";
+import { FileText, Forward, Reply } from "lucide-react";
 
 function DeliveryMark({
   status,
@@ -34,9 +34,11 @@ function DeliveryMark({
 export function ChatTimeline({
   messages,
   onReply,
+  onForward,
 }: {
   messages: ChatMessage[];
   onReply?: (message: ChatMessage) => void;
+  onForward?: (message: ChatMessage) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -71,21 +73,34 @@ export function ChatTimeline({
             <div className={cn("max-w-[78%] rounded-2xl px-4 py-2 shadow-sm space-y-2", bubble)}>
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs font-medium opacity-70">{label}</div>
-                {onReply && (
-                  <button
-                    type="button"
-                    className="text-[11px] opacity-60 hover:opacity-100 inline-flex items-center gap-1"
-                    title={
-                      m.waMessageId
-                        ? "Responder citando esta mensagem"
-                        : "Mensagem antiga: o WhatsApp ainda não tem o id para citar"
-                    }
-                    onClick={() => onReply(m)}
-                  >
-                    <Reply className="h-3 w-3" />
-                    Responder
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {onForward && (m.mediaUrl || (m.text && m.text !== "[áudio]")) && (
+                    <button
+                      type="button"
+                      className="text-[11px] opacity-60 hover:opacity-100 inline-flex items-center gap-1"
+                      title="Enviar esta mensagem para outra pessoa"
+                      onClick={() => onForward(m)}
+                    >
+                      <Forward className="h-3 w-3" />
+                      Encaminhar
+                    </button>
+                  )}
+                  {onReply && (
+                    <button
+                      type="button"
+                      className="text-[11px] opacity-60 hover:opacity-100 inline-flex items-center gap-1"
+                      title={
+                        m.waMessageId
+                          ? "Responder citando esta mensagem"
+                          : "Mensagem antiga: o WhatsApp ainda não tem o id para citar"
+                      }
+                      onClick={() => onReply(m)}
+                    >
+                      <Reply className="h-3 w-3" />
+                      Responder
+                    </button>
+                  )}
+                </div>
               </div>
               {m.replyTo && (
                 <div className="rounded-md border-l-2 border-primary/60 bg-background/60 px-2 py-1 text-xs">

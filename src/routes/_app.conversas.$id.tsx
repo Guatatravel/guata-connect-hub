@@ -4,6 +4,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { ChatTimeline } from "@/components/guata/chat-timeline";
 import { ConversationProfileCard } from "@/components/guata/conversation-profile-card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +21,14 @@ import { DossieCard } from "@/components/guata/dossie-card";
 import { HandoffControls } from "@/components/guata/handoff-controls";
 import { CopilotCard } from "@/components/guata/copilot-card";
 import type { ChatMessage } from "@/types/guata";
+
+function forwardCaption(message: ChatMessage): string {
+  const text = message.text?.trim() ?? "";
+  if (!text || text === "[áudio]" || text === "[imagem]" || text === "[documento]") return "";
+  if (text.startsWith("[cartaz]")) return text.replace(/^\[cartaz\]\s*/, "");
+  if (text.startsWith("(falha")) return "";
+  return text;
+}
 
 export const Route = createFileRoute("/_app/conversas/$id")({
   component: ConversaDetail,
@@ -42,6 +57,9 @@ function ConversaDetail() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [recording, setRecording] = useState(false);
+  const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
+  const [forwardQuery, setForwardQuery] = useState("");
+  const [forwardPhone, setForwardPhone] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -55,6 +73,12 @@ function ConversaDetail() {
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [attachFile]);
+
+  const { data: conversations } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => api.listConversations(),
+    enabled: Boolean(forwarding),
+  });
 
   const { data: conv, isLoading } = useQuery({
     queryKey: ["conversation", id],
@@ -105,6 +129,63 @@ function ConversaDetail() {
       toast.error(e instanceof Error ? e.message : "Falha ao enviar"),
   });
 
+  const forwardMut = useMutation({
+    mutationFn: async (targetId: string) => {
+      const source = forwarding;
+      if (!source) throw new Error("Nenhuma mensagem selecionada.");
+      const caption = forwardCaption(source);
+      let attachment:
+        | { base64: string; contentType: string; filename?: string; kind: "image" | "document" | "audio" }
+        | undefined;
+      if (source.mediaUrl && source.mediaKind && source.mediaKind !== "video") {
+        const downloaded = await fetch(source.mediaUrl);
+        if (!downloaded.ok) throw new Error("Não consegui baixar o arquivo desta mensagem.");
+        const blob = await downloaded.blob();
+        const mime = (source.mediaMime || blob.type || "application/octet-stream").split(";")[0];
+        const ext =
+          source.mediaKind === "audio"
+            ? "webm"
+            : source.mediaKind === "document"
+              ? "pdf"
+              : "jpg";
+        let file = new File([blob], source.mediaFilename || `encaminhada.${ext}`, { type: mime });
+        if (source.mediaKind === "audio") {
+          const { needsWhatsAppAudioTranscode, transcodeToMp3 } = await import("@/lib/whatsapp-audio");
+          if (needsWhatsAppAudioTranscode(file)) file = await transcodeToMp3(file);
+        }
+        const encoded = await fileToBase64(file);
+        const kind =
+          source.mediaKind === "audio" ? "audio" : source.mediaKind === "document" ? "document" : "image";
+        attachment = {
+          base64: encoded.base64,
+          contentType: file.type || mime,
+          filename: file.name,
+          kind,
+        };
+      }
+      if (!caption && !attachment) {
+        throw new Error("Essa mensagem não tem texto nem arquivo salvo para encaminhar.");
+      }
+      return api.replyConversation(targetId, caption, attachment);
+    },
+    onSuccess: () => {
+      toast.success("Mensagem encaminhada");
+      setForwarding(null);
+      setForwardPhone("");
+      setForwardQuery("");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao encaminhar"),
+  });
+
+  const forwardTargets = (conversations ?? [])
+    .filter((c) => c.id !== id && !c.archived)
+    .filter((c) => {
+      const q = forwardQuery.trim().toLowerCase();
+      if (!q) return true;
+      return `${c.contactName ?? ""} ${c.phone}`.toLowerCase().includes(q);
+    })
+    .slice(0, 40);
+
   if (isLoading || !conv) {
     return <Skeleton className="h-96 rounded-2xl" />;
   }
@@ -132,6 +213,11 @@ function ConversaDetail() {
           <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-xl bg-secondary/30 p-4">
             <ChatTimeline
               messages={conv.messages}
+              onForward={(message) => {
+                setForwardQuery("");
+                setForwardPhone("");
+                setForwarding(message);
+              }}
               onReply={(message) => {
                 if (!message.waMessageId) {
                   toast.error(
@@ -311,6 +397,63 @@ function ConversaDetail() {
           </p>
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(forwarding)} onOpenChange={(open) => !open && setForwarding(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Encaminhar mensagem</DialogTitle>
+            <DialogDescription>
+              A outra pessoa recebe uma mensagem nova. Se ela não falou nas últimas 24 horas, o
+              WhatsApp pode não entregar.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Buscar conversa por nome ou telefone"
+            value={forwardQuery}
+            onChange={(e) => setForwardQuery(e.target.value)}
+          />
+          <div className="max-h-52 overflow-y-auto rounded-lg border">
+            {forwardTargets.length === 0 && (
+              <p className="p-3 text-sm text-muted-foreground">Nenhuma conversa encontrada.</p>
+            )}
+            {forwardTargets.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-secondary/60"
+                disabled={forwardMut.isPending}
+                onClick={() => forwardMut.mutate(c.id)}
+              >
+                <span className="font-medium">{c.contactName || c.phone}</span>
+                {c.contactName && (
+                  <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ou um telefone com DDD"
+              value={forwardPhone}
+              onChange={(e) => setForwardPhone(e.target.value)}
+            />
+            <Button
+              type="button"
+              disabled={forwardMut.isPending || forwardPhone.replace(/\D/g, "").length < 10}
+              onClick={async () => {
+                try {
+                  const started = await api.startConversation(forwardPhone);
+                  forwardMut.mutate(started.id);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Telefone inválido");
+                }
+              }}
+            >
+              Enviar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
