@@ -72,15 +72,19 @@ function ConversaDetail() {
         | { base64: string; contentType: string; filename?: string; kind: "image" | "document" | "audio" }
         | undefined;
       if (attachFile) {
-        const file = await fileToBase64(attachFile);
+        let source = attachFile;
+        const isAudio = source.type.startsWith("audio/") || /\.(webm|mp3|m4a|ogg|aac|amr)$/i.test(source.name);
+        if (isAudio) {
+          const { needsWhatsAppAudioTranscode, transcodeToMp3 } = await import("@/lib/whatsapp-audio");
+          if (needsWhatsAppAudioTranscode(source)) source = await transcodeToMp3(source);
+        }
+        const file = await fileToBase64(source);
         const isPdf =
-          attachFile.type === "application/pdf" ||
-          attachFile.name.toLowerCase().endsWith(".pdf");
-        const isAudio = attachFile.type.startsWith("audio/");
+          source.type === "application/pdf" || source.name.toLowerCase().endsWith(".pdf");
         attachment = {
           base64: file.base64,
-          contentType: file.type,
-          filename: attachFile.name,
+          contentType: isAudio ? source.type || "audio/mpeg" : file.type,
+          filename: source.name,
           kind: isAudio ? "audio" : isPdf ? "document" : "image",
         };
       }
