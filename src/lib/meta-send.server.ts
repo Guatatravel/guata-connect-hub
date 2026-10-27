@@ -465,18 +465,22 @@ export async function sendWhatsAppAudio(
 export async function markReadAndTyping(
   target: WhatsAppTarget,
   messageId: string,
+  options?: { typing?: boolean },
 ): Promise<void> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId || !messageId) return;
+  const body: Record<string, unknown> = {
+    messaging_product: "whatsapp",
+    status: "read",
+    message_id: messageId,
+  };
+  if (options?.typing !== false) {
+    body.typing_indicator = { type: "text" };
+  }
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      status: "read",
-      message_id: messageId,
-      typing_indicator: { type: "text" },
-    }),
+    body: JSON.stringify(body),
   }).catch(() => null);
   if (res && !res.ok) console.error("[meta] read/typing falhou:", res.status, await res.text().catch(() => ""));
 }

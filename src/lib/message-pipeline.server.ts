@@ -649,13 +649,17 @@ export async function processMessage(
   msg: IncomingMessage,
 ): Promise<{ replies: string[]; sessionId: string }> {
   const waTarget = { organizationId: msg.organizationId, line: msg.line };
-  if (msg.messageId) void markReadAndTyping(waTarget, msg.messageId);
   const session = await loadOrCreateSession(
     msg.organizationId,
     msg.line,
     msg.phone,
     msg.contactName,
   );
+  if (msg.messageId) {
+    void markReadAndTyping(waTarget, msg.messageId, {
+      typing: session.mode !== "humano",
+    });
+  }
   if (msg.contactName?.trim()) {
     await supabaseAdmin
       .from("sessions")
