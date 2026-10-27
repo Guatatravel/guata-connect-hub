@@ -616,10 +616,14 @@ export const markConversationSeen = createServerFn({ method: "POST" })
   .inputValidator((i) => idSchema.parse(i))
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
-    await supabaseAdmin
+    const { data: row } = await supabaseAdmin
       .from("sessions")
-      .update({ staff_seen_at: new Date().toISOString() })
-      .eq("id", data.id);
+      .select("last_message_at")
+      .eq("id", data.id)
+      .maybeSingle();
+    const lastMs = row?.last_message_at ? new Date(row.last_message_at).getTime() : 0;
+    const seenAt = new Date(Math.max(Date.now(), lastMs)).toISOString();
+    await supabaseAdmin.from("sessions").update({ staff_seen_at: seenAt }).eq("id", data.id);
     return { ok: true };
   });
 

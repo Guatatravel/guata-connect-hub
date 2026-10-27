@@ -1,9 +1,80 @@
 import { useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { fetchUnreadCounts } from "@/lib/notifications.functions";
 import { toast } from "sonner";
+import type { ChatMessage, Conversation } from "@/types/guata";
+
+type LiveMessage = {
+  id?: string;
+  session_id?: string;
+  author?: string;
+  text?: string;
+  created_at?: string;
+  metadata?: {
+    media_kind?: ChatMessage["mediaKind"];
+    media_mime?: string;
+    filename?: string;
+    wa_message_id?: string;
+  } | null;
+};
+
+function liveChatMessage(row: LiveMessage): ChatMessage | null {
+  if (!row.id) return null;
+  const author = row.author;
+  const role: ChatMessage["role"] =
+    author === "user" ? "user" : author === "bot" ? "bot" : "human";
+  return {
+    id: row.id,
+    role,
+    text: row.text ?? "",
+    at: row.created_at ?? new Date().toISOString(),
+    mediaKind: row.metadata?.media_kind,
+    mediaMime: row.metadata?.media_mime,
+    mediaFilename: row.metadata?.filename,
+    waMessageId: row.metadata?.wa_message_id,
+  };
+}
+
+function chatIsOpen(qc: QueryClient, sessionId?: string) {
+  if (!sessionId) return false;
+  return qc
+    .getQueryCache()
+    .findAll({ queryKey: ["conversation", sessionId] })
+    .some((query) => query.getObserversCount() > 0);
+}
+
+/** Mostra a frase na lista e no chat aberto antes da busca no servidor. */
+function showMessageNow(qc: QueryClient, row: LiveMessage) {
+  if (!row.session_id) return;
+  const text = row.text ?? "";
+  const at = row.created_at ?? new Date().toISOString();
+  qc.setQueriesData<Conversation[]>({ queryKey: ["conversations"] }, (list) => {
+    if (!list) return list;
+    return list.map((c) =>
+      c.id === row.session_id
+        ? {
+            ...c,
+            lastMessage: text || c.lastMessage,
+            lastMessageAt: at,
+            unseen: row.author === "user" ? true : c.unseen,
+          }
+        : c,
+    );
+  });
+  const message = liveChatMessage(row);
+  if (!message) return;
+  qc.setQueryData<Conversation | null>(["conversation", row.session_id], (conv) => {
+    if (!conv || conv.messages.some((m) => m.id === message.id)) return conv;
+    return {
+      ...conv,
+      lastMessage: text || conv.lastMessage,
+      lastMessageAt: at,
+      messages: [...conv.messages, message],
+    };
+  });
+}
 
 const SOUND_STORAGE_KEY = "guata.notifications.sound";
 
@@ -84,7 +155,9 @@ export function useRealtimeNotifications() {
         { event: "UPDATE", schema: "public", table: "sessions" },
         (payload) => {
           const sessionId = (payload.new as { id?: string })?.id;
-          qc.invalidateQueries({ queryKey: ["unread-counts"] });
+          if (!chatIsOpen(qc, sessionId)) {
+            qc.invalidateQueries({ queryKey: ["unread-counts"] });
+          }
           qc.invalidateQueries({ queryKey: ["conversations"] });
           if (sessionId) qc.invalidateQueries({ queryKey: ["conversation", sessionId] });
           const newMode = (payload.new as { mode?: string })?.mode;
@@ -92,7 +165,9 @@ export function useRealtimeNotifications() {
           if (newMode === "humano" && oldMode !== "humano") {
             const phone = (payload.new as { phone?: string })?.phone ?? "";
             toast.info("Cliente pediu atendimento humano", {
+              id: sessionId ? `humano-${sessionId}` : undefined,
               description: phone ? `WhatsApp: ${phone}` : undefined,
+              duration: 4000,
             });
             playChime();
           }
@@ -101,30 +176,40 @@ export function useRealtimeNotifications() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
-          const row = payload.new as {
-            session_id?: string;
-            author?: string;
-            text?: string;
-            created_at?: string;
-          };
+        async (payload) => {
+          const row = payload.new as LiveMessage;
           if (row.created_at && new Date(row.created_at).getTime() < mountedAt.current - 5000) return;
-          qc.invalidateQueries({ queryKey: ["conversations"] });
-          qc.invalidateQueries({ queryKey: ["unread-counts"] });
-          if (row.session_id) qc.invalidateQueries({ queryKey: ["conversation", row.session_id] });
-          if (row.author !== "user") return;
-          const lists = qc.getQueriesData<Array<{ id: string; mode?: string }>>({
-            queryKey: ["conversations"],
-          });
-          const mode = lists
-            .flatMap(([, list]) => list ?? [])
-            .find((c) => c.id === row.session_id)?.mode;
-          if (mode !== "humano") return;
-          const preview = (row.text ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
-          toast.info("Cliente respondeu", {
-            description: preview || "Nova mensagem no atendimento humano.",
-          });
-          playChime();
+          await Promise.all([
+            qc.cancelQueries({ queryKey: ["conversations"] }),
+            row.session_id
+              ? qc.cancelQueries({ queryKey: ["conversation", row.session_id] })
+              : Promise.resolve(),
+          ]);
+          showMessageNow(qc, row);
+          if (row.author === "user") {
+            const lists = qc.getQueriesData<Array<{ id: string; mode?: string }>>({
+              queryKey: ["conversations"],
+            });
+            const mode = lists
+              .flatMap(([, list]) => list ?? [])
+              .find((c) => c.id === row.session_id)?.mode;
+            if (mode === "humano") {
+              const preview = (row.text ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+              toast.info("Cliente respondeu", {
+                id: row.session_id ? `reply-${row.session_id}` : undefined,
+                description: preview || "Nova mensagem no atendimento humano.",
+                duration: 4000,
+              });
+              playChime();
+            }
+          }
+          if (!chatIsOpen(qc, row.session_id)) {
+            void qc.invalidateQueries({ queryKey: ["unread-counts"] });
+          }
+          void qc.invalidateQueries({ queryKey: ["conversations"] });
+          if (row.session_id) {
+            void qc.invalidateQueries({ queryKey: ["conversation", row.session_id] });
+          }
         },
       )
       .subscribe();

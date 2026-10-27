@@ -74,6 +74,7 @@ function ConversaDetail() {
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const [outgoing, setOutgoing] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
@@ -98,9 +99,26 @@ function ConversaDetail() {
     refetchInterval: 5000,
   });
 
+  const latestMessageId = conv?.messages.at(-1)?.id;
   useEffect(() => {
-    api.markConversationSeen(id).catch(() => {});
-  }, [id]);
+    let active = true;
+    api
+      .markConversationSeen(id)
+      .then(() => {
+        if (active) qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [id, latestMessageId, qc]);
+
+  const visibleCount = (conv?.messages.length ?? 0) + outgoing.length;
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [visibleCount]);
 
   const replyMut = useMutation({
     mutationFn: async (payload: { text: string; file: File | null; replyToMessage: ChatMessage | null }) => {
@@ -239,7 +257,7 @@ function ConversaDetail() {
         </CardHeader>
         <CardContent className="space-y-4">
           <HandoffControls sessionId={conv.id} mode={conv.mode} />
-          <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-xl bg-secondary/30 p-4">
+          <div ref={threadRef} className="max-h-[min(60vh,520px)] overflow-y-auto rounded-xl bg-secondary/30 p-4">
             <ChatTimeline
               messages={[
                 ...conv.messages,
