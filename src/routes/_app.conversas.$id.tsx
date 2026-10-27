@@ -22,6 +22,17 @@ import { HandoffControls } from "@/components/guata/handoff-controls";
 import { CopilotCard } from "@/components/guata/copilot-card";
 import type { ChatMessage } from "@/types/guata";
 
+function pendingLabel(text: string, file: File | null): string {
+  if (file && (file.type.startsWith("audio/") || /\.(webm|mp3|m4a|ogg|aac|amr)$/i.test(file.name))) {
+    return "[áudio]";
+  }
+  const caption = text.trim();
+  if (caption) return caption;
+  if (!file) return "";
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  return isPdf ? "[documento]" : "[imagem]";
+}
+
 function forwardCaption(message: ChatMessage): string {
   const text = message.text?.trim() ?? "";
   if (!text || text === "[áudio]" || text === "[imagem]" || text === "[documento]") return "";
@@ -63,6 +74,7 @@ function ConversaDetail() {
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const [outgoing, setOutgoing] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (!attachFile || !attachFile.type.startsWith("image/")) {
@@ -91,12 +103,12 @@ function ConversaDetail() {
   }, [id]);
 
   const replyMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (payload: { text: string; file: File | null; replyToMessage: ChatMessage | null }) => {
       let attachment:
         | { base64: string; contentType: string; filename?: string; kind: "image" | "document" | "audio" }
         | undefined;
-      if (attachFile) {
-        let source = attachFile;
+      if (payload.file) {
+        let source = payload.file;
         const isAudio = source.type.startsWith("audio/") || /\.(webm|mp3|m4a|ogg|aac|amr)$/i.test(source.name);
         if (isAudio) {
           const { needsWhatsAppAudioTranscode, transcodeToMp3 } = await import("@/lib/whatsapp-audio");
@@ -112,21 +124,38 @@ function ConversaDetail() {
           kind: isAudio ? "audio" : isPdf ? "document" : "image",
         };
       }
-      if (!reply.trim() && !attachment) throw new Error("Informe texto ou anexo.");
-      return api.replyConversation(id, reply.trim(), attachment, replyTo?.id);
+      if (!payload.text.trim() && !attachment) throw new Error("Informe texto ou anexo.");
+      return api.replyConversation(id, payload.text.trim(), attachment, payload.replyToMessage?.id);
     },
-    onSuccess: () => {
-      toast.success("Mensagem enviada");
+    onMutate: (payload) => {
+      const pending: ChatMessage = {
+        id: `local-${crypto.randomUUID()}`,
+        role: "human",
+        text: pendingLabel(payload.text, payload.file),
+        at: new Date().toISOString(),
+      };
+      setOutgoing((prev) => [...prev, pending]);
       setReply("");
       setAttachFile(null);
       setReplyTo(null);
       if (fileRef.current) fileRef.current.value = "";
-      qc.invalidateQueries({ queryKey: ["conversation", id] });
+      if (audioRef.current) audioRef.current.value = "";
+      return pending.id;
+    },
+    onSuccess: async (_data, _payload, pendingId) => {
+      toast.success("Mensagem enviada");
+      await qc.invalidateQueries({ queryKey: ["conversation", id] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
       qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      setOutgoing((prev) => prev.filter((m) => m.id !== pendingId));
     },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Falha ao enviar"),
+    onError: (e, payload, pendingId) => {
+      setOutgoing((prev) => prev.filter((m) => m.id !== pendingId));
+      setReply(payload.text);
+      if (payload.file) setAttachFile(payload.file);
+      if (payload.replyToMessage) setReplyTo(payload.replyToMessage);
+      toast.error(e instanceof Error ? e.message : "Falha ao enviar");
+    },
   });
 
   const forwardMut = useMutation({
@@ -212,7 +241,17 @@ function ConversaDetail() {
           <HandoffControls sessionId={conv.id} mode={conv.mode} />
           <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-xl bg-secondary/30 p-4">
             <ChatTimeline
-              messages={conv.messages}
+              messages={[
+                ...conv.messages,
+                ...outgoing.filter((pending) => {
+                  const start = new Date(pending.at).getTime() - 5000;
+                  return !conv.messages.some((m) => {
+                    if (m.role !== "human" || m.id.startsWith("local-")) return false;
+                    if (new Date(m.at).getTime() < start) return false;
+                    return m.text === pending.text || m.text.includes(pending.text);
+                  });
+                }),
+              ]}
               onForward={(message) => {
                 setForwardQuery("");
                 setForwardPhone("");
@@ -380,19 +419,21 @@ function ConversaDetail() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (reply.trim() || attachFile) replyMut.mutate();
+                  if (reply.trim() || attachFile) {
+                    replyMut.mutate({ text: reply, file: attachFile, replyToMessage: replyTo });
+                  }
                 }
               }}
             />
             <Button
-              onClick={() => replyMut.mutate()}
+              onClick={() => replyMut.mutate({ text: reply, file: attachFile, replyToMessage: replyTo })}
               disabled={replyMut.isPending || (!reply.trim() && !attachFile)}
             >
               <Send className="h-4 w-4" />
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Atualiza automaticamente a cada poucos segundos. Enviar aqui usa o WhatsApp da empresa
+            A conversa atualiza assim que chega mensagem. Enviar aqui usa o WhatsApp da empresa
             (Meta) — o cliente recebe no app normal.
           </p>
         </CardContent>

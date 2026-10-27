@@ -83,7 +83,10 @@ export function useRealtimeNotifications() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "sessions" },
         (payload) => {
+          const sessionId = (payload.new as { id?: string })?.id;
           qc.invalidateQueries({ queryKey: ["unread-counts"] });
+          qc.invalidateQueries({ queryKey: ["conversations"] });
+          if (sessionId) qc.invalidateQueries({ queryKey: ["conversation", sessionId] });
           const newMode = (payload.new as { mode?: string })?.mode;
           const oldMode = (payload.old as { mode?: string })?.mode;
           if (newMode === "humano" && oldMode !== "humano") {
@@ -92,9 +95,36 @@ export function useRealtimeNotifications() {
               description: phone ? `WhatsApp: ${phone}` : undefined,
             });
             playChime();
-            qc.invalidateQueries({ queryKey: ["unread-counts"] });
-            qc.invalidateQueries({ queryKey: ["conversations"] });
           }
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const row = payload.new as {
+            session_id?: string;
+            author?: string;
+            text?: string;
+            created_at?: string;
+          };
+          if (row.created_at && new Date(row.created_at).getTime() < mountedAt.current - 5000) return;
+          qc.invalidateQueries({ queryKey: ["conversations"] });
+          qc.invalidateQueries({ queryKey: ["unread-counts"] });
+          if (row.session_id) qc.invalidateQueries({ queryKey: ["conversation", row.session_id] });
+          if (row.author !== "user") return;
+          const lists = qc.getQueriesData<Array<{ id: string; mode?: string }>>({
+            queryKey: ["conversations"],
+          });
+          const mode = lists
+            .flatMap(([, list]) => list ?? [])
+            .find((c) => c.id === row.session_id)?.mode;
+          if (mode !== "humano") return;
+          const preview = (row.text ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+          toast.info("Cliente respondeu", {
+            description: preview || "Nova mensagem no atendimento humano.",
+          });
+          playChime();
         },
       )
       .subscribe();

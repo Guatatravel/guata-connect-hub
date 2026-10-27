@@ -514,6 +514,7 @@ async function deliverTextReplies(
   botMode: boolean,
   inboundKind: IncomingMessage["inboundKind"],
   attendantTtsVoice: BotVoiceProfile | null,
+  inboundWaMessageId?: string,
 ): Promise<void> {
   const audioPrefs = readBotAudioPrefs(intake);
   const ttsVoice = resolveTtsVoice(intake, attendantTtsVoice);
@@ -543,6 +544,7 @@ async function deliverTextReplies(
     const text = replies[i];
 
     if (i === 0 && tryAudio) {
+      if (inboundWaMessageId) await markReadAndTyping(waTarget, inboundWaMessageId);
       const speech = await synthesizeBotSpeechDetailed(text, ttsVoice);
       if (speech.ok) {
         try {
@@ -552,17 +554,19 @@ async function deliverTextReplies(
           } catch (e) {
             console.error("[chat-media] áudio outbound:", e);
           }
-          await new Promise((r) => setTimeout(r, typingDelayMs(text)));
+          const voiceNote = speech.mimeType.includes("ogg");
+          if (inboundWaMessageId) await markReadAndTyping(waTarget, inboundWaMessageId);
           let audioRes = await sendWhatsAppAudioBytes(
             waTarget,
             phone,
             speech.bytes,
             speech.mimeType,
+            { voice: voiceNote },
           ).catch((e) => ({ ok: false, reason: String(e) }) as const);
           if (!audioRes.ok && audioPath) {
             const url = await signedChatMediaUrl(audioPath, 60 * 60);
             if (url) {
-              audioRes = await sendWhatsAppAudio(waTarget, phone, url).catch(
+              audioRes = await sendWhatsAppAudio(waTarget, phone, url, { voice: voiceNote }).catch(
                 (e) => ({ ok: false, reason: String(e) }) as const,
               );
             }
@@ -606,6 +610,7 @@ async function deliverTextReplies(
         : undefined;
     const rowId = await persistMessage(sessionId, "out", "bot", text, outMeta);
 
+    if (inboundWaMessageId) await markReadAndTyping(waTarget, inboundWaMessageId);
     await new Promise((r) => setTimeout(r, typingDelayMs(text)));
     const res = await sendWhatsAppText(waTarget, phone, text).catch(
       (e) => ({ ok: false, reason: String(e) }) as const,
@@ -827,6 +832,7 @@ export async function processMessage(
       botOutbound,
       msg.inboundKind,
       activeAttendant?.tts_voice_profile ?? null,
+      msg.messageId,
     );
   }
 

@@ -311,6 +311,7 @@ export async function sendWhatsAppAudioByMediaId(
   target: WhatsAppTarget,
   to: string,
   mediaId: string,
+  options?: { voice?: boolean },
 ): Promise<SendResult> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
@@ -329,7 +330,7 @@ export async function sendWhatsAppAudioByMediaId(
         messaging_product: "whatsapp",
         to: to.replace(/\D/g, ""),
         type: "audio",
-        audio: { id: mediaId },
+        audio: options?.voice ? { id: mediaId, voice: true } : { id: mediaId },
       }),
     },
   );
@@ -350,6 +351,7 @@ export async function sendWhatsAppAudioBytes(
   to: string,
   bytes: Uint8Array,
   mimeType: string,
+  options?: { voice?: boolean },
 ): Promise<SendResult> {
   const ext = mimeType.includes("mpeg")
     ? "mp3"
@@ -365,11 +367,11 @@ export async function sendWhatsAppAudioBytes(
   const uploaded = await uploadWhatsAppMedia(
     target,
     bytes,
-    mimeType,
+    mimeType.split(";")[0].trim(),
     `guata-reply.${ext}`,
   );
   if (!uploaded.ok) return { ok: false, reason: uploaded.reason };
-  return sendWhatsAppAudioByMediaId(target, to, uploaded.mediaId);
+  return sendWhatsAppAudioByMediaId(target, to, uploaded.mediaId, options);
 }
 
 /** Template aprovado na Meta. Único tipo que sai fora da janela de 24h. */
@@ -426,6 +428,7 @@ export async function sendWhatsAppAudio(
   target: WhatsAppTarget,
   to: string,
   audioUrl: string,
+  options?: { voice?: boolean },
 ): Promise<SendResult> {
   const { token, phoneId } = await lineCreds(target);
   if (!token || !phoneId) {
@@ -444,7 +447,7 @@ export async function sendWhatsAppAudio(
         messaging_product: "whatsapp",
         to: to.replace(/\D/g, ""),
         type: "audio",
-        audio: { link: audioUrl },
+        audio: options?.voice ? { link: audioUrl, voice: true } : { link: audioUrl },
       }),
     },
   );

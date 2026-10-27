@@ -93,22 +93,29 @@ function openAiVoice(profile: BotVoiceProfile): string {
   return process.env.GUATA_TTS_OPENAI_VOICE_MALE?.trim() || "onyx";
 }
 
-async function synthesizeElevenLabs(
-  text: string,
-  profile: BotVoiceProfile,
-): Promise<{ bytes: Uint8Array } | { error: string }> {
-  const key = process.env.ELEVENLABS_API_KEY?.trim();
-  const voiceId = voiceIdFor(profile);
-  if (!key || !voiceId) {
-    return { error: "elevenlabs_missing_key_or_voice_id" };
-  }
+function isOgg(bytes: Uint8Array): boolean {
+  return (
+    bytes.length > 4 &&
+    bytes[0] === 0x4f &&
+    bytes[1] === 0x67 &&
+    bytes[2] === 0x67 &&
+    bytes[3] === 0x53
+  );
+}
 
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+async function requestElevenLabs(
+  voiceId: string,
+  key: string,
+  text: string,
+  outputFormat?: string,
+): Promise<{ bytes: Uint8Array } | { error: string }> {
+  const query = outputFormat ? `?output_format=${outputFormat}` : "";
+  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}${query}`, {
     method: "POST",
     headers: {
       "xi-api-key": key,
       "Content-Type": "application/json",
-      Accept: "audio/mpeg",
+      Accept: outputFormat?.startsWith("opus") ? "audio/ogg" : "audio/mpeg",
     },
     body: JSON.stringify({
       text,
@@ -117,19 +124,39 @@ async function synthesizeElevenLabs(
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    console.error("[tts] elevenlabs:", res.status, body);
+    console.error("[tts] elevenlabs:", res.status, outputFormat ?? "mp3", body);
     return { error: `elevenlabs_${res.status}: ${body.slice(0, 120)}` };
   }
-  return { bytes: new Uint8Array(await res.arrayBuffer()) };
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length === 0) return { error: "elevenlabs_empty" };
+  return { bytes };
 }
 
-async function synthesizeOpenAi(
+/** OGG Opus vira nota de voz no WhatsApp. Se o formato falhar, cai para MP3. */
+async function synthesizeElevenLabs(
   text: string,
   profile: BotVoiceProfile,
-): Promise<{ bytes: Uint8Array } | { error: string }> {
-  const key = process.env.OPENAI_API_KEY?.trim();
-  if (!key) return { error: "openai_key_missing" };
+): Promise<{ bytes: Uint8Array; mimeType: string } | { error: string }> {
+  const key = process.env.ELEVENLABS_API_KEY?.trim();
+  const voiceId = voiceIdFor(profile);
+  if (!key || !voiceId) {
+    return { error: "elevenlabs_missing_key_or_voice_id" };
+  }
 
+  const opus = await requestElevenLabs(voiceId, key, text, "opus_48000_64");
+  if ("bytes" in opus && isOgg(opus.bytes)) return { bytes: opus.bytes, mimeType: "audio/ogg" };
+
+  const mp3 = await requestElevenLabs(voiceId, key, text);
+  if ("bytes" in mp3) return { bytes: mp3.bytes, mimeType: "audio/mpeg" };
+  return { error: "error" in mp3 ? mp3.error : opus.error };
+}
+
+async function requestOpenAi(
+  key: string,
+  text: string,
+  profile: BotVoiceProfile,
+  format: "opus" | "mp3",
+): Promise<{ bytes: Uint8Array } | { error: string }> {
   const res = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -140,15 +167,32 @@ async function synthesizeOpenAi(
       model: process.env.GUATA_TTS_OPENAI_MODEL?.trim() || "gpt-4o-mini-tts",
       input: text,
       voice: openAiVoice(profile),
-      response_format: "mp3",
+      response_format: format,
     }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    console.error("[tts] openai:", res.status, body);
+    console.error("[tts] openai:", res.status, format, body);
     return { error: `openai_${res.status}: ${body.slice(0, 120)}` };
   }
-  return { bytes: new Uint8Array(await res.arrayBuffer()) };
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length === 0) return { error: "openai_empty" };
+  return { bytes };
+}
+
+async function synthesizeOpenAi(
+  text: string,
+  profile: BotVoiceProfile,
+): Promise<{ bytes: Uint8Array; mimeType: string } | { error: string }> {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  if (!key) return { error: "openai_key_missing" };
+
+  const opus = await requestOpenAi(key, text, profile, "opus");
+  if ("bytes" in opus && isOgg(opus.bytes)) return { bytes: opus.bytes, mimeType: "audio/ogg" };
+
+  const mp3 = await requestOpenAi(key, text, profile, "mp3");
+  if ("bytes" in mp3) return { bytes: mp3.bytes, mimeType: "audio/mpeg" };
+  return { error: "error" in mp3 ? mp3.error : opus.error };
 }
 
 export type SynthesizeResult =
@@ -167,7 +211,7 @@ export async function synthesizeBotSpeechDetailed(
   if (elevenLabsTtsReady()) {
     const el = await synthesizeElevenLabs(spoken, profile);
     if ("bytes" in el && el.bytes.length > 0) {
-      return { ok: true, bytes: el.bytes, mimeType: "audio/mpeg" };
+      return { ok: true, bytes: el.bytes, mimeType: el.mimeType };
     }
     const elErr = "error" in el ? el.error : "elevenlabs_empty";
     if (!process.env.OPENAI_API_KEY?.trim()) {
@@ -177,7 +221,7 @@ export async function synthesizeBotSpeechDetailed(
 
   const oa = await synthesizeOpenAi(spoken, profile);
   if ("bytes" in oa && oa.bytes.length > 0) {
-    return { ok: true, bytes: oa.bytes, mimeType: "audio/mpeg" };
+    return { ok: true, bytes: oa.bytes, mimeType: oa.mimeType };
   }
   const oaErr = "error" in oa ? oa.error : "openai_empty";
   return { ok: false, reason: oaErr };
