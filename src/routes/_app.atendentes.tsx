@@ -195,10 +195,10 @@ function Atendentes() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Atendentes</h1>
+          <h1 className="text-2xl font-semibold">Agentes IA</h1>
           <p className="text-muted-foreground text-sm">
-            Defina como o atendente virtual se apresenta e responde em cada linha
-            de WhatsApp.
+            Aqui fica a personalidade do bot: tom, instruções, voz e quando passar para um
+            humano. Horário, integrações e serviços da agência continuam em Configurações.
           </p>
         </div>
         <Button

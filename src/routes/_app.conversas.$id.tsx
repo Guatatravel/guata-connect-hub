@@ -17,9 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, FileAudio, Mic, Paperclip, Send, Square, X } from "lucide-react";
-import { DossieCard } from "@/components/guata/dossie-card";
 import { HandoffControls } from "@/components/guata/handoff-controls";
-import { CopilotCard } from "@/components/guata/copilot-card";
+import { ConsultantAiDock } from "@/components/guata/consultant-ai-dock";
 import { CrmPanel } from "@/components/guata/crm-panel";
 import type { ChatMessage } from "@/types/guata";
 
@@ -248,11 +247,9 @@ function ConversaDetail() {
 
       <ConversationProfileCard conv={conv} />
 
-      <DossieCard sessionId={conv.id} onUseMessage={setReply} />
-
-      <CopilotCard sessionId={conv.id} onUseMessage={setReply} />
-
       <CrmPanel conv={conv} onUseReply={setReply} />
+
+      <ConsultantAiDock sessionId={conv.id} onUseMessage={setReply} />
 
       <Card className="rounded-2xl">
         <CardHeader>

@@ -18,9 +18,11 @@ function extractSuggestion(text: string) {
 export function CopilotCard({
   sessionId,
   onUseMessage,
+  embedded = false,
 }: {
   sessionId: string;
   onUseMessage: (t: string) => void;
+  embedded?: boolean;
 }) {
   const ask = useServerFn(askCopilot);
   const [history, setHistory] = useState<Msg[]>([]);
@@ -41,6 +43,61 @@ export function CopilotCard({
     mut.mutate(next);
   };
 
+  const thread = (
+    <>
+      <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1">
+        {history.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            Pergunte, por exemplo: “O que o cliente quer?”, “Traduza a última mensagem” ou
+            “Escreva uma resposta em inglês oferecendo um roteiro em Bonito”.
+          </p>
+        )}
+        {history.map((m, i) => {
+          const sug = m.role === "assistant" ? extractSuggestion(m.content) : null;
+          return (
+            <div
+              key={i}
+              className={
+                m.role === "user"
+                  ? "ml-auto max-w-[85%] rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm whitespace-pre-wrap break-words"
+                  : "max-w-[95%] text-sm whitespace-pre-wrap break-words"
+              }
+            >
+              {m.content}
+              {sug && (
+                <Button size="sm" variant="outline" className="mt-2" onClick={() => onUseMessage(sug)}>
+                  Usar como resposta
+                </Button>
+              )}
+            </div>
+          );
+        })}
+        {mut.isPending && <p className="text-sm text-muted-foreground">Pensando…</p>}
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <Textarea
+          rows={2}
+          value={input}
+          placeholder="Converse com a IA sobre este cliente..."
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+        />
+        <Button onClick={send} disabled={mut.isPending || !input.trim()}>
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="flex min-h-[16rem] max-h-[26rem] flex-1 flex-col gap-3">{thread}</div>;
+  }
+
   return (
     <Card className="rounded-2xl">
       <CardHeader>
@@ -51,54 +108,7 @@ export function CopilotCard({
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="max-h-80 overflow-y-auto space-y-3">
-          {history.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Pergunte, por exemplo: “O que o cliente quer?”, “Traduza a última mensagem” ou
-              “Escreva uma resposta em inglês oferecendo um roteiro em Bonito”.
-            </p>
-          )}
-          {history.map((m, i) => {
-            const sug = m.role === "assistant" ? extractSuggestion(m.content) : null;
-            return (
-              <div
-                key={i}
-                className={
-                  m.role === "user"
-                    ? "ml-auto max-w-[85%] rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm"
-                    : "max-w-[95%] text-sm whitespace-pre-wrap"
-                }
-              >
-                {m.content}
-                {sug && (
-                  <Button size="sm" variant="outline" className="mt-2" onClick={() => onUseMessage(sug)}>
-                    Usar como resposta
-                  </Button>
-                )}
-              </div>
-            );
-          })}
-          {mut.isPending && <p className="text-sm text-muted-foreground">Pensando…</p>}
-        </div>
-        <div className="flex gap-2">
-          <Textarea
-            rows={2}
-            value={input}
-            placeholder="Converse com a IA sobre este cliente..."
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          <Button onClick={send} disabled={mut.isPending || !input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
+      <CardContent className="flex max-h-[28rem] flex-col gap-3">{thread}</CardContent>
     </Card>
   );
 }

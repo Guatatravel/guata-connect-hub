@@ -18,9 +18,11 @@ const TEMP: Record<string, { label: string; cls: string }> = {
 export function DossieCard({
   sessionId,
   onUseMessage,
+  embedded = false,
 }: {
   sessionId: string;
   onUseMessage?: (text: string) => void;
+  embedded?: boolean;
 }) {
   const qc = useQueryClient();
   const fetchFn = useServerFn(getDossie);
@@ -43,18 +45,28 @@ export function DossieCard({
 
   const d = data?.dossie;
 
-  return (
-    <Card className="rounded-2xl border-primary/30">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+  const header = (
+    <div className="flex flex-row items-center justify-between gap-2">
+      {!embedded && (
         <CardTitle className="font-display flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" /> Dossiê de Fechamento
         </CardTitle>
-        <Button size="sm" variant="outline" onClick={() => regen.mutate()} disabled={regen.isPending}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${regen.isPending ? "animate-spin" : ""}`} />
-          {d ? "Atualizar" : "Gerar resumo"}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className={embedded ? "ml-auto" : undefined}
+        onClick={() => regen.mutate()}
+        disabled={regen.isPending}
+      >
+        <RefreshCw className={`h-4 w-4 mr-1 ${regen.isPending ? "animate-spin" : ""}`} />
+        {d ? "Atualizar" : "Gerar resumo"}
+      </Button>
+    </div>
+  );
+
+  const body = (
+      <div className="space-y-4 text-sm">
         {isLoading || regen.isPending ? (
           <div className="space-y-2">
             <Skeleton className="h-4 w-3/4" />
@@ -112,9 +124,49 @@ export function DossieCard({
               </div>
             )}
 
+            {d.mensagem_sugerida && onUseMessage && (
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Mensagem sugerida
+                </p>
+                <p className="rounded-lg bg-secondary/40 px-3 py-2 whitespace-pre-wrap">
+                  {d.mensagem_sugerida}
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => onUseMessage(d.mensagem_sugerida)}>
+                    <Send className="h-4 w-4 mr-1" /> Usar no chat
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(d.mensagem_sugerida);
+                      toast.success("Copiado");
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-1" /> Copiar
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
-      </CardContent>
+      </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        {header}
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <Card className="rounded-2xl border-primary/30">
+      <CardHeader className="space-y-0">{header}</CardHeader>
+      <CardContent>{body}</CardContent>
     </Card>
   );
 }

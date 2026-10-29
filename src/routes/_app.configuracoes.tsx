@@ -45,16 +45,12 @@ function ConfigPage() {
     queryFn: () => api.listServices(),
   });
 
-  const [personaDescubra, setPersonaDescubra] = useState("");
-  const [personaViagens, setPersonaViagens] = useState("");
   const [horario, setHorario] = useState("");
   const [foraHorario, setForaHorario] = useState("");
   const [msgHumano, setMsgHumano] = useState("");
 
   useEffect(() => {
     if (settings) {
-      setPersonaDescubra(settings.personaDescubra);
-      setPersonaViagens(settings.personaViagens);
       setHorario(settings.horarioAtendimento);
       setForaHorario(settings.mensagemForaHorario);
       setMsgHumano(settings.mensagemHumano);
@@ -64,8 +60,6 @@ function ConfigPage() {
   const saveSettings = useMutation({
     mutationFn: () =>
       api.updateSettings({
-        personaDescubra,
-        personaViagens,
         horarioAtendimento: horario,
         mensagemForaHorario: foraHorario,
         mensagemHumano: msgHumano,
@@ -112,7 +106,12 @@ function ConfigPage() {
           Configurações
         </h1>
         <p className="text-muted-foreground">
-          Status das integrações, personas do bot, horário, respostas rápidas e serviços da agência.
+          Integrações, horário de atendimento, respostas rápidas e serviços da agência.
+          A personalidade do bot fica em{" "}
+          <Link to="/atendentes" className="underline font-medium">
+            Agentes IA
+          </Link>
+          .
         </p>
       </div>
 
@@ -127,7 +126,7 @@ function ConfigPage() {
               Os campos com <Lock className="inline h-3 w-3" /> são <strong>só-leitura</strong> —
               são URLs geradas pelo sistema. Você deve <strong>copiar e colar</strong> essas URLs
               nos painéis externos (Meta Developers e Supabase do Descubra MS). O que é editável
-              aqui: personas, horário, mensagens automáticas, serviços e notificações.
+              aqui: horário, mensagens automáticas, serviços e notificações.
             </p>
           </div>
         </CardContent>
@@ -234,6 +233,82 @@ function ConfigPage() {
       <TtsDiagnosticsCard />
 
       {settings.useDescubraKb && <DiagnosticsCard />}
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <CardTitle className="font-display">Horário e mensagens automáticas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label>Horário de atendimento</Label>
+            <Input
+              value={horario}
+              onChange={(e) => setHorario(e.target.value)}
+              placeholder="Ex.: segunda a sexta, 8h às 18h"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Mensagem fora do horário</Label>
+            <Textarea
+              rows={3}
+              value={foraHorario}
+              onChange={(e) => setForaHorario(e.target.value)}
+              placeholder="O que o bot diz quando a agência está fechada"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Mensagem ao passar para um humano</Label>
+            <Textarea
+              rows={3}
+              value={msgHumano}
+              onChange={(e) => setMsgHumano(e.target.value)}
+              placeholder="Aviso quando o cliente pede um consultor"
+            />
+          </div>
+          <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
+            {saveSettings.isPending ? "Salvando..." : "Salvar horário e mensagens"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="font-display">Serviços da agência</CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              upsertSvc.mutate({
+                id: crypto.randomUUID(),
+                nome: "",
+                descricao: "",
+                categoria: "",
+                keywords: [],
+                ativo: true,
+              })
+            }
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Novo
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            O bot cita estes serviços nas conversas. Não é a personalidade dele.
+          </p>
+          {(services ?? []).map((svc) => (
+            <ServiceRow
+              key={svc.id}
+              service={svc}
+              onSave={(s) => upsertSvc.mutate(s)}
+              onDelete={() => deleteSvc.mutate(svc.id)}
+            />
+          ))}
+          {(services ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum serviço cadastrado.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <BrandingCard />
 
