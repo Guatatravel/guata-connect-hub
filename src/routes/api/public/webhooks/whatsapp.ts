@@ -168,6 +168,34 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const { applyWhatsAppDeliveryStatus } = await import(
           "@/lib/whatsapp-status.server"
         );
+        const echoes = [
+          ...(Array.isArray(value.message_echoes) ? value.message_echoes : []),
+          ...(Array.isArray(value.smb_message_echoes) ? value.smb_message_echoes : []),
+        ];
+        if (echoes.length && inboundMeta) {
+          const { persistPhoneEcho } = await import("@/lib/crm.server");
+          for (const echo of echoes) {
+            const text =
+              echo?.text?.body ??
+              echo?.image?.caption ??
+              echo?.button?.text ??
+              (echo?.type ? `[${echo.type} pelo celular]` : "");
+            const customer = String(echo?.to ?? "");
+            if (!customer) continue;
+            try {
+              await persistPhoneEcho({
+                organizationId: inboundMeta.organizationId,
+                line: inboundMeta.line,
+                customerPhone: customer,
+                text: String(text),
+                waMessageId: echo?.id ? String(echo.id) : undefined,
+              });
+            } catch (err) {
+              console.error("[whatsapp-webhook] eco do celular:", err);
+            }
+          }
+        }
+
         for (const st of statuses) {
           const waId = String(st?.id ?? "");
           const status = String(st?.status ?? "");

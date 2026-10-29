@@ -575,6 +575,38 @@ export type Database = {
         }
         Relationships: []
       }
+      quick_replies: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          organization_id: string
+          title: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_replies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           active_organization_id: string | null

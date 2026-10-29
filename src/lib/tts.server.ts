@@ -148,7 +148,7 @@ async function synthesizeElevenLabs(
 
   const mp3 = await requestElevenLabs(voiceId, key, text);
   if ("bytes" in mp3) return { bytes: mp3.bytes, mimeType: "audio/mpeg" };
-  return { error: "error" in mp3 ? mp3.error : opus.error };
+  return { error: "error" in mp3 ? mp3.error : "error" in opus ? opus.error : "tts_empty" };
 }
 
 async function requestOpenAi(
@@ -192,7 +192,7 @@ async function synthesizeOpenAi(
 
   const mp3 = await requestOpenAi(key, text, profile, "mp3");
   if ("bytes" in mp3) return { bytes: mp3.bytes, mimeType: "audio/mpeg" };
-  return { error: "error" in mp3 ? mp3.error : opus.error };
+  return { error: "error" in mp3 ? mp3.error : "error" in opus ? opus.error : "tts_empty" };
 }
 
 export type SynthesizeResult =

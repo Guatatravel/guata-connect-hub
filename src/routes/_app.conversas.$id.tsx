@@ -20,6 +20,7 @@ import { ArrowLeft, FileAudio, Mic, Paperclip, Send, Square, X } from "lucide-re
 import { DossieCard } from "@/components/guata/dossie-card";
 import { HandoffControls } from "@/components/guata/handoff-controls";
 import { CopilotCard } from "@/components/guata/copilot-card";
+import { CrmPanel } from "@/components/guata/crm-panel";
 import type { ChatMessage } from "@/types/guata";
 
 function pendingLabel(text: string, file: File | null): string {
@@ -250,6 +251,8 @@ function ConversaDetail() {
       <DossieCard sessionId={conv.id} onUseMessage={setReply} />
 
       <CopilotCard sessionId={conv.id} onUseMessage={setReply} />
+
+      <CrmPanel conv={conv} onUseReply={setReply} />
 
       <Card className="rounded-2xl">
         <CardHeader>

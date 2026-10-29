@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatPhone, timeAgo } from "@/lib/format";
 import type { Conversation } from "@/types/guata";
 import { useOrgLineUi } from "@/hooks/use-org-line-ui";
+import { CRM_GUIDES } from "@/lib/crm.shared";
 
 export const Route = createFileRoute("/_app/conversas/")({
   head: () => ({ meta: [{ title: "Conversas — Guatá Channel" }] }),
@@ -24,6 +25,7 @@ function ConversasPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<"ativas" | "arquivadas" | "leads">("ativas");
   const [q, setQ] = useState("");
+  const [guide, setGuide] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   const [newPhone, setNewPhone] = useState("");
   const [newName, setNewName] = useState("");
@@ -53,6 +55,7 @@ function ConversasPage() {
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (data ?? []).filter((c) => {
+      if (guide && c.crmGuide !== guide) return false;
       if (term) {
         return (c.contactName ?? "").toLowerCase().includes(term) || c.phone.includes(term.replace(/\D/g, "") || "§");
       }
@@ -64,7 +67,7 @@ function ConversasPage() {
       }
       return tab === "arquivadas" ? c.archived : !c.archived;
     });
-  }, [data, q, tab]);
+  }, [data, q, tab, guide]);
   const waiting = list.filter((c) => c.mode === "humano" && !c.archived);
   const others = list.filter((c) => !(c.mode === "humano" && !c.archived));
 
@@ -80,6 +83,7 @@ function ConversasPage() {
             <span className="font-medium truncate">{c.contactName ?? formatPhone(c.phone)}</span>
             <LineBadge line={c.line} org={orgUi} />
             <SessionModeBadge mode={c.mode} />
+            {c.crmGuide && <span className="text-[10px] rounded-full bg-secondary px-1.5 py-0.5">{c.crmGuide}</span>}
             {c.leadStage && <LeadStageBadge stage={c.leadStage} />}
           </div>
           <div className="text-sm text-muted-foreground truncate">{c.lastMessage}</div>
@@ -114,6 +118,16 @@ function ConversasPage() {
         <Button variant={tab === "ativas" ? "default" : "outline"} size="sm" onClick={() => setTab("ativas")}>Ativas</Button>
         <Button variant={tab === "arquivadas" ? "default" : "outline"} size="sm" onClick={() => setTab("arquivadas")}>Arquivadas</Button>
         <Button variant={tab === "leads" ? "default" : "outline"} size="sm" onClick={() => setTab("leads")}>Leads</Button>
+        <select
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+          value={guide}
+          onChange={(e) => setGuide(e.target.value)}
+        >
+          <option value="">Todas as guias</option>
+          {CRM_GUIDES.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
         <Button size="sm" variant="secondary" onClick={() => setNewOpen((v) => !v)}>
           <Phone className="h-4 w-4 mr-1" /> Nova conversa
         </Button>

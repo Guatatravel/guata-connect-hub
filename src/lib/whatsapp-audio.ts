@@ -61,7 +61,7 @@ export async function transcodeToMp3(file: File): Promise<File> {
     }
     const tail = encoder.flush();
     if (tail.length > 0) chunks.push(tail);
-    const blob = new Blob(chunks, { type: "audio/mpeg" });
+    const blob = new Blob(chunks.map((c) => new Uint8Array(c)), { type: "audio/mpeg" });
     if (blob.size < 128) throw new Error("Áudio vazio depois da conversão.");
     return new File([blob], `audio-${Date.now()}.mp3`, { type: "audio/mpeg" });
   } catch (e) {

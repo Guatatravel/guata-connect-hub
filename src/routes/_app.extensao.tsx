@@ -1,5 +1,5 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_app/extensao")({
-  component: () => <Navigate to="/conversas" replace />,
+  component: () => <Navigate to="/quadro" replace />,
 });

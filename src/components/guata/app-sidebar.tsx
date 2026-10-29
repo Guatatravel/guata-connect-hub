@@ -22,6 +22,8 @@ import {
   Bot,
   Link2,
   Building2,
+  Columns3,
+  MessageSquareText,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
@@ -30,6 +32,8 @@ const items = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
+  { to: "/quadro", label: "Quadro", icon: Columns3 },
+  { to: "/respostas", label: "Respostas rápidas", icon: MessageSquareText },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/organizacoes", label: "Agências", icon: Building2 },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },

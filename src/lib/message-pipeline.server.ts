@@ -21,6 +21,7 @@ import {
   markReadAndTyping,
   typingDelayMs,
 } from "@/lib/meta-send.server";
+import { applyInboundCrm, markQuoteSent, runDueFollowUps } from "@/lib/crm.server";
 import {
   handleBotAudioPreferenceMessage,
   readBotAudioPrefs,
@@ -666,6 +667,8 @@ export async function processMessage(
       .update({ contact_name: msg.contactName.trim() })
       .eq("id", session.id);
   }
+  await applyInboundCrm(session.id, msg.text).catch((e) => console.error("[crm]", e));
+  void runDueFollowUps(msg.organizationId).catch((e) => console.error("[follow-up]", e));
   await persistMessage(session.id, "in", "user", msg.text, {
     inbound_kind: msg.inboundKind ?? "text",
     ...(msg.messageId ? { wa_message_id: msg.messageId } : {}),
@@ -925,6 +928,9 @@ export async function processMessage(
       }
       if (sendRes.ok) {
         knowledgeMediaSent = true;
+        if (media.delivery === "document") {
+          await markQuoteSent(session.id).catch((e) => console.error("[crm] orçamento", e));
+        }
         await persistMessage(
           session.id,
           "out",

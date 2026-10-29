@@ -115,10 +115,30 @@ function ConectarMeta() {
           )}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          O responsável da agência (ou a equipe Guatá) pode preencher os dados abaixo. Parceiros usam só
-          base local; Descubra MS é exclusivo da org Guatá.
+          A mensalidade é o uso do Guatá Labs. As mensagens de modelo (utilidade ou marketing) são
+          cobradas pela Meta no cartão cadastrado no Gerenciador de Negócios da agência. São
+          pagamentos separados.
         </p>
       </div>
+
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Celular e painel no mesmo número</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <p>
+            A coexistência oficial deixa a conversa no WhatsApp Business do celular e nesta central.
+            Status, etiqueta do aplicativo e catálogo continuam só no celular. Guias, quadro e
+            follow-up ficam aqui.
+          </p>
+          <p>
+            A Meta só libera esse espelhamento depois de homologar o Guatá Labs como provedor. Até
+            lá, o número conectado abaixo já recebe e envia pelo painel. Quando a homologação
+            existir, a agência confirma a sincronização na tela da Meta em até 24 horas. Mensagens
+            escritas no celular passam a aparecer nesta caixa.
+          </p>
+        </CardContent>
+      </Card>
 
       {isLoading || !data ? (
         <Skeleton className="h-48 rounded-2xl" />

@@ -24,6 +24,8 @@ import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
 import { Route as AppOrganizacoesRouteImport } from './routes/_app.organizacoes'
+import { Route as AppQuadroRouteImport } from './routes/_app.quadro'
+import { Route as AppRespostasRouteImport } from './routes/_app.respostas'
 import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
 import { Route as AppUsuariosRouteImport } from './routes/_app.usuarios'
 import { Route as AppConversasIndexRouteImport } from './routes/_app.conversas.index'
@@ -107,6 +109,16 @@ const AppOrganizacoesRoute = AppOrganizacoesRouteImport.update({
   path: '/organizacoes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppQuadroRoute = AppQuadroRouteImport.update({
+  id: '/quadro',
+  path: '/quadro',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRespostasRoute = AppRespostasRouteImport.update({
+  id: '/respostas',
+  path: '/respostas',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSolicitacoesRoute = AppSolicitacoesRouteImport.update({
   id: '/solicitacoes',
   path: '/solicitacoes',
@@ -165,6 +177,8 @@ export interface FileRoutesByFullPath {
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/extensao': typeof AppExtensaoRoute
   '/organizacoes': typeof AppOrganizacoesRoute
+  '/quadro': typeof AppQuadroRoute
+  '/respostas': typeof AppRespostasRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -189,6 +203,8 @@ export interface FileRoutesByTo {
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/extensao': typeof AppExtensaoRoute
   '/organizacoes': typeof AppOrganizacoesRoute
+  '/quadro': typeof AppQuadroRoute
+  '/respostas': typeof AppRespostasRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
   '/usuarios': typeof AppUsuariosRoute
   '/conversas/$id': typeof AppConversasIdRoute
@@ -215,6 +231,8 @@ export interface FileRoutesById {
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/_app/extensao': typeof AppExtensaoRoute
   '/_app/organizacoes': typeof AppOrganizacoesRoute
+  '/_app/quadro': typeof AppQuadroRoute
+  '/_app/respostas': typeof AppRespostasRoute
   '/_app/solicitacoes': typeof AppSolicitacoesRoute
   '/_app/usuarios': typeof AppUsuariosRoute
   '/_app/conversas/$id': typeof AppConversasIdRoute
@@ -241,6 +259,8 @@ export interface FileRouteTypes {
     | '/diagnostico-whatsapp'
     | '/extensao'
     | '/organizacoes'
+    | '/quadro'
+    | '/respostas'
     | '/solicitacoes'
     | '/usuarios'
     | '/conversas/$id'
@@ -265,6 +285,8 @@ export interface FileRouteTypes {
     | '/diagnostico-whatsapp'
     | '/extensao'
     | '/organizacoes'
+    | '/quadro'
+    | '/respostas'
     | '/solicitacoes'
     | '/usuarios'
     | '/conversas/$id'
@@ -290,6 +312,8 @@ export interface FileRouteTypes {
     | '/_app/diagnostico-whatsapp'
     | '/_app/extensao'
     | '/_app/organizacoes'
+    | '/_app/quadro'
+    | '/_app/respostas'
     | '/_app/solicitacoes'
     | '/_app/usuarios'
     | '/_app/conversas/$id'
@@ -418,6 +442,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrganizacoesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/quadro': {
+      id: '/_app/quadro'
+      path: '/quadro'
+      fullPath: '/quadro'
+      preLoaderRoute: typeof AppQuadroRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/respostas': {
+      id: '/_app/respostas'
+      path: '/respostas'
+      fullPath: '/respostas'
+      preLoaderRoute: typeof AppRespostasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/solicitacoes': {
       id: '/_app/solicitacoes'
       path: '/solicitacoes'
@@ -487,6 +525,8 @@ interface AppRouteChildren {
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
   AppExtensaoRoute: typeof AppExtensaoRoute
   AppOrganizacoesRoute: typeof AppOrganizacoesRoute
+  AppQuadroRoute: typeof AppQuadroRoute
+  AppRespostasRoute: typeof AppRespostasRoute
   AppSolicitacoesRoute: typeof AppSolicitacoesRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
   AppConversasIdRoute: typeof AppConversasIdRoute
@@ -505,6 +545,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
   AppExtensaoRoute: AppExtensaoRoute,
   AppOrganizacoesRoute: AppOrganizacoesRoute,
+  AppQuadroRoute: AppQuadroRoute,
+  AppRespostasRoute: AppRespostasRoute,
   AppSolicitacoesRoute: AppSolicitacoesRoute,
   AppUsuariosRoute: AppUsuariosRoute,
   AppConversasIdRoute: AppConversasIdRoute,

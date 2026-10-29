@@ -22,6 +22,8 @@ import {
   agentWhatsAppParts,
 } from "@/lib/whatsapp-messages.server";
 import { parseLeadStageFromIntake } from "@/lib/lead-intake.server";
+import { parseCrm } from "@/lib/crm.shared";
+import { markQuoteSent, runDueFollowUps } from "@/lib/crm.server";
 import { resolveOrganizationForUser } from "@/lib/organizations.server";
 
 // --------- mapeamentos DB ↔ UI ---------
@@ -35,6 +37,16 @@ const uiToDbLine = (l: UiLine | string): DbLine =>
 type DbMode = "bot" | "humano" | "triagem" | "aguardando";
 type UiMode = "informacional" | "triagem" | "humano" | "aguardando";
 const dbToUiMode = (m: DbMode): UiMode => (m === "bot" ? "informacional" : m);
+
+function crmFields(intake: Record<string, unknown>) {
+  const crm = parseCrm(intake);
+  return {
+    crmGuide: crm.guide,
+    crmLabels: crm.labels,
+    crmColumn: crm.column,
+    followUp: crm.followUp,
+  };
+}
 
 const uiToDbStatusPost = (s: string): "rascunho" | "aprovado" | "publicado" | "arquivado" => {
   if (s === "ignorado") return "arquivado";
@@ -246,6 +258,7 @@ export const fetchConversations = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
     const orgId = await resolveOrganizationForUser(context.userId);
+    await runDueFollowUps(orgId).catch((e) => console.error("[follow-up]", e));
     const { data, error } = await supabaseAdmin
       .from("sessions")
       .select(
@@ -279,6 +292,7 @@ export const fetchConversations = createServerFn({ method: "POST" })
           typeof intake["triagem_protocol"] === "string"
             ? intake["triagem_protocol"]
             : undefined,
+        ...crmFields(intake),
         messages: [],
       };
     });
@@ -379,6 +393,7 @@ export const fetchConversation = createServerFn({ method: "POST" })
       leadStage: parseLeadStageFromIntake(intake),
       triagemProtocol:
         typeof intake["triagem_protocol"] === "string" ? intake["triagem_protocol"] : undefined,
+      ...crmFields(intake),
       messages,
     };
   });
@@ -536,8 +551,10 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         replyToWaId,
       );
       sent = docRes.ok;
-      if (docRes.ok) await markSent(rowId, docRes.messageId);
-      else await markFailed(rowId, docRes.reason ?? "desconhecida");
+      if (docRes.ok) {
+        await markSent(rowId, docRes.messageId);
+        await markQuoteSent(s.id).catch((e) => console.error("[crm] orçamento", e));
+      } else await markFailed(rowId, docRes.reason ?? "desconhecida");
     } else if (data.audioBase64) {
       const mime = (data.audioContentType ?? "audio/ogg").split(";")[0].trim() || "audio/ogg";
       const mediaPath = await storeChatMediaFromBase64(s.phone, data.audioBase64, mime, "audio");

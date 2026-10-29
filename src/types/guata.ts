@@ -73,6 +73,16 @@ export interface Conversation {
   unseen?: boolean;
   leadStage?: LeadStage;
   triagemProtocol?: string;
+  crmGuide?: string;
+  crmLabels?: string[];
+  crmColumn?: "interessados" | "orcamento" | "fechado";
+  followUp?: {
+    dueAt: string;
+    text: string;
+    templateName?: string;
+    status: "pending" | "sent" | "skipped";
+    detail?: string;
+  };
   messages: ChatMessage[];
 }
 
