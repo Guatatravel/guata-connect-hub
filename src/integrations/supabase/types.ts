@@ -538,6 +538,7 @@ export type Database = {
       }
       organizations: {
         Row: {
+          access_liberado: boolean
           allow_bot_audio: boolean
           bot_audio_client_default: boolean
           bot_audio_monthly_cap: number | null
@@ -550,6 +551,7 @@ export type Database = {
           use_descubra_kb: boolean
         }
         Insert: {
+          access_liberado?: boolean
           allow_bot_audio?: boolean
           bot_audio_client_default?: boolean
           bot_audio_monthly_cap?: number | null
@@ -562,6 +564,7 @@ export type Database = {
           use_descubra_kb?: boolean
         }
         Update: {
+          access_liberado?: boolean
           allow_bot_audio?: boolean
           bot_audio_client_default?: boolean
           bot_audio_monthly_cap?: number | null

@@ -96,8 +96,8 @@ function UsuariosPage() {
           Usuários
         </h1>
         <p className="text-muted-foreground">
-          Cadastre consultores e administradores. Cada novo usuário é obrigado a
-          trocar a senha no primeiro acesso.
+          Cadastre consultores (vinculados à agência ativa no topo) e administradores Guatá.
+          Cada novo usuário com senha temporária troca a senha no primeiro acesso.
         </p>
         <Link
           to="/solicitacoes"

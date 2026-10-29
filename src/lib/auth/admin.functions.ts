@@ -164,6 +164,40 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       .insert({ user_id: newId, role: data.role });
     if (roleErr) throw new Error(roleErr.message);
 
+    const {
+      addOrganizationMember,
+      getGuataOrganizationId,
+      resolveOrganizationForUser,
+    } = await import("@/lib/organizations.server");
+
+    if (data.role === "admin") {
+      const guataId = await getGuataOrganizationId();
+      const { data: mem } = await supabaseAdmin
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", newId)
+        .eq("organization_id", guataId)
+        .maybeSingle();
+      if (!mem) await addOrganizationMember(guataId, newId, "admin");
+      await supabaseAdmin
+        .from("profiles")
+        .update({ active_organization_id: guataId })
+        .eq("id", newId);
+    } else {
+      const orgId = await resolveOrganizationForUser(context.userId);
+      const { data: mem } = await supabaseAdmin
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", newId)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (!mem) await addOrganizationMember(orgId, newId, "member");
+      await supabaseAdmin
+        .from("profiles")
+        .update({ active_organization_id: orgId })
+        .eq("id", newId);
+    }
+
     return { id: newId, email: data.email, role: data.role };
   });
 

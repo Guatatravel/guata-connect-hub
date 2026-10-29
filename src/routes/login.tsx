@@ -142,7 +142,7 @@ function LoginPage() {
                 <p className="text-xs text-center text-muted-foreground pt-2">
                   Ainda não tem acesso?{" "}
                   <a href="/apresentacao#solicitar" className="text-primary underline font-medium">
-                    Solicitar cadastro
+                    Criar conta da agência
                   </a>
                 </p>
               </>

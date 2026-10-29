@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_app/atendentes")({
   component: Atendentes,
   head: () => ({
     meta: [
-      { title: "Agentes IA | Guatá Channel" },
+      { title: "Atendente virtual (IA) | Guatá Channel" },
       {
         name: "description",
         content:
@@ -195,7 +195,14 @@ function Atendentes() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Agentes IA</h1>
+          <h1 className="text-2xl font-semibold">Atendente virtual (IA)</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Personalidade do bot no WhatsApp — não confundir com consultores humanos (
+            <Link to="/equipe" className="text-primary underline">
+              Equipe
+            </Link>
+            ).
+          </p>
           <p className="text-muted-foreground text-sm">
             Aqui fica a personalidade do bot: tom, instruções, voz e quando passar para um
             humano. Horário, integrações e serviços da agência continuam em Configurações.

@@ -73,6 +73,13 @@ export async function setActiveOrganizationForUser(
 }
 
 export async function resolveOrganizationForUser(userId: string): Promise<string> {
+  const orgs = await listOrganizationsForUser(userId);
+  if (orgs.length === 0) {
+    throw new Error(
+      "Sua conta não está vinculada a nenhuma agência. Peça suporte à equipe Guatá.",
+    );
+  }
+
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("active_organization_id")
@@ -82,15 +89,20 @@ export async function resolveOrganizationForUser(userId: string): Promise<string
   const active = profile?.active_organization_id as string | undefined;
   if (active && (await isMember(userId, active))) return active;
 
-  const { data } = await supabaseAdmin
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
+  return orgs[0]!.id;
+}
+
+/** Parceiro só opera WhatsApp/bot quando access_liberado; org Guatá sempre ativa. */
+export async function isOrganizationAccessLiberado(organizationId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("organizations")
+    .select("access_liberado, is_guata")
+    .eq("id", organizationId)
     .maybeSingle();
-  if (data?.organization_id) return data.organization_id as string;
-  return getGuataOrganizationId();
+  if (error) throw new Error(error.message);
+  if (!data) return false;
+  if (data.is_guata) return true;
+  return Boolean(data.access_liberado);
 }
 
 /** Admin global ou owner/admin da organização ativa podem configurar WhatsApp. */
@@ -116,6 +128,59 @@ export async function userCanManageOrgWhatsApp(
   return role === "owner" || role === "admin";
 }
 
+/** Dono/admin da agência (ou admin Guatá) podem convidar consultores humanos ao painel. */
+export async function userCanManageOrgTeam(
+  userId: string,
+  organizationId: string,
+): Promise<boolean> {
+  return userCanManageOrgWhatsApp(userId, organizationId);
+}
+
+export async function listOrganizationTeamMembers(organizationId: string): Promise<
+  Array<{
+    userId: string;
+    orgRole: string;
+    name: string;
+    email: string;
+    mustChangePassword: boolean;
+    panelRole: string;
+  }>
+> {
+  const { data: members, error } = await supabaseAdmin
+    .from("organization_members")
+    .select("user_id, role")
+    .eq("organization_id", organizationId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const userIds = (members ?? []).map((m) => m.user_id as string);
+  if (!userIds.length) return [];
+
+  const { data: profs } = await supabaseAdmin
+    .from("profiles")
+    .select("id, name, email, must_change_password")
+    .in("id", userIds);
+  const { data: roles } = await supabaseAdmin
+    .from("user_roles")
+    .select("user_id, role")
+    .in("user_id", userIds);
+
+  const profById = new Map((profs ?? []).map((p) => [p.id, p]));
+  const roleByUser = new Map((roles ?? []).map((r) => [r.user_id, r.role as string]));
+  const orgRoleByUser = new Map((members ?? []).map((m) => [m.user_id as string, m.role as string]));
+
+  return userIds.map((uid) => {
+    const p = profById.get(uid);
+    return {
+      userId: uid,
+      orgRole: orgRoleByUser.get(uid) ?? "member",
+      name: p?.name?.trim() || p?.email || uid,
+      email: p?.email ?? "",
+      mustChangePassword: Boolean(p?.must_change_password),
+      panelRole: roleByUser.get(uid) ?? "consultor",
+    };
+  });
+}
+
 export async function userCanManagePartnerOrgs(userId: string): Promise<boolean> {
   const guataId = await getGuataOrganizationId();
   const { data: role } = await supabaseAdmin
@@ -131,6 +196,7 @@ export async function userCanManagePartnerOrgs(userId: string): Promise<boolean>
 export async function createPartnerOrganization(input: {
   name: string;
   slug: string;
+  accessLiberado?: boolean;
 }): Promise<string> {
   const slug = input.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
   if (!slug || slug === "guata") throw new Error("Slug inválido.");
@@ -141,6 +207,7 @@ export async function createPartnerOrganization(input: {
       slug,
       is_guata: false,
       use_descubra_kb: false,
+      access_liberado: input.accessLiberado ?? true,
     })
     .select("id")
     .single();

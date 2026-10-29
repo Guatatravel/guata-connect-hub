@@ -41,8 +41,10 @@ function SolicitacoesPage() {
   const provisionMut = useMutation({
     mutationFn: (requestId: string) => provision({ data: { requestId } }),
     onSuccess: (res) => {
-      if (res.alreadyProvisioned) {
+      if (res.alreadyProvisioned && !res.accessLiberated) {
         toast.info("Esta solicitação já foi liberada anteriormente.");
+      } else if (res.accessLiberated) {
+        toast.success("Agência liberada — o parceiro já pode usar WhatsApp e o painel completo.");
       } else if (res.tempPassword) {
         toast.success(
           `Conta criada. Envie ao parceiro: ${res.email} / senha: ${res.tempPassword}`,
@@ -77,8 +79,9 @@ function SolicitacoesPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold text-primary">Solicitações de acesso</h1>
           <p className="text-muted-foreground">
-            Pedidos em “Solicitar cadastro”. Use <strong>Aprovar e criar conta</strong> para criar org +
-            login automaticamente. Depois o parceiro só conecta o WhatsApp na Meta.
+            Pedidos de novas agências (cadastro com login na hora ou formulário antigo).{" "}
+            <strong>Liberar acesso</strong> ativa WhatsApp e IA; em cadastros antigos sem conta, também
+            cria login.
           </p>
         </div>
       </div>
@@ -91,11 +94,25 @@ function SolicitacoesPage() {
       <div className="grid gap-4">
         {data?.map((r) => {
           const wa = `https://wa.me/${r.whatsapp.replace(/\D/g, "").replace(/^(?!55)/, "55")}`;
+          let selfRegistered = false;
+          if (r.notas) {
+            try {
+              selfRegistered = Boolean(JSON.parse(String(r.notas)).self_registered);
+            } catch {
+              /* ignore */
+            }
+          }
           return (
             <Card key={r.id} className="rounded-2xl">
               <CardContent className="p-5 grid md:grid-cols-[1fr_auto] gap-4">
                 <div className="space-y-1">
-                  <p className="font-semibold text-primary">{r.empresa} <span className="font-normal text-muted-foreground">· {r.nome}</span></p>
+                  <p className="font-semibold text-primary">
+                    {r.empresa}{" "}
+                    <span className="font-normal text-muted-foreground">· {r.nome}</span>
+                    {selfRegistered && (
+                      <span className="ml-2 text-xs font-normal text-accent">conta já criada</span>
+                    )}
+                  </p>
                   <p className="text-sm">{r.email} · {r.whatsapp}{r.cidade ? ` · ${r.cidade}` : ""}</p>
                   {r.mensagem && <p className="text-sm text-muted-foreground">{r.mensagem}</p>}
                   <p className="text-xs text-muted-foreground">Recebida em {formatDate(r.created_at)}</p>
@@ -115,7 +132,7 @@ function SolicitacoesPage() {
                     disabled={provisionMut.isPending || r.status === "liberado"}
                     onClick={() => provisionMut.mutate(r.id)}
                   >
-                    {r.status === "liberado" ? "Já liberado" : "Aprovar e criar conta"}
+                    {r.status === "liberado" ? "Já liberado" : "Liberar acesso"}
                   </Button>
                   <Button size="sm" variant="outline" asChild>
                     <Link to="/usuarios">Usuários (manual)</Link>

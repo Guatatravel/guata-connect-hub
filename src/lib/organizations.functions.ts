@@ -5,12 +5,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   addOrganizationMember,
   createPartnerOrganization,
+  isOrganizationAccessLiberado,
   listOrganizationsForUser,
   listWhatsAppChannels,
   resolveOrganizationForUser,
   setActiveOrganizationForUser,
   userCanManagePartnerOrgs,
   userCanManageOrgWhatsApp,
+  userCanManageOrgTeam,
+  listOrganizationTeamMembers,
 } from "@/lib/organizations.server";
 
 export const fetchMyOrganizations = createServerFn({ method: "GET" })
@@ -69,7 +72,7 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
     const orgId = await resolveOrganizationForUser(context.userId);
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("id, name, slug, is_guata, use_descubra_kb")
+      .select("id, name, slug, is_guata, use_descubra_kb, access_liberado")
       .eq("id", orgId)
       .maybeSingle();
     if (!org) throw new Error("Organização não encontrada.");
@@ -77,6 +80,7 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
     const hasViagensChannel = channels.some(
       (c) => c.line === "viagens" && Boolean(c.phone_number_id?.trim()),
     );
+    const accessLiberado = await isOrganizationAccessLiberado(orgId);
     return {
       organization: {
         id: org.id as string,
@@ -84,6 +88,7 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
         slug: org.slug as string,
         isGuata: Boolean(org.is_guata),
         useDescubraKb: Boolean(org.use_descubra_kb),
+        accessLiberado,
       },
       hasViagensChannel,
       channels,
@@ -106,6 +111,11 @@ export const saveWhatsAppChannel = createServerFn({ method: "POST" })
     if (!(await userCanManageOrgWhatsApp(context.userId, orgId))) {
       throw new Error(
         "Sem permissão para alterar o WhatsApp desta organização. Peça a um administrador da agência.",
+      );
+    }
+    if (!(await isOrganizationAccessLiberado(orgId))) {
+      throw new Error(
+        "WhatsApp fica disponível depois que a equipe Guatá liberar sua agência em Solicitações.",
       );
     }
     const patch: Record<string, unknown> = {
@@ -196,4 +206,127 @@ export const provisionAccessRequest = createServerFn({ method: "POST" })
       "@/lib/access-provision.server"
     );
     return provisionPartnerFromAccessRequest(data.requestId);
+  });
+
+/** Estado do painel: org ativa, liberação e papéis (layout / menu). */
+export const fetchPanelAccessGate = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const orgs = await listOrganizationsForUser(context.userId);
+    const activeOrg = orgs.find((o) => o.id === orgId) ?? orgs[0];
+    const accessLiberado = await isOrganizationAccessLiberado(orgId);
+    const canManagePartners = await userCanManagePartnerOrgs(context.userId);
+
+    const { data: roles } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const roleList = (roles ?? []).map((r) => r.role as string);
+    const isGlobalAdmin = roleList.includes("admin");
+    const canManageOrgTeam =
+      (await userCanManageOrgTeam(context.userId, orgId)) &&
+      (accessLiberado || isGlobalAdmin);
+
+    return {
+      organizationId: orgId,
+      organizationName: activeOrg?.name ?? "Agência",
+      accessLiberado: accessLiberado || isGlobalAdmin,
+      isGlobalAdmin,
+      canManagePartners,
+      canManageOrgTeam,
+      roles: roleList,
+    };
+  });
+
+const inviteTeamSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(255),
+  password: z.string().min(8).max(128),
+});
+
+/** Consultor humano com login no painel — vinculado à org ativa. */
+export const listOrgTeam = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const orgId = await resolveOrganizationForUser(context.userId);
+    if (!(await userCanManageOrgTeam(context.userId, orgId))) {
+      throw new Error("Somente o responsável da agência pode gerenciar a equipe.");
+    }
+    if (!(await isOrganizationAccessLiberado(orgId))) {
+      throw new Error("Libere a agência em Solicitações antes de convidar consultores.");
+    }
+    const members = await listOrganizationTeamMembers(orgId);
+    return { organizationId: orgId, members };
+  });
+
+export const inviteOrgTeamMember = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => inviteTeamSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    const orgId = await resolveOrganizationForUser(context.userId);
+    if (!(await userCanManageOrgTeam(context.userId, orgId))) {
+      throw new Error("Somente o responsável da agência pode convidar consultores.");
+    }
+    if (!(await isOrganizationAccessLiberado(orgId))) {
+      throw new Error("Libere a agência antes de convidar consultores.");
+    }
+
+    const email = data.email.trim().toLowerCase();
+    let userId: string | undefined;
+
+    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: { name: data.name, must_change_password: true },
+    });
+
+    if (createErr) {
+      const msg = createErr.message.toLowerCase();
+      if (!msg.includes("already") && !msg.includes("registered")) {
+        throw new Error(createErr.message);
+      }
+      const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+      if (listErr) throw new Error(listErr.message);
+      const existing = list.users.find((u) => u.email?.toLowerCase() === email);
+      if (!existing?.id) throw new Error("E-mail já cadastrado, mas usuário não encontrado.");
+      userId = existing.id;
+    } else {
+      userId = created.user?.id;
+    }
+
+    if (!userId) throw new Error("Falha ao criar usuário.");
+
+    await supabaseAdmin.from("profiles").upsert(
+      {
+        id: userId,
+        email,
+        name: data.name,
+        must_change_password: true,
+        active_organization_id: orgId,
+      },
+      { onConflict: "id" },
+    );
+
+    const { data: roleRow } = await supabaseAdmin
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!roleRow) {
+      await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "consultor" });
+    }
+
+    const { data: mem } = await supabaseAdmin
+      .from("organization_members")
+      .select("organization_id")
+      .eq("organization_id", orgId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!mem) {
+      await addOrganizationMember(orgId, userId, "member");
+    }
+
+    return { ok: true, userId, email };
   });

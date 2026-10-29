@@ -1,8 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { registerPartnerAccount } from "@/lib/partner-register.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,9 +30,14 @@ const schema = z.object({
   nome: z.string().trim().min(2, "Informe seu nome").max(120),
   empresa: z.string().trim().min(2, "Informe a empresa").max(160),
   email: z.string().trim().email("E-mail inválido").max(255),
+  password: z.string().min(8, "Senha com pelo menos 8 caracteres").max(128),
+  passwordConfirm: z.string().min(8).max(128),
   whatsapp: z.string().trim().min(8, "WhatsApp inválido").max(30),
   cidade: z.string().trim().max(120).optional(),
   mensagem: z.string().trim().max(1000).optional(),
+}).refine((d) => d.password === d.passwordConfirm, {
+  message: "As senhas não coincidem",
+  path: ["passwordConfirm"],
 });
 
 const features = [
@@ -43,26 +50,55 @@ const features = [
 ];
 
 function Apresentacao() {
-  const [form, setForm] = useState({ nome: "", empresa: "", email: "", whatsapp: "", cidade: "", mensagem: "" });
+  const navigate = useNavigate();
+  const register = useServerFn(registerPartnerAccount);
+  const [form, setForm] = useState({
+    nome: "",
+    empresa: "",
+    email: "",
+    password: "",
+    passwordConfirm: "",
+    whatsapp: "",
+    cidade: "",
+    mensagem: "",
+  });
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = schema.safeParse(form);
-    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+    if (!parsed.success) return toast.error(parsed.error.issues[0]?.message ?? "Dados inválidos");
     setSending(true);
-    const { error } = await supabase.from("access_requests").insert({
-      ...parsed.data,
-      cidade: parsed.data.cidade || null,
-      mensagem: parsed.data.mensagem || null,
-    });
-    setSending(false);
-    if (error) return toast.error("Não foi possível enviar. Tente novamente.");
-    setSent(true);
-    toast.success("Solicitação enviada! Entraremos em contato.");
+    try {
+      const { email } = await register({
+        data: {
+          nome: parsed.data.nome,
+          empresa: parsed.data.empresa,
+          email: parsed.data.email,
+          password: parsed.data.password,
+          whatsapp: parsed.data.whatsapp,
+          cidade: parsed.data.cidade,
+          mensagem: parsed.data.mensagem,
+        },
+      });
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email,
+        password: parsed.data.password,
+      });
+      if (signInErr) {
+        toast.success("Conta criada! Entre com seu e-mail e senha.");
+        navigate({ to: "/login" });
+        return;
+      }
+      toast.success("Conta criada! Em instantes liberamos o WhatsApp e a IA.");
+      navigate({ to: "/aguardando-liberacao" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível criar a conta.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -87,7 +123,7 @@ function Apresentacao() {
             tudo resumido para você entrar só na hora certa.
           </p>
           <Button size="lg" asChild>
-            <a href="#solicitar">Solicitar acesso</a>
+            <a href="#solicitar">Criar minha conta</a>
           </Button>
         </div>
         <Card className="rounded-2xl border-accent/50">
@@ -119,25 +155,40 @@ function Apresentacao() {
       <section id="solicitar" className="max-w-2xl mx-auto px-6 py-16">
         <Card className="rounded-2xl">
           <CardContent className="p-8">
-            <h2 className="font-display text-3xl font-semibold text-primary mb-2">Solicitar acesso</h2>
-            <p className="text-muted-foreground mb-6">Preencha e entraremos em contato para ativar sua conta.</p>
-            {sent ? (
-              <p className="text-primary font-medium">Recebemos sua solicitação. Em breve falaremos com você pelo WhatsApp.</p>
-            ) : (
-              <form onSubmit={submit} className="grid gap-3">
-                <Input placeholder="Seu nome" value={form.nome} onChange={set("nome")} />
-                <Input placeholder="Empresa / agência" value={form.empresa} onChange={set("empresa")} />
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <Input type="email" placeholder="E-mail" value={form.email} onChange={set("email")} />
-                  <Input placeholder="WhatsApp com DDD" value={form.whatsapp} onChange={set("whatsapp")} />
-                </div>
-                <Input placeholder="Cidade (opcional)" value={form.cidade} onChange={set("cidade")} />
-                <Textarea placeholder="Conte um pouco sobre seu atendimento (opcional)" value={form.mensagem} onChange={set("mensagem")} />
-                <Button type="submit" size="lg" disabled={sending}>
-                  {sending ? "Enviando..." : "Enviar solicitação"}
-                </Button>
-              </form>
-            )}
+            <h2 className="font-display text-3xl font-semibold text-primary mb-2">Criar conta da agência</h2>
+            <p className="text-muted-foreground mb-6">
+              Você já entra no painel com login e senha. WhatsApp e IA são liberados pela equipe Guatá em
+              até 1 dia útil (geralmente bem antes).
+            </p>
+            <form onSubmit={submit} className="grid gap-3">
+              <Input placeholder="Seu nome" value={form.nome} onChange={set("nome")} autoComplete="name" />
+              <Input placeholder="Empresa / agência" value={form.empresa} onChange={set("empresa")} />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Input type="email" placeholder="E-mail" value={form.email} onChange={set("email")} autoComplete="email" />
+                <Input placeholder="WhatsApp com DDD" value={form.whatsapp} onChange={set("whatsapp")} />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Input
+                  type="password"
+                  placeholder="Senha (mín. 8 caracteres)"
+                  value={form.password}
+                  onChange={set("password")}
+                  autoComplete="new-password"
+                />
+                <Input
+                  type="password"
+                  placeholder="Repita a senha"
+                  value={form.passwordConfirm}
+                  onChange={set("passwordConfirm")}
+                  autoComplete="new-password"
+                />
+              </div>
+              <Input placeholder="Cidade (opcional)" value={form.cidade} onChange={set("cidade")} />
+              <Textarea placeholder="Conte um pouco sobre seu atendimento (opcional)" value={form.mensagem} onChange={set("mensagem")} />
+              <Button type="submit" size="lg" disabled={sending}>
+                {sending ? "Criando conta..." : "Criar conta e entrar"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </section>

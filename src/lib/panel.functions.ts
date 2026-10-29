@@ -1013,10 +1013,20 @@ export const fetchStaff = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
+    const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
+    const orgId = await resolveOrganizationForUser(context.userId);
+    const { data: members } = await supabaseAdmin
+      .from("organization_members")
+      .select("user_id")
+      .eq("organization_id", orgId);
+    const memberIds = new Set((members ?? []).map((m) => m.user_id as string));
+    if (!memberIds.size) return [] as Array<{ id: string; name: string; role: string }>;
+
     const { data: roles } = await supabaseAdmin
       .from("user_roles")
-      .select("user_id, role");
-    const ids = Array.from(new Set((roles ?? []).map((r) => r.user_id)));
+      .select("user_id, role")
+      .in("user_id", [...memberIds]);
+    const ids = (roles ?? []).map((r) => r.user_id).filter((id) => memberIds.has(id));
     if (!ids.length) return [] as Array<{ id: string; name: string; role: string }>;
     const { data: profs } = await supabaseAdmin
       .from("profiles")

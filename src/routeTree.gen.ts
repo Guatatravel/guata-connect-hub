@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AguardandoLiberacaoRouteImport } from './routes/aguardando-liberacao'
 import { Route as ApresentacaoRouteImport } from './routes/apresentacao'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
@@ -22,6 +23,7 @@ import { Route as AppConhecimentoRouteImport } from './routes/_app.conhecimento'
 import { Route as AppCotacoesRouteImport } from './routes/_app.cotacoes'
 import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
+import { Route as AppEquipeRouteImport } from './routes/_app.equipe'
 import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
 import { Route as AppOrganizacoesRouteImport } from './routes/_app.organizacoes'
 import { Route as AppQuadroRouteImport } from './routes/_app.quadro'
@@ -42,6 +44,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AguardandoLiberacaoRoute = AguardandoLiberacaoRouteImport.update({
+  id: '/aguardando-liberacao',
+  path: '/aguardando-liberacao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApresentacaoRoute = ApresentacaoRouteImport.update({
@@ -97,6 +104,11 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
 const AppDiagnosticoWhatsappRoute = AppDiagnosticoWhatsappRouteImport.update({
   id: '/diagnostico-whatsapp',
   path: '/diagnostico-whatsapp',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEquipeRoute = AppEquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
   getParentRoute: () => AppRoute,
 } as any)
 const AppExtensaoRoute = AppExtensaoRouteImport.update({
@@ -164,6 +176,7 @@ const ApiPublicWebhooksWhatsappRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/aguardando-liberacao': typeof AguardandoLiberacaoRoute
   '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
@@ -175,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/cotacoes': typeof AppCotacoesRoute
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
   '/organizacoes': typeof AppOrganizacoesRoute
   '/quadro': typeof AppQuadroRoute
@@ -190,6 +204,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/aguardando-liberacao': typeof AguardandoLiberacaoRoute
   '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
@@ -201,6 +216,7 @@ export interface FileRoutesByTo {
   '/cotacoes': typeof AppCotacoesRoute
   '/dashboard': typeof AppDashboardRoute
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
   '/organizacoes': typeof AppOrganizacoesRoute
   '/quadro': typeof AppQuadroRoute
@@ -218,6 +234,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/aguardando-liberacao': typeof AguardandoLiberacaoRoute
   '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
@@ -229,6 +246,7 @@ export interface FileRoutesById {
   '/_app/cotacoes': typeof AppCotacoesRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
+  '/_app/equipe': typeof AppEquipeRoute
   '/_app/extensao': typeof AppExtensaoRoute
   '/_app/organizacoes': typeof AppOrganizacoesRoute
   '/_app/quadro': typeof AppQuadroRoute
@@ -246,6 +264,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/aguardando-liberacao'
     | '/apresentacao'
     | '/login'
     | '/setup'
@@ -257,6 +276,7 @@ export interface FileRouteTypes {
     | '/cotacoes'
     | '/dashboard'
     | '/diagnostico-whatsapp'
+    | '/equipe'
     | '/extensao'
     | '/organizacoes'
     | '/quadro'
@@ -272,6 +292,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/aguardando-liberacao'
     | '/apresentacao'
     | '/login'
     | '/setup'
@@ -283,6 +304,7 @@ export interface FileRouteTypes {
     | '/cotacoes'
     | '/dashboard'
     | '/diagnostico-whatsapp'
+    | '/equipe'
     | '/extensao'
     | '/organizacoes'
     | '/quadro'
@@ -299,6 +321,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/aguardando-liberacao'
     | '/apresentacao'
     | '/login'
     | '/setup'
@@ -310,6 +333,7 @@ export interface FileRouteTypes {
     | '/_app/cotacoes'
     | '/_app/dashboard'
     | '/_app/diagnostico-whatsapp'
+    | '/_app/equipe'
     | '/_app/extensao'
     | '/_app/organizacoes'
     | '/_app/quadro'
@@ -327,6 +351,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  AguardandoLiberacaoRoute: typeof AguardandoLiberacaoRoute
   ApresentacaoRoute: typeof ApresentacaoRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
@@ -349,6 +374,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/aguardando-liberacao': {
+      id: '/aguardando-liberacao'
+      path: '/aguardando-liberacao'
+      fullPath: '/aguardando-liberacao'
+      preLoaderRoute: typeof AguardandoLiberacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/apresentacao': {
@@ -426,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/diagnostico-whatsapp'
       fullPath: '/diagnostico-whatsapp'
       preLoaderRoute: typeof AppDiagnosticoWhatsappRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/equipe': {
+      id: '/_app/equipe'
+      path: '/equipe'
+      fullPath: '/equipe'
+      preLoaderRoute: typeof AppEquipeRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/extensao': {
@@ -523,6 +562,7 @@ interface AppRouteChildren {
   AppCotacoesRoute: typeof AppCotacoesRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
+  AppEquipeRoute: typeof AppEquipeRoute
   AppExtensaoRoute: typeof AppExtensaoRoute
   AppOrganizacoesRoute: typeof AppOrganizacoesRoute
   AppQuadroRoute: typeof AppQuadroRoute
@@ -543,6 +583,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCotacoesRoute: AppCotacoesRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
+  AppEquipeRoute: AppEquipeRoute,
   AppExtensaoRoute: AppExtensaoRoute,
   AppOrganizacoesRoute: AppOrganizacoesRoute,
   AppQuadroRoute: AppQuadroRoute,
@@ -560,6 +601,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  AguardandoLiberacaoRoute: AguardandoLiberacaoRoute,
   ApresentacaoRoute: ApresentacaoRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,

@@ -649,6 +649,10 @@ async function notifyOwner(msg: IncomingMessage, sessionId: string) {
 export async function processMessage(
   msg: IncomingMessage,
 ): Promise<{ replies: string[]; sessionId: string }> {
+  const { isOrganizationAccessLiberado } = await import("@/lib/organizations.server");
+  if (!(await isOrganizationAccessLiberado(msg.organizationId))) {
+    return { replies: [], sessionId: "" };
+  }
   const waTarget = { organizationId: msg.organizationId, line: msg.line };
   const session = await loadOrCreateSession(
     msg.organizationId,

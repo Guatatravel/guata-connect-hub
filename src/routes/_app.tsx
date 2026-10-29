@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, Navigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   SidebarProvider,
   SidebarTrigger,
@@ -10,6 +11,7 @@ import { OrgSwitcher } from "@/components/guata/org-switcher";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeNotifications } from "@/hooks/use-realtime-notifications";
+import { fetchPanelAccessGate } from "@/lib/organizations.functions";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -17,6 +19,7 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const { loading, user } = useAuth();
+  const loadGate = useServerFn(fetchPanelAccessGate);
 
   const { data: profile } = useQuery({
     queryKey: ["my-profile", user?.id],
@@ -32,31 +35,52 @@ function AppLayout() {
     },
   });
 
-  if (loading) return null;
+  const { data: gate, isLoading: gateLoading } = useQuery({
+    queryKey: ["panel-access-gate"],
+    queryFn: () => loadGate(),
+    enabled: Boolean(user?.id),
+  });
+
+  if (loading || (user && gateLoading)) return null;
   if (!user) return <Navigate to="/login" />;
   if (profile?.must_change_password) return <Navigate to="/trocar-senha" />;
+  if (gate && !gate.accessLiberado) return <Navigate to="/aguardando-liberacao" />;
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        <AppLayoutInner />
+        <AppLayoutInner gate={gate} />
       </div>
     </SidebarProvider>
   );
 }
 
-function AppLayoutInner() {
+function AppLayoutInner({
+  gate,
+}: {
+  gate?: {
+    organizationName?: string;
+    isGlobalAdmin?: boolean;
+    canManagePartners?: boolean;
+    canManageOrgTeam?: boolean;
+  };
+}) {
   const counts = useRealtimeNotifications();
   return (
     <>
-        <AppSidebar counts={counts} />
+        <AppSidebar counts={counts} gate={gate} />
         <SidebarInset>
           <header className="h-14 flex items-center gap-2 border-b border-border/70 bg-card/50 px-4 sticky top-0 z-10 backdrop-blur">
             <SidebarTrigger />
-            <div className="font-display text-lg font-semibold text-primary">
+            <div className="font-display text-lg font-semibold text-primary hidden sm:block">
               Guatá Channel
             </div>
-            <div className="ml-auto">
+            {gate?.organizationName && (
+              <span className="text-xs text-muted-foreground truncate max-w-[40vw] sm:max-w-none">
+                · {gate.organizationName}
+              </span>
+            )}
+            <div className="ml-auto shrink-0">
               <OrgSwitcher />
             </div>
           </header>

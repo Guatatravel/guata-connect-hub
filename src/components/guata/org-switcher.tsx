@@ -29,7 +29,22 @@ export function OrgSwitcher() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (isLoading || !data || data.organizations.length <= 1) return null;
+  if (isLoading || !data) {
+    return (
+      <span className="text-xs text-muted-foreground px-2 max-w-[180px] truncate">
+        {isLoading ? "…" : "Organização"}
+      </span>
+    );
+  }
+
+  if (data.organizations.length <= 1) {
+    const name = data.organizations[0]?.name ?? "Organização";
+    return (
+      <span className="text-xs font-medium text-primary px-2 max-w-[200px] truncate" title={name}>
+        {name}
+      </span>
+    );
+  }
 
   return (
     <Select
