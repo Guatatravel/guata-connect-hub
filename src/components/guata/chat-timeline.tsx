@@ -1,6 +1,6 @@
 import type { ChatMessage } from "@/types/guata";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/lib/format";
+import { formatTime } from "@/lib/format";
 import { FileText, Forward, Reply } from "lucide-react";
 
 function DeliveryMark({
@@ -14,7 +14,7 @@ function DeliveryMark({
 }) {
   if (status === "failed") {
     return (
-      <span className="text-destructive" title={error || "A Meta não entregou"}>
+      <span className="text-red-700" title={error || "A Meta não entregou"}>
         não entregue
       </span>
     );
@@ -25,7 +25,7 @@ function DeliveryMark({
   const delivered = shown === "delivered" || read;
   const label = read ? "Visualizada" : delivered ? "Entregue" : "Enviada";
   return (
-    <span className={read ? "text-sky-600" : undefined} title={label}>
+    <span className={read ? "text-[#53bdeb]" : "text-[#667781]"} title={label}>
       {delivered ? "✓✓" : "✓"}
     </span>
   );
@@ -41,22 +41,16 @@ export function ChatTimeline({
   onForward?: (message: ChatMessage) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1">
       {messages.map((m) => {
-        const align = m.role === "user" ? "justify-start" : "justify-end";
-        const bubble =
-          m.role === "user"
-            ? "bg-card border border-border text-foreground"
-            : m.role === "bot"
-              ? "bg-primary/10 border border-primary/20 text-foreground"
-              : "bg-accent/40 border border-accent text-accent-foreground";
+        const mine = m.role !== "user";
         const label =
           m.role === "user"
             ? "Cliente"
             : m.role === "bot"
-              ? "Guatá 🦫"
+              ? "Guatá"
               : m.authorName
-                ? `${m.authorName} (Consultor)`
+                ? m.authorName
                 : "Consultor";
         const showText =
           m.text &&
@@ -69,15 +63,22 @@ export function ChatTimeline({
         const voiceWithoutFile = m.outboundKind === "audio" && !m.mediaUrl;
         const mediaMissing = Boolean(m.mediaKind && !m.mediaUrl && m.outboundKind !== "audio");
         return (
-          <div key={m.id} className={cn("flex", align)}>
-            <div className={cn("max-w-[78%] rounded-2xl px-4 py-2 shadow-sm space-y-2", bubble)}>
+          <div key={m.id} className={cn("flex px-1", mine ? "justify-end" : "justify-start")}>
+            <div
+              className={cn(
+                "max-w-[82%] px-2.5 pt-1 pb-1 shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] space-y-1",
+                mine
+                  ? "rounded-lg rounded-tr-none bg-[#d9fdd3] text-[#111b21]"
+                  : "rounded-lg rounded-tl-none bg-white text-[#111b21]",
+              )}
+            >
               <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-medium opacity-70">{label}</div>
+                <div className="text-[11px] font-medium text-[#075e54]">{label}</div>
                 <div className="flex items-center gap-2">
                   {onForward && (m.mediaUrl || (m.text && m.text !== "[áudio]")) && (
                     <button
                       type="button"
-                      className="text-[11px] opacity-60 hover:opacity-100 inline-flex items-center gap-1"
+                      className="text-[10px] text-[#667781] hover:text-[#111b21] inline-flex items-center gap-1"
                       title="Enviar esta mensagem para outra pessoa"
                       onClick={() => onForward(m)}
                     >
@@ -88,7 +89,7 @@ export function ChatTimeline({
                   {onReply && (
                     <button
                       type="button"
-                      className="text-[11px] opacity-60 hover:opacity-100 inline-flex items-center gap-1"
+                      className="text-[10px] text-[#667781] hover:text-[#111b21] inline-flex items-center gap-1"
                       title={
                         m.waMessageId
                           ? "Responder citando esta mensagem"
@@ -103,9 +104,9 @@ export function ChatTimeline({
                 </div>
               </div>
               {m.replyTo && (
-                <div className="rounded-md border-l-2 border-primary/60 bg-background/60 px-2 py-1 text-xs">
-                  <div className="font-medium opacity-80">{m.replyTo.authorLabel}</div>
-                  <div className="line-clamp-2 whitespace-pre-wrap opacity-70">{m.replyTo.text}</div>
+                <div className="rounded border-l-4 border-[#25d366] bg-black/5 px-2 py-1 text-xs">
+                  <div className="font-medium text-[#075e54]">{m.replyTo.authorLabel}</div>
+                  <div className="line-clamp-2 whitespace-pre-wrap text-[#667781]">{m.replyTo.text}</div>
                 </div>
               )}
               {m.mediaKind === "image" && m.mediaUrl && (
@@ -113,7 +114,7 @@ export function ChatTimeline({
                   <img
                     src={m.mediaUrl}
                     alt="Imagem"
-                    className="rounded-lg max-h-64 w-auto object-contain"
+                    className="rounded-md max-h-64 w-auto object-contain"
                   />
                 </a>
               )}
@@ -123,13 +124,13 @@ export function ChatTimeline({
                 </audio>
               )}
               {m.mediaKind === "video" && m.mediaUrl && (
-                <video controls preload="metadata" className="w-full max-w-xs rounded-lg" src={m.mediaUrl} />
+                <video controls preload="metadata" className="w-full max-w-xs rounded-md" src={m.mediaUrl} />
               )}
               {voiceWithoutFile && (
-                <div className="text-xs opacity-70">Áudio enviado no WhatsApp (arquivo anterior não ficou salvo).</div>
+                <div className="text-xs text-[#667781]">Áudio enviado no WhatsApp (arquivo anterior não ficou salvo).</div>
               )}
               {mediaMissing && (
-                <div className="text-xs opacity-70">
+                <div className="text-xs text-[#667781]">
                   {m.mediaKind === "image"
                     ? "Imagem"
                     : m.mediaKind === "document"
@@ -145,18 +146,18 @@ export function ChatTimeline({
                   href={m.mediaUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 text-sm text-primary underline underline-offset-2"
+                  className="flex items-center gap-2 text-sm text-[#027eb5]"
                 >
                   <FileText className="h-4 w-4 shrink-0" />
-                  {m.mediaFilename ?? "Abrir PDF / documento"}
+                  {m.mediaFilename ?? "PDF / documento"}
                 </a>
               )}
               {showText && (
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">{m.text}</div>
+                <div className="whitespace-pre-wrap text-[14.2px] leading-[19px]">{m.text}</div>
               )}
-              <div className="text-[10px] opacity-60 mt-1 text-right flex items-center justify-end gap-1">
-                <span>{formatDateTime(m.at)}</span>
-                {m.role !== "user" && (
+              <div className="text-[11px] text-[#667781] mt-0.5 text-right flex items-center justify-end gap-1">
+                <span>{formatTime(m.at)}</span>
+                {mine && (
                   <DeliveryMark
                     status={m.deliveryStatus}
                     hasWaId={Boolean(m.waMessageId)}

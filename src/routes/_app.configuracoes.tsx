@@ -24,6 +24,7 @@ import {
   isSoundEnabled,
   setSoundEnabled,
 } from "@/hooks/use-realtime-notifications";
+import { QuickRepliesSettings } from "@/components/guata/quick-replies-settings";
 
 // URL pública estável (não muda ao renomear o projeto).
 const STABLE_PUBLIC_URL =
@@ -111,9 +112,11 @@ function ConfigPage() {
           Configurações
         </h1>
         <p className="text-muted-foreground">
-          Status das integrações, personas do bot, horário e serviços da agência.
+          Status das integrações, personas do bot, horário, respostas rápidas e serviços da agência.
         </p>
       </div>
+
+      <QuickRepliesSettings />
 
       <Card className="rounded-2xl border-primary/20 bg-primary/5">
         <CardContent className="pt-6 flex gap-3 items-start text-sm">

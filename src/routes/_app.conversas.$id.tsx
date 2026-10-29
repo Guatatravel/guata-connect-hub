@@ -260,7 +260,16 @@ function ConversaDetail() {
         </CardHeader>
         <CardContent className="space-y-4">
           <HandoffControls sessionId={conv.id} mode={conv.mode} />
-          <div ref={threadRef} className="max-h-[min(60vh,520px)] overflow-y-auto rounded-xl bg-secondary/30 p-4">
+          <div
+            ref={threadRef}
+            className="max-h-[min(70vh,640px)] overflow-y-auto rounded-xl p-3"
+            style={{
+              backgroundColor: "#efeae2",
+              backgroundImage:
+                "radial-gradient(circle at 20px 20px, rgba(0,0,0,0.035) 1px, transparent 0)",
+              backgroundSize: "28px 28px",
+            }}
+          >
             <ChatTimeline
               messages={[
                 ...conv.messages,
