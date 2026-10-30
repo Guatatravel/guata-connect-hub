@@ -1,26 +1,41 @@
 -- Multi-tenant: dedupe atendentes, org em campanhas, índices e RLS por organização.
 
 -- 1) Atendentes virtuais: um por linha por org
-DELETE FROM public.attendants a
-USING public.attendants b
-WHERE a.organization_id IS NOT NULL
-  AND b.organization_id IS NOT NULL
-  AND a.organization_id = b.organization_id
-  AND a.line = b.line
-  AND a.created_at < b.created_at;
-
-DELETE FROM public.attendants a
-USING public.attendants b
-WHERE a.organization_id IS NULL
-  AND b.organization_id IS NULL
-  AND a.line = b.line
-  AND a.created_at < b.created_at;
+-- (pares com mesmo created_at não eram removidos pelo DELETE antigo a.created_at < b.created_at)
+DELETE FROM public.attendants
+WHERE id IN (
+  SELECT id
+  FROM (
+    SELECT
+      id,
+      ROW_NUMBER() OVER (
+        PARTITION BY organization_id, line
+        ORDER BY
+          (CASE WHEN ativo THEN 0 ELSE 1 END),
+          updated_at DESC NULLS LAST,
+          created_at DESC,
+          id DESC
+      ) AS rn
+    FROM public.attendants
+  ) ranked
+  WHERE rn > 1
+);
 
 ALTER TABLE public.attendants
   DROP CONSTRAINT IF EXISTS attendants_org_line_unique;
 
-ALTER TABLE public.attendants
-  ADD CONSTRAINT attendants_org_line_unique UNIQUE (organization_id, line);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'attendants_org_line_unique'
+      AND conrelid = 'public.attendants'::regclass
+  ) THEN
+    ALTER TABLE public.attendants
+      ADD CONSTRAINT attendants_org_line_unique UNIQUE (organization_id, line);
+  END IF;
+END $$;
 
 -- 2) Campanhas / disparos por organização
 ALTER TABLE public.broadcast_campaigns
