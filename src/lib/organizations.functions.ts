@@ -19,10 +19,15 @@ import {
 export const fetchMyOrganizations = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { resolveActiveOrganizationId } = await import("@/lib/auth-context.server");
     const orgs = await listOrganizationsForUser(context.userId);
-    const activeId = await resolveOrganizationForUser(context.userId);
+    const activeId = await resolveActiveOrganizationId(context.userId);
     const canManagePartners = await userCanManagePartnerOrgs(context.userId);
-    return { organizations: orgs, activeOrganizationId: activeId, canManagePartners };
+    return {
+      organizations: orgs,
+      activeOrganizationId: activeId ?? "",
+      canManagePartners,
+    };
   });
 
 export const setActiveOrganization = createServerFn({ method: "POST" })
@@ -212,28 +217,29 @@ export const provisionAccessRequest = createServerFn({ method: "POST" })
 export const fetchPanelAccessGate = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const orgId = await resolveOrganizationForUser(context.userId);
-    const orgs = await listOrganizationsForUser(context.userId);
-    const activeOrg = orgs.find((o) => o.id === orgId) ?? orgs[0];
-    const accessLiberado = await isOrganizationAccessLiberado(orgId);
-    const canManagePartners = await userCanManagePartnerOrgs(context.userId);
+    const { getPanelAuthContext } = await import("@/lib/auth-context.server");
+    const ctx = await getPanelAuthContext(context.userId);
 
     const { data: roles } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", context.userId);
     const roleList = (roles ?? []).map((r) => r.role as string);
-    const isGlobalAdmin = roleList.includes("admin");
-    const canManageOrgTeam =
-      (await userCanManageOrgTeam(context.userId, orgId)) &&
-      (accessLiberado || isGlobalAdmin);
+
+    let canManageOrgTeam = false;
+    if (ctx.activeOrganizationId) {
+      canManageOrgTeam =
+        (await userCanManageOrgTeam(context.userId, ctx.activeOrganizationId)) &&
+        (ctx.accessLiberado || ctx.isPlatformAdmin);
+    }
 
     return {
-      organizationId: orgId,
-      organizationName: activeOrg?.name ?? "Agência",
-      accessLiberado: accessLiberado || isGlobalAdmin,
-      isGlobalAdmin,
-      canManagePartners,
+      organizationId: ctx.activeOrganizationId,
+      organizationName: ctx.organizationName ?? "Agência",
+      hasOrganization: ctx.hasOrganization,
+      accessLiberado: ctx.accessLiberado,
+      isGlobalAdmin: ctx.isPlatformAdmin,
+      canManagePartners: ctx.canManagePartners,
       canManageOrgTeam,
       roles: roleList,
     };

@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AguardandoLiberacaoRouteImport } from './routes/aguardando-liberacao'
 import { Route as ApresentacaoRouteImport } from './routes/apresentacao'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SemAgenciaRouteImport } from './routes/sem-agencia'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as TrocarSenhaRouteImport } from './routes/trocar-senha'
 import { Route as AppAtendentesRouteImport } from './routes/_app.atendentes'
@@ -59,6 +60,11 @@ const ApresentacaoRoute = ApresentacaoRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SemAgenciaRoute = SemAgenciaRouteImport.update({
+  id: '/sem-agencia',
+  path: '/sem-agencia',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/aguardando-liberacao': typeof AguardandoLiberacaoRoute
   '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
+  '/sem-agencia': typeof SemAgenciaRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/atendentes': typeof AppAtendentesRoute
@@ -207,6 +214,7 @@ export interface FileRoutesByTo {
   '/aguardando-liberacao': typeof AguardandoLiberacaoRoute
   '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
+  '/sem-agencia': typeof SemAgenciaRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/atendentes': typeof AppAtendentesRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/aguardando-liberacao': typeof AguardandoLiberacaoRoute
   '/apresentacao': typeof ApresentacaoRoute
   '/login': typeof LoginRoute
+  '/sem-agencia': typeof SemAgenciaRoute
   '/setup': typeof SetupRoute
   '/trocar-senha': typeof TrocarSenhaRoute
   '/_app/atendentes': typeof AppAtendentesRoute
@@ -267,6 +276,7 @@ export interface FileRouteTypes {
     | '/aguardando-liberacao'
     | '/apresentacao'
     | '/login'
+    | '/sem-agencia'
     | '/setup'
     | '/trocar-senha'
     | '/atendentes'
@@ -295,6 +305,7 @@ export interface FileRouteTypes {
     | '/aguardando-liberacao'
     | '/apresentacao'
     | '/login'
+    | '/sem-agencia'
     | '/setup'
     | '/trocar-senha'
     | '/atendentes'
@@ -324,6 +335,7 @@ export interface FileRouteTypes {
     | '/aguardando-liberacao'
     | '/apresentacao'
     | '/login'
+    | '/sem-agencia'
     | '/setup'
     | '/trocar-senha'
     | '/_app/atendentes'
@@ -354,6 +366,7 @@ export interface RootRouteChildren {
   AguardandoLiberacaoRoute: typeof AguardandoLiberacaoRoute
   ApresentacaoRoute: typeof ApresentacaoRoute
   LoginRoute: typeof LoginRoute
+  SemAgenciaRoute: typeof SemAgenciaRoute
   SetupRoute: typeof SetupRoute
   TrocarSenhaRoute: typeof TrocarSenhaRoute
   ApiPublicWebhooksDescubraMsRoute: typeof ApiPublicWebhooksDescubraMsRoute
@@ -395,6 +408,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sem-agencia': {
+      id: '/sem-agencia'
+      path: '/sem-agencia'
+      fullPath: '/sem-agencia'
+      preLoaderRoute: typeof SemAgenciaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -604,6 +624,7 @@ const rootRouteChildren: RootRouteChildren = {
   AguardandoLiberacaoRoute: AguardandoLiberacaoRoute,
   ApresentacaoRoute: ApresentacaoRoute,
   LoginRoute: LoginRoute,
+  SemAgenciaRoute: SemAgenciaRoute,
   SetupRoute: SetupRoute,
   TrocarSenhaRoute: TrocarSenhaRoute,
   ApiPublicWebhooksDescubraMsRoute: ApiPublicWebhooksDescubraMsRoute,

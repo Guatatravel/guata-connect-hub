@@ -172,6 +172,7 @@ export type Database = {
           sent_fail: number
           sent_ok: number
           sent_skip: number
+          organization_id: string
           send_mode: string
           template_name: string | null
           template_language: string

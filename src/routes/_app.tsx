@@ -44,6 +44,7 @@ function AppLayout() {
   if (loading || (user && gateLoading)) return null;
   if (!user) return <Navigate to="/login" />;
   if (profile?.must_change_password) return <Navigate to="/trocar-senha" />;
+  if (gate?.hasOrganization === false) return <Navigate to="/sem-agencia" />;
   if (gate && !gate.accessLiberado) return <Navigate to="/aguardando-liberacao" />;
 
   return (

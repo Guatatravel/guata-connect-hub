@@ -33,6 +33,11 @@ import {
 import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 import { attendantLineOptions } from "@/lib/org-ui";
 
+function lineLabel(line: string, orgUi: ReturnType<typeof useOrgLineUi>["ui"]) {
+  const opt = attendantLineOptions(orgUi).find((o) => o.value === line);
+  return opt?.label ?? (line === "viagens" ? "Guatá Viagens" : "WhatsApp");
+}
+
 export const Route = createFileRoute("/_app/atendentes")({
   component: Atendentes,
   head: () => ({
@@ -239,7 +244,8 @@ function Atendentes() {
                   <Bot className="h-4 w-4" />
                   <span className="font-medium truncate">{a.nome as string}</span>
                 </div>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <Badge variant="outline">{lineLabel(String(a.line), orgUi)}</Badge>
                   <Badge variant="outline">WhatsApp oficial</Badge>
                   {a.ativo ? (
                     <Badge variant="secondary">ativo</Badge>

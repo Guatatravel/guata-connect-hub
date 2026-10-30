@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/guata/brand-logo";
 import { useAuth, signOut } from "@/lib/auth";
+import { fetchPanelAccessGate } from "@/lib/organizations.functions";
 
 export const Route = createFileRoute("/aguardando-liberacao")({
   head: () => ({
@@ -25,6 +26,7 @@ function AguardandoLiberacaoPage() {
 
   if (loading || (user && isLoading)) return null;
   if (!user) return <Navigate to="/login" />;
+  if (gate?.hasOrganization === false) return <Navigate to="/sem-agencia" />;
   if (gate?.accessLiberado) return <Navigate to="/dashboard" />;
 
   return (

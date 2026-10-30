@@ -102,17 +102,18 @@ function renderName(body: string, name: string): string {
   return body.replaceAll("{nome}", name).replaceAll("{{1}}", name);
 }
 
-export async function listCampaigns(): Promise<CampaignRow[]> {
+export async function listCampaigns(organizationId: string): Promise<CampaignRow[]> {
   const { data, error } = await supabaseAdmin
     .from("broadcast_campaigns")
     .select("*")
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw new Error(error.message);
   return (data ?? []) as CampaignRow[];
 }
 
-export async function getCampaign(id: string): Promise<CampaignRow> {
+export async function getCampaign(id: string, organizationId?: string): Promise<CampaignRow> {
   const { data, error } = await supabaseAdmin
     .from("broadcast_campaigns")
     .select("*")
@@ -120,7 +121,11 @@ export async function getCampaign(id: string): Promise<CampaignRow> {
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Campanha não encontrada");
-  return data as CampaignRow;
+  const row = data as CampaignRow & { organization_id?: string };
+  if (organizationId && row.organization_id && row.organization_id !== organizationId) {
+    throw new Error("Campanha não pertence à sua organização.");
+  }
+  return row as CampaignRow;
 }
 
 async function uploadCampaignImage(
@@ -198,8 +203,8 @@ export async function updateCampaignDraft(
   return data as CampaignRow;
 }
 
-export async function deleteCampaign(id: string): Promise<void> {
-  const row = await getCampaign(id);
+export async function deleteCampaign(id: string, organizationId?: string): Promise<void> {
+  const row = await getCampaign(id, organizationId);
   if (row.status === "enviando") {
     throw new Error("Campanha em envio — use “Continuar envio” ou aguarde terminar antes de excluir.");
   }
@@ -210,14 +215,15 @@ export async function deleteCampaign(id: string): Promise<void> {
 /** Nova campanha com mesmo conteúdo e disparo imediato (público atual). */
 export async function duplicateAndLaunchCampaign(
   userId: string,
+  organizationId: string,
   sourceId: string,
 ): Promise<CampaignRow> {
-  const src = await getCampaign(sourceId);
+  const src = await getCampaign(sourceId, organizationId);
   const line = src.line as CampaignLine;
   await assertMetaConfiguredForLine(line);
   const baseTitle = src.title.replace(/\s*·\s*(Descubra|Viagens)\s*$/i, "").trim();
   const title = `${baseTitle} (reenvio)`.slice(0, 160);
-  const draft = await createCampaignDraft(userId, {
+  const draft = await createCampaignDraft(userId, organizationId, {
     title,
     line,
     body: String(src.body ?? ""),
@@ -234,13 +240,14 @@ export async function duplicateAndLaunchCampaign(
 
 export async function saveCampaignDraft(
   userId: string,
+  organizationId: string,
   input: CreateCampaignInput & { id?: string },
 ): Promise<CampaignRow> {
   if (input.line === "both") {
     throw new Error("Rascunho só para uma linha — escolha Descubra ou Viagens.");
   }
   if (input.id) {
-    const existing = await getCampaign(input.id);
+    const existing = await getCampaign(input.id, organizationId);
     if (input.sendMode !== "template" && !input.body.trim() && !input.imageBase64 && !existing.image_path) {
       throw new Error("Informe o texto ou anexe um cartaz.");
     }
@@ -262,7 +269,7 @@ export async function saveCampaignDraft(
   if (input.sendMode !== "template" && !input.body.trim() && !input.imageBase64) {
     throw new Error("Informe o texto ou anexe um cartaz.");
   }
-  return createCampaignDraft(userId, {
+  return createCampaignDraft(userId, organizationId, {
     title: input.title.trim() || "Campanha",
     line: input.line,
     body: input.body,
@@ -321,13 +328,14 @@ export async function assertMetaConfiguredForLine(line: CampaignLine | "both"): 
 }
 
 export async function previewAudienceCount(
+  organizationId: string,
   line: CampaignLine | "both",
   audience: CampaignAudience,
 ): Promise<{ filterCount: number; eligible24h: number }> {
   let filterCount = 0;
   let eligible24h = 0;
   for (const l of linesForSelect(line)) {
-    const targets = await resolveAudience(l, audience);
+    const targets = await resolveAudience(organizationId, l, audience);
     filterCount += targets.length;
     for (const t of targets) {
       const lastIn = await lastUserMessageAt(t.session_id);
@@ -338,12 +346,14 @@ export async function previewAudienceCount(
 }
 
 async function resolveAudience(
+  organizationId: string,
   line: CampaignLine,
   audience: CampaignAudience,
 ): Promise<Array<{ phone: string; session_id: string }>> {
   const { data: sessions, error } = await supabaseAdmin
     .from("sessions")
     .select("id, phone")
+    .eq("organization_id", organizationId)
     .eq("line", line)
     .is("archived_at", null)
     .limit(2000);
@@ -365,6 +375,7 @@ async function resolveAudience(
 
 export async function createCampaignDraft(
   userId: string,
+  organizationId: string,
   input: {
     title: string;
     line: CampaignLine;
@@ -401,6 +412,7 @@ export async function createCampaignDraft(
       image_path: imagePath,
       status: "rascunho",
       created_by: userId,
+      organization_id: organizationId,
       ...campaignFields(input),
     })
     .select("*")
@@ -464,7 +476,7 @@ async function targetsForLaunch(
   extraPhones: string | null,
 ): Promise<Array<{ phone: string; session_id: string }>> {
   const phones = parsePhoneList(extraPhones);
-  if (phones.length === 0) return resolveAudience(line, audience);
+  if (phones.length === 0) return resolveAudience(orgId, line, audience);
   const out: Array<{ phone: string; session_id: string }> = [];
   for (const phone of phones) {
     const session_id = await ensureSessionForPhone(orgId, line, phone);
@@ -495,12 +507,12 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
 
   const line = campaign.line as CampaignLine;
   await assertMetaConfiguredForLine(line);
-  const guataOrgId = await getGuataOrganizationId();
-  const wa = { organizationId: guataOrgId, line };
+  const orgId = (campaign.organization_id as string) || (await getGuataOrganizationId());
+  const wa = { organizationId: orgId, line };
   const audience = campaign.audience as CampaignAudience;
 
   if (campaign.status === "rascunho") {
-    const targets = await targetsForLaunch(guataOrgId, line, audience, campaign.extra_phones as string | null);
+    const targets = await targetsForLaunch(orgId, line, audience, campaign.extra_phones as string | null);
     if (targets.length === 0) {
       throw new Error(
         "Nenhum contato no público selecionado. Escolha “Todas as conversas da linha” ou garanta que clientes já falaram com esse número (sessões no painel Conversas).",
@@ -774,6 +786,7 @@ export interface CreateCampaignInput {
 /** Cria e envia (1 ou 2 campanhas quando line === both). */
 export async function createAndLaunchCampaigns(
   userId: string,
+  organizationId: string,
   input: CreateCampaignInput,
 ): Promise<{ results: CampaignRow[] }> {
   await assertMetaConfiguredForLine(input.line);
@@ -791,7 +804,7 @@ export async function createAndLaunchCampaigns(
           : " · Viagens"
         : "";
     try {
-      const draft = await createCampaignDraft(userId, {
+      const draft = await createCampaignDraft(userId, organizationId, {
         title: input.title,
         titleSuffix: suffix,
         line: ln,

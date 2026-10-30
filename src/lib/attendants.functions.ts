@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveOrganization } from "@/lib/auth-context.server";
 
 export type AgentGender = "male" | "female";
 export type TtsVoiceProfile = "male" | "female";
@@ -42,19 +43,30 @@ function sanitize(input: AttendantInput): AttendantInput {
   };
 }
 
+async function assertAttendantInOrg(attendantId: string, orgId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("attendants")
+    .select("organization_id")
+    .eq("id", attendantId)
+    .maybeSingle();
+  if (!data || data.organization_id !== orgId) {
+    throw new Error("Atendente não encontrado nesta organização.");
+  }
+}
+
 export const listAttendants = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await requireStaffUser(context.userId);
-    const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
-    const orgId = await resolveOrganizationForUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     const { data, error } = await supabaseAdmin
       .from("attendants")
       .select("*")
       .eq("organization_id", orgId)
-      .order("created_at", { ascending: true });
+      .order("line", { ascending: true });
     if (error) throw new Error(error.message);
     return data ?? [];
   });
@@ -67,17 +79,36 @@ export const saveAttendant = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await requireStaffUser(context.userId);
     if (!data.nome) throw new Error("Informe o nome do atendente");
+    const orgId = await requireActiveOrganization(context.userId);
     const { id, ...fields } = data;
+
     if (id) {
-      const { error } = await supabaseAdmin.from("attendants").update(fields).eq("id", id);
-      if (error) throw new Error(error.message);
-    } else {
-      const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
-      const organization_id = await resolveOrganizationForUser(context.userId);
+      await assertAttendantInOrg(id, orgId);
       const { error } = await supabaseAdmin
         .from("attendants")
-        .insert({ ...fields, organization_id });
+        .update(fields)
+        .eq("id", id)
+        .eq("organization_id", orgId);
       if (error) throw new Error(error.message);
+    } else {
+      const { data: existing } = await supabaseAdmin
+        .from("attendants")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("line", fields.line)
+        .maybeSingle();
+      if (existing?.id) {
+        const { error } = await supabaseAdmin
+          .from("attendants")
+          .update(fields)
+          .eq("id", existing.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabaseAdmin
+          .from("attendants")
+          .insert({ ...fields, organization_id: orgId });
+        if (error) throw new Error(error.message);
+      }
     }
     return { ok: true };
   });
@@ -89,7 +120,13 @@ export const removeAttendant = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await requireStaffUser(context.userId);
-    const { error } = await supabaseAdmin.from("attendants").delete().eq("id", data.id);
+    const orgId = await requireActiveOrganization(context.userId);
+    await assertAttendantInOrg(data.id, orgId);
+    const { error } = await supabaseAdmin
+      .from("attendants")
+      .delete()
+      .eq("id", data.id)
+      .eq("organization_id", orgId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });

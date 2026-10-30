@@ -37,6 +37,14 @@ export function OrgSwitcher() {
     );
   }
 
+  if (data.organizations.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground px-2 max-w-[200px] truncate">
+        Sem agência
+      </span>
+    );
+  }
+
   if (data.organizations.length <= 1) {
     const name = data.organizations[0]?.name ?? "Organização";
     return (

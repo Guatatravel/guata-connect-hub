@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireActiveOrganization } from "@/lib/auth-context.server";
 
 const audienceSchema = z.enum([
   "active_24h",
@@ -30,7 +31,8 @@ export const listCampaignsFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { listCampaigns } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    return listCampaigns();
+    const orgId = await requireActiveOrganization(context.userId);
+    return listCampaigns(orgId);
   });
 
 export const previewCampaignAudienceFn = createServerFn({ method: "POST" })
@@ -42,7 +44,8 @@ export const previewCampaignAudienceFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { previewAudienceCount } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    return previewAudienceCount(data.line, data.audience);
+    const orgId = await requireActiveOrganization(context.userId);
+    return previewAudienceCount(orgId, data.line, data.audience);
   });
 
 export const campaignMetaStatusFn = createServerFn({ method: "POST" })
@@ -61,13 +64,14 @@ export const createAndLaunchCampaignFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { createAndLaunchCampaigns } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     if (data.sendMode === "template" && !data.templateName?.trim()) {
       throw new Error("Informe o nome do template aprovado na Meta (WhatsApp Manager).");
     }
     if (data.sendMode !== "template" && !data.body.trim() && !data.imageBase64) {
       throw new Error("Informe o texto ou anexe um cartaz.");
     }
-    return createAndLaunchCampaigns(context.userId, data);
+    return createAndLaunchCampaigns(context.userId, orgId, data);
   });
 
 export const launchCampaignFn = createServerFn({ method: "POST" })
@@ -75,8 +79,10 @@ export const launchCampaignFn = createServerFn({ method: "POST" })
   .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
   .handler(async ({ data, context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
-    const { launchCampaign } = await import("@/lib/campaigns.server");
+    const { getCampaign, launchCampaign } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    await getCampaign(data.id, orgId);
     return launchCampaign(data.id);
   });
 
@@ -89,7 +95,8 @@ export const saveCampaignDraftFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { saveCampaignDraft } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    return saveCampaignDraft(context.userId, data);
+    const orgId = await requireActiveOrganization(context.userId);
+    return saveCampaignDraft(context.userId, orgId, data);
   });
 
 export const deleteCampaignFn = createServerFn({ method: "POST" })
@@ -99,7 +106,8 @@ export const deleteCampaignFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { deleteCampaign } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    await deleteCampaign(data.id);
+    const orgId = await requireActiveOrganization(context.userId);
+    await deleteCampaign(data.id, orgId);
     return { ok: true };
   });
 
@@ -110,5 +118,6 @@ export const duplicateAndLaunchCampaignFn = createServerFn({ method: "POST" })
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { duplicateAndLaunchCampaign } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
-    return duplicateAndLaunchCampaign(context.userId, data.id);
+    const orgId = await requireActiveOrganization(context.userId);
+    return duplicateAndLaunchCampaign(context.userId, orgId, data.id);
   });

@@ -24,7 +24,11 @@ import {
 import { parseLeadStageFromIntake } from "@/lib/lead-intake.server";
 import { parseCrm } from "@/lib/crm.shared";
 import { markQuoteSent, runDueFollowUps } from "@/lib/crm.server";
-import { resolveOrganizationForUser } from "@/lib/organizations.server";
+import {
+  assertSessionBelongsToUserOrg,
+  requireActiveOrganization,
+  sessionIdsForOrganization,
+} from "@/lib/auth-context.server";
 
 // --------- mapeamentos DB ↔ UI ---------
 type DbLine = "descubra" | "viagens";
@@ -84,42 +88,74 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: orgRow } = await supabaseAdmin
+      .from("organizations")
+      .select("is_guata")
+      .eq("id", orgId)
+      .maybeSingle();
+    const orgSessionIds = await sessionIdsForOrganization(orgId);
 
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const todayIso = today.toISOString();
+
+    const emptyStats = {
+      triagensHoje: 0,
+      aguardandoConsultor: 0,
+      emAtendimentoHumano: 0,
+      conversasAtivas: 0,
+      leadsQuentes: 0,
+      postsPendentes: 0,
+      ultimasTriagens: [] as Array<Record<string, unknown>>,
+    };
+
+    if (orgSessionIds.length === 0) {
+      return emptyStats;
+    }
+
+    const postsQuery =
+      orgRow?.is_guata
+        ? supabaseAdmin
+            .from("channel_posts")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "rascunho")
+        : Promise.resolve({ count: 0, data: null, error: null });
 
     const [triagensHojeRes, abertasRes, humanoRes, sessoesRes, postsRes, ultimasRes, leadSessionsRes] =
       await Promise.all([
         supabaseAdmin
           .from("travel_intake")
           .select("id", { count: "exact", head: true })
+          .in("session_id", orgSessionIds)
           .gte("created_at", todayIso),
         supabaseAdmin
           .from("travel_intake")
           .select("id", { count: "exact", head: true })
+          .in("session_id", orgSessionIds)
           .in("status", ["aberta", "novo"]),
         supabaseAdmin
           .from("sessions")
           .select("id", { count: "exact", head: true })
+          .eq("organization_id", orgId)
           .eq("mode", "humano"),
         supabaseAdmin
           .from("sessions")
-          .select("id", { count: "exact", head: true }),
-        supabaseAdmin
-          .from("channel_posts")
           .select("id", { count: "exact", head: true })
-          .eq("status", "rascunho"),
+          .eq("organization_id", orgId),
+        postsQuery,
         supabaseAdmin
           .from("travel_intake")
           .select(
             "id, protocol, destino, origem, status, assigned_to, created_at, updated_at, session_id, adultos, criancas, orcamento_brl, data_ida, data_volta",
           )
+          .in("session_id", orgSessionIds)
           .order("created_at", { ascending: false })
           .limit(5),
         supabaseAdmin
           .from("sessions")
           .select("intake_data")
+          .eq("organization_id", orgId)
           .is("archived_at", null)
           .limit(400),
       ]);
@@ -129,12 +165,12 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
       return stage === "quente" || stage === "qualificando";
     }).length;
 
-    const sessionIds = (ultimasRes.data ?? []).map((t) => t.session_id);
-    const { data: sess } = sessionIds.length
+    const triageSessionIds = (ultimasRes.data ?? []).map((t) => t.session_id);
+    const { data: sess } = triageSessionIds.length
       ? await supabaseAdmin
           .from("sessions")
           .select("id, contact_name, phone, line")
-          .in("id", sessionIds)
+          .in("id", triageSessionIds)
       : { data: [] as Array<{ id: string; contact_name: string | null; phone: string; line: DbLine }> };
     const sessMap = new Map((sess ?? []).map((s) => [s.id, s]));
 
@@ -257,7 +293,7 @@ export const fetchConversations = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
-    const orgId = await resolveOrganizationForUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     await runDueFollowUps(orgId).catch((e) => console.error("[follow-up]", e));
     const { data, error } = await supabaseAdmin
       .from("sessions")
@@ -303,6 +339,7 @@ export const setConversationArchived = createServerFn({ method: "POST" })
   .inputValidator((i) => z.object({ id: z.string().uuid(), archived: z.boolean() }).parse(i))
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    await assertSessionBelongsToUserOrg(context.userId, data.id);
     await supabaseAdmin
       .from("sessions")
       .update({ archived_at: data.archived ? new Date().toISOString() : null })
@@ -320,7 +357,7 @@ export const startConversation = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
-    const orgId = await resolveOrganizationForUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     let phone = data.phone.replace(/\D/g, "");
     if (phone.length === 10 || phone.length === 11) phone = "55" + phone;
     if (phone.length < 12) throw new Error("Telefone inválido. Use DDD + número.");
@@ -364,10 +401,11 @@ export const fetchConversation = createServerFn({ method: "POST" })
   .inputValidator((i) => idSchema.parse(i))
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    await assertSessionBelongsToUserOrg(context.userId, data.id);
     const { data: s } = await supabaseAdmin
       .from("sessions")
       .select(
-        "id, line, mode, phone, contact_name, last_message_at, created_at, assigned_to, intake_data",
+        "id, line, mode, phone, contact_name, last_message_at, created_at, assigned_to, intake_data, organization_id",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -431,7 +469,9 @@ export const replyAsAgent = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
     if (!s) throw new Error("Sessão não encontrada");
-    const orgId = (s.organization_id as string) || (await resolveOrganizationForUser(context.userId));
+    await assertSessionBelongsToUserOrg(context.userId, data.id);
+    const orgId = s.organization_id as string;
+    if (!orgId) throw new Error("Sessão sem organização.");
     const wa = { organizationId: orgId, line: s.line as DbLine };
 
     const caption = data.text?.trim() ?? "";
@@ -712,16 +752,31 @@ async function hydrateTriages(rows: Array<Record<string, unknown>>) {
   });
 }
 
+async function assertTriageInUserOrg(userId: string, triageId: string): Promise<void> {
+  const { data: row } = await supabaseAdmin
+    .from("travel_intake")
+    .select("session_id")
+    .eq("id", triageId)
+    .maybeSingle();
+  if (!row?.session_id) throw new Error("Triagem não encontrada.");
+  await assertSessionBelongsToUserOrg(userId, row.session_id as string);
+}
+
 export const fetchTriages = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => triageFilterSchema.parse(i) ?? {})
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const sessionIds = await sessionIdsForOrganization(orgId);
+    if (sessionIds.length === 0) return [];
+
     let q = supabaseAdmin
       .from("travel_intake")
       .select(
         "id, protocol, destino, origem, status, assigned_to, created_at, updated_at, session_id, adultos, criancas, orcamento_brl, data_ida, data_volta, preferencias",
       )
+      .in("session_id", sessionIds)
       .order("created_at", { ascending: false })
       .limit(500);
     if (data?.status && data.status !== "all") {
@@ -749,6 +804,7 @@ export const fetchTriage = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .maybeSingle();
     if (!row) return null;
+    await assertTriageInUserOrg(context.userId, data.id);
     const hyd = await hydrateTriages([row as Record<string, unknown>]);
     return hyd[0];
   });
@@ -765,6 +821,7 @@ export const updateTriage = createServerFn({ method: "POST" })
   .inputValidator((i) => updateTriageSchema.parse(i))
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    await assertTriageInUserOrg(context.userId, data.id);
     const patch: Record<string, unknown> = {};
     if (data.status !== undefined)
       patch.status = data.status === "novo" ? "aberta" : data.status;
@@ -795,6 +852,14 @@ export const fetchChannelPosts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("is_guata")
+      .eq("id", orgId)
+      .maybeSingle();
+    if (!org?.is_guata) return [];
+
     const { data } = await supabaseAdmin
       .from("channel_posts")
       .select("*")
@@ -852,15 +917,16 @@ export const fetchSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
-    const orgId = await resolveOrganizationForUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     let { data: s } = await supabaseAdmin
       .from("channel_settings")
       .select("*")
+      .eq("organization_id", orgId)
       .maybeSingle();
     if (!s) {
       const ins = await supabaseAdmin
         .from("channel_settings")
-        .insert({})
+        .insert({ organization_id: orgId })
         .select("*")
         .single();
       s = ins.data ?? null;
@@ -904,6 +970,7 @@ export const updateSettings = createServerFn({ method: "POST" })
   .inputValidator((i) => settingsPatchSchema.parse(i))
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     const patch: Record<string, unknown> = {};
     if (data.personaDescubra !== undefined) patch.persona_descubra = data.personaDescubra;
     if (data.personaViagens !== undefined) patch.persona_viagens = data.personaViagens;
@@ -914,6 +981,7 @@ export const updateSettings = createServerFn({ method: "POST" })
     const { data: existing } = await supabaseAdmin
       .from("channel_settings")
       .select("id")
+      .eq("organization_id", orgId)
       .maybeSingle();
     if (existing) {
       const { error } = await supabaseAdmin
@@ -924,7 +992,7 @@ export const updateSettings = createServerFn({ method: "POST" })
     } else {
       const { error } = await supabaseAdmin
         .from("channel_settings")
-        .insert(patch as never);
+        .insert({ ...patch, organization_id: orgId } as never);
       if (error) throw new Error(error.message);
     }
     return { ok: true };
@@ -937,6 +1005,14 @@ export const fetchServices = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("is_guata")
+      .eq("id", orgId)
+      .maybeSingle();
+    if (!org?.is_guata) return [];
+
     const { data } = await supabaseAdmin
       .from("agency_services")
       .select("*")
@@ -1013,8 +1089,7 @@ export const fetchStaff = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await requireStaff(context.userId);
-    const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
-    const orgId = await resolveOrganizationForUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
     const { data: members } = await supabaseAdmin
       .from("organization_members")
       .select("user_id")

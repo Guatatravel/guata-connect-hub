@@ -28,6 +28,7 @@ export interface CampaignRow {
   template_language?: string | null;
   template_uses_name?: boolean | null;
   extra_phones?: string | null;
+  organization_id?: string;
   created_at: string;
   updated_at: string;
 }

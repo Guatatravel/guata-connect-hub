@@ -130,13 +130,22 @@ export function useRealtimeNotifications() {
 
   useEffect(() => {
     if (!user) return;
+    const activeOrgId = counts.data?.organizationId;
     const channel = supabase
       .channel("guata-notifications")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "travel_intake" },
-        (payload) => {
-          // Ignora eventos antigos que possam chegar no reconnect
+        async (payload) => {
+          if (!activeOrgId) return;
+          const sessionId = (payload.new as { session_id?: string })?.session_id;
+          if (!sessionId) return;
+          const { data: sess } = await supabase
+            .from("sessions")
+            .select("organization_id")
+            .eq("id", sessionId)
+            .maybeSingle();
+          if (sess?.organization_id !== activeOrgId) return;
           const createdAt = (payload.new as { created_at?: string })?.created_at;
           if (createdAt && new Date(createdAt).getTime() < mountedAt.current - 5000) return;
           const protocol = (payload.new as { protocol?: string })?.protocol ?? "nova";
@@ -154,6 +163,8 @@ export function useRealtimeNotifications() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "sessions" },
         (payload) => {
+          const orgId = (payload.new as { organization_id?: string })?.organization_id;
+          if (activeOrgId && orgId && orgId !== activeOrgId) return;
           const sessionId = (payload.new as { id?: string })?.id;
           if (!chatIsOpen(qc, sessionId)) {
             qc.invalidateQueries({ queryKey: ["unread-counts"] });
@@ -178,6 +189,14 @@ export function useRealtimeNotifications() {
         { event: "INSERT", schema: "public", table: "messages" },
         async (payload) => {
           const row = payload.new as LiveMessage;
+          if (activeOrgId && row.session_id) {
+            const { data: sess } = await supabase
+              .from("sessions")
+              .select("organization_id")
+              .eq("id", row.session_id)
+              .maybeSingle();
+            if (sess?.organization_id !== activeOrgId) return;
+          }
           if (row.created_at && new Date(row.created_at).getTime() < mountedAt.current - 5000) return;
           await Promise.all([
             qc.cancelQueries({ queryKey: ["conversations"] }),
@@ -217,7 +236,7 @@ export function useRealtimeNotifications() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, qc]);
+  }, [user, qc, counts.data?.organizationId]);
 
   return counts.data ?? { triagensAbertas: 0, conversasHumano: 0 };
 }

@@ -9,6 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatDate } from "@/lib/format";
 import { useServerFn } from "@tanstack/react-start";
 import { provisionAccessRequest } from "@/lib/organizations.functions";
+import { deleteAccessRequest } from "@/lib/access-requests.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useState } from "react";
 
 export const Route = createFileRoute("/_app/solicitacoes")({
   head: () => ({ meta: [{ title: "Solicitações de acesso — Guatá Channel" }] }),
@@ -26,6 +39,8 @@ const STATUS: Record<string, string> = {
 function SolicitacoesPage() {
   const qc = useQueryClient();
   const provision = useServerFn(provisionAccessRequest);
+  const removeRequest = useServerFn(deleteAccessRequest);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["access-requests"],
     queryFn: async () => {
@@ -71,6 +86,16 @@ function SolicitacoesPage() {
       qc.invalidateQueries({ queryKey: ["access-requests"] });
     },
     onError: () => toast.error("Somente administradores podem alterar"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => removeRequest({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Solicitação removida");
+      setDeleteId(null);
+      qc.invalidateQueries({ queryKey: ["access-requests"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -137,6 +162,34 @@ function SolicitacoesPage() {
                   <Button size="sm" variant="outline" asChild>
                     <Link to="/usuarios">Usuários (manual)</Link>
                   </Button>
+                  <AlertDialog
+                    open={deleteId === r.id}
+                    onOpenChange={(open) => setDeleteId(open ? r.id : null)}
+                  >
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="destructive">
+                        Excluir solicitação
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir solicitação?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Remove permanentemente o pedido de {r.empresa} ({r.email}). Essa ação não
+                          pode ser desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          disabled={deleteMut.isPending}
+                          onClick={() => deleteMut.mutate(r.id)}
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </CardContent>
             </Card>
