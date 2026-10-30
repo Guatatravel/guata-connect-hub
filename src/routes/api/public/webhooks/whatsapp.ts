@@ -116,6 +116,58 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
 
         for (const msg of messages) {
           const msgId = String(msg?.id ?? "");
+          const msgType = String(msg?.type ?? "");
+
+          if (msgType === "revoke" && msg?.revoke?.original_message_id) {
+            try {
+              const { applyWhatsAppMessageRevoke } = await import(
+                "@/lib/message-revisions.server"
+              );
+              await applyWhatsAppMessageRevoke(String(msg.revoke.original_message_id));
+            } catch (err) {
+              console.error("[whatsapp-webhook] revoke:", err);
+            }
+            if (msgId) {
+              await supabaseAdmin
+                .from("whatsapp_processed_messages")
+                .insert({ message_id: msgId })
+                .catch(() => {});
+            }
+            continue;
+          }
+
+          if (msgType === "edit" && msg?.edit?.original_message_id) {
+            const inner = msg.edit.message as Record<string, unknown> | undefined;
+            const innerType = String(inner?.type ?? "text");
+            let newText: string | undefined;
+            if (innerType === "text") {
+              newText = (inner?.text as { body?: string } | undefined)?.body;
+            } else if (innerType === "image") {
+              newText = (inner?.image as { caption?: string } | undefined)?.caption ?? "";
+            } else if (innerType === "video") {
+              newText = (inner?.video as { caption?: string } | undefined)?.caption ?? "";
+            } else if (innerType === "document") {
+              newText = (inner?.document as { caption?: string } | undefined)?.caption ?? "";
+            }
+            if (newText !== undefined) {
+              try {
+                const { applyWhatsAppMessageEdit } = await import(
+                  "@/lib/message-revisions.server"
+                );
+                await applyWhatsAppMessageEdit(String(msg.edit.original_message_id), newText);
+              } catch (err) {
+                console.error("[whatsapp-webhook] edit:", err);
+              }
+            }
+            if (msgId) {
+              await supabaseAdmin
+                .from("whatsapp_processed_messages")
+                .insert({ message_id: msgId })
+                .catch(() => {});
+            }
+            continue;
+          }
+
           if (msgId) {
             const { error: dupErr } = await supabaseAdmin
               .from("whatsapp_processed_messages")

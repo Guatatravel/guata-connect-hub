@@ -1,7 +1,7 @@
 import type { ChatMessage } from "@/types/guata";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
-import { FileText, Forward, Reply } from "lucide-react";
+import { FileText, Forward, Pencil, Reply, Trash2 } from "lucide-react";
 
 function DeliveryMark({
   status,
@@ -35,10 +35,14 @@ export function ChatTimeline({
   messages,
   onReply,
   onForward,
+  onEdit,
+  onDelete,
 }: {
   messages: ChatMessage[];
   onReply?: (message: ChatMessage) => void;
   onForward?: (message: ChatMessage) => void;
+  onEdit?: (message: ChatMessage) => void;
+  onDelete?: (message: ChatMessage) => void;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -62,6 +66,14 @@ export function ChatTimeline({
           );
         const voiceWithoutFile = m.outboundKind === "audio" && !m.mediaUrl;
         const mediaMissing = Boolean(m.mediaKind && !m.mediaUrl && m.outboundKind !== "audio");
+        const canRevoke =
+          mine && !m.deleted && Boolean(m.waMessageId) && (onEdit || onDelete);
+        const canEditText =
+          canRevoke &&
+          onEdit &&
+          !m.mediaKind &&
+          showText &&
+          m.text !== "Mensagem apagada";
         return (
           <div key={m.id} className={cn("flex px-1", mine ? "justify-end" : "justify-start")}>
             <div
@@ -74,8 +86,10 @@ export function ChatTimeline({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-medium text-[#075e54]">{label}</div>
-                <div className="flex items-center gap-2">
-                  {onForward && (m.mediaUrl || (m.text && m.text !== "[áudio]")) && (
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {onForward &&
+                    !m.deleted &&
+                    (m.mediaUrl || (m.text && m.text !== "[áudio]" && m.text !== "Mensagem apagada")) && (
                     <button
                       type="button"
                       className="text-[10px] text-[#667781] hover:text-[#111b21] inline-flex items-center gap-1"
@@ -86,7 +100,29 @@ export function ChatTimeline({
                       Encaminhar
                     </button>
                   )}
-                  {onReply && (
+                  {canEditText && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-[#667781] hover:text-[#111b21] inline-flex items-center gap-1"
+                      title="Editar texto no WhatsApp (até 15 min)"
+                      onClick={() => onEdit!(m)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Editar
+                    </button>
+                  )}
+                  {canRevoke && onDelete && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-[#667781] hover:text-[#c62828] inline-flex items-center gap-1"
+                      title="Apagar para todos no WhatsApp"
+                      onClick={() => onDelete(m)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Apagar
+                    </button>
+                  )}
+                  {onReply && !m.deleted && (
                     <button
                       type="button"
                       className="text-[10px] text-[#667781] hover:text-[#111b21] inline-flex items-center gap-1"
@@ -153,7 +189,17 @@ export function ChatTimeline({
                 </a>
               )}
               {showText && (
-                <div className="whitespace-pre-wrap text-[14.2px] leading-[19px]">{m.text}</div>
+                <div
+                  className={cn(
+                    "whitespace-pre-wrap text-[14.2px] leading-[19px]",
+                    m.deleted && "italic text-[#667781]",
+                  )}
+                >
+                  {m.text}
+                  {m.edited && !m.deleted ? (
+                    <span className="text-[11px] text-[#667781]"> · editada</span>
+                  ) : null}
+                </div>
               )}
               <div className="text-[11px] text-[#667781] mt-0.5 text-right flex items-center justify-end gap-1">
                 <span>{formatTime(m.at)}</span>

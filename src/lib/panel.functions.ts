@@ -12,6 +12,8 @@ import {
   sendWhatsAppDocument,
   sendWhatsAppImage,
   sendWhatsAppText,
+  deleteWhatsAppMessage,
+  editWhatsAppText,
 } from "@/lib/meta-send.server";
 import {
   signedChatMediaUrl,
@@ -29,6 +31,10 @@ import {
   requireActiveOrganization,
   sessionIdsForOrganization,
 } from "@/lib/auth-context.server";
+import {
+  markMessageDeletedLocally,
+  markMessageEditedLocally,
+} from "@/lib/message-revisions.server";
 
 // --------- mapeamentos DB ↔ UI ---------
 type DbLine = "descubra" | "viagens";
@@ -219,6 +225,8 @@ type MessageMeta = {
   outbound_kind?: string;
   delivery_status?: "sent" | "delivered" | "read" | "failed";
   delivery_error?: string;
+  deleted_at?: string;
+  edited_at?: string;
 };
 
 function quoteLabel(author: string): string {
@@ -263,6 +271,7 @@ async function mapMessagesForPanel(
         : meta.reply_preview
           ? { authorLabel: "Mensagem", text: meta.reply_preview }
           : undefined;
+      const deleted = Boolean(meta.deleted_at);
       return {
         id: m.id,
         role: (m.author === "user" ? "user" : m.author === "bot" ? "bot" : "human") as
@@ -270,16 +279,18 @@ async function mapMessagesForPanel(
           | "bot"
           | "human",
         authorName,
-        text: m.text,
+        text: deleted ? "Mensagem apagada" : m.text,
         at: m.created_at,
-        mediaKind,
-        mediaUrl: mediaUrl ?? undefined,
-        mediaMime: meta.media_mime,
-        mediaFilename: meta.filename,
+        mediaKind: deleted ? undefined : mediaKind,
+        mediaUrl: deleted ? undefined : mediaUrl ?? undefined,
+        mediaMime: deleted ? undefined : meta.media_mime,
+        mediaFilename: deleted ? undefined : meta.filename,
         waMessageId: meta.wa_message_id,
         outboundKind: meta.outbound_kind,
         deliveryStatus: meta.delivery_status,
         deliveryError: meta.delivery_error,
+        deleted,
+        edited: Boolean(meta.edited_at),
         replyTo,
       };
     }),
@@ -644,6 +655,110 @@ export const replyAsAgent = createServerFn({ method: "POST" })
     return { ok: true, sent };
   });
 
+const messageInSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+  messageId: z.string().uuid(),
+});
+
+const editMessageSchema = messageInSessionSchema.extend({
+  text: z.string().min(1).max(4000),
+});
+
+async function loadStaffOutboundMessage(
+  userId: string,
+  sessionId: string,
+  messageId: string,
+) {
+  await assertSessionBelongsToUserOrg(userId, sessionId);
+  const { data: s } = await supabaseAdmin
+    .from("sessions")
+    .select("id, phone, line, organization_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!s?.organization_id) throw new Error("Sessão sem organização.");
+  const { data: m } = await supabaseAdmin
+    .from("messages")
+    .select("id, author, direction, text, metadata, created_at")
+    .eq("id", messageId)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+  if (!m) throw new Error("Mensagem não encontrada.");
+  if (m.direction !== "out" || m.author === "user") {
+    throw new Error("Só mensagens enviadas pelo painel ou Guatá podem ser alteradas.");
+  }
+  const meta = (m.metadata ?? {}) as MessageMeta;
+  if (meta.deleted_at) throw new Error("Esta mensagem já foi apagada.");
+  if (!meta.wa_message_id) {
+    throw new Error("Mensagem sem id do WhatsApp — não dá para sincronizar com o cliente.");
+  }
+  return {
+    session: s,
+    message: m,
+    meta,
+    wa: { organizationId: s.organization_id as string, line: s.line as DbLine },
+  };
+}
+
+export const deleteMessageForEveryone = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => messageInSessionSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    const { session, message, meta, wa } = await loadStaffOutboundMessage(
+      context.userId,
+      data.sessionId,
+      data.messageId,
+    );
+    const del = await deleteWhatsAppMessage(wa, meta.wa_message_id!);
+    if (!del.ok) {
+      throw new Error(
+        del.reason?.includes("not_configured")
+          ? "WhatsApp não configurado para esta linha."
+          : `A Meta não apagou a mensagem: ${del.reason ?? "erro desconhecido"}`,
+      );
+    }
+    await markMessageDeletedLocally(message.id as string, { deleted_by: context.userId });
+    await supabaseAdmin
+      .from("sessions")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", session.id);
+    return { ok: true };
+  });
+
+export const editConversationMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => editMessageSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    const { session, message, meta, wa } = await loadStaffOutboundMessage(
+      context.userId,
+      data.sessionId,
+      data.messageId,
+    );
+    if (meta.media_kind) {
+      throw new Error("Edição disponível só para mensagens de texto.");
+    }
+    const created = new Date(String(message.created_at)).getTime();
+    if (Number.isFinite(created) && Date.now() - created > 15 * 60 * 1000) {
+      throw new Error("A Meta só permite editar mensagens até 15 minutos após o envio.");
+    }
+    const newText = data.text.trim();
+    const edit = await editWhatsAppText(wa, session.phone as string, meta.wa_message_id!, newText);
+    if (!edit.ok) {
+      throw new Error(
+        edit.reason?.includes("not_configured")
+          ? "WhatsApp não configurado para esta linha."
+          : `A Meta não aceitou a edição: ${edit.reason ?? "erro desconhecido"}`,
+      );
+    }
+    await markMessageEditedLocally(message.id as string, newText, { edited_by: context.userId });
+    await supabaseAdmin
+      .from("sessions")
+      .update({ last_message_at: new Date().toISOString() })
+      .eq("id", session.id);
+    return { ok: true };
+  });
+
 export const releaseBot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => idSchema.parse(i))
@@ -926,7 +1041,7 @@ export const fetchSettings = createServerFn({ method: "GET" })
     if (!s) {
       const ins = await supabaseAdmin
         .from("channel_settings")
-        .insert({ organization_id: orgId })
+        .insert({ organization_id: orgId, singleton: false })
         .select("*")
         .single();
       s = ins.data ?? null;
@@ -992,7 +1107,7 @@ export const updateSettings = createServerFn({ method: "POST" })
     } else {
       const { error } = await supabaseAdmin
         .from("channel_settings")
-        .insert({ ...patch, organization_id: orgId } as never);
+        .insert({ ...patch, organization_id: orgId, singleton: false } as never);
       if (error) throw new Error(error.message);
     }
     return { ok: true };

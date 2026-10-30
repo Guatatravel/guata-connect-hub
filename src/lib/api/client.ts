@@ -7,6 +7,8 @@ import {
   fetchConversations,
   fetchConversation,
   replyAsAgent,
+  deleteMessageForEveryone,
+  editConversationMessage,
   releaseBot,
   fetchTriages,
   fetchTriage,
@@ -77,6 +79,14 @@ export const api = {
         replyToMessageId,
       },
     });
+  },
+
+  async deleteMessageForEveryone(sessionId: string, messageId: string) {
+    return deleteMessageForEveryone({ data: { sessionId, messageId } });
+  },
+
+  async editConversationMessage(sessionId: string, messageId: string, text: string) {
+    return editConversationMessage({ data: { sessionId, messageId, text } });
   },
 
   async releaseBot(id: string) {

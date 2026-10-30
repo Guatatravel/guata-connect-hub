@@ -8,9 +8,20 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +82,9 @@ function ConversaDetail() {
   const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
   const [forwardQuery, setForwardQuery] = useState("");
   const [forwardPhone, setForwardPhone] = useState("");
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deleting, setDeleting] = useState<ChatMessage | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -224,6 +238,29 @@ function ConversaDetail() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao encaminhar"),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: (message: ChatMessage) => api.deleteMessageForEveryone(id, message.id),
+    onSuccess: async () => {
+      toast.success("Mensagem apagada para todos");
+      setDeleting(null);
+      await qc.invalidateQueries({ queryKey: ["conversation", id] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao apagar"),
+  });
+
+  const editMut = useMutation({
+    mutationFn: (payload: { message: ChatMessage; text: string }) =>
+      api.editConversationMessage(id, payload.message.id, payload.text),
+    onSuccess: async () => {
+      toast.success("Mensagem editada");
+      setEditing(null);
+      setEditDraft("");
+      await qc.invalidateQueries({ queryKey: ["conversation", id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao editar"),
+  });
+
   const forwardTargets = (conversations ?? [])
     .filter((c) => c.id !== id && !c.archived)
     .filter((c) => {
@@ -293,6 +330,11 @@ function ConversaDetail() {
                 }
                 setReplyTo(message);
               }}
+              onEdit={(message) => {
+                setEditing(message);
+                setEditDraft(message.text);
+              }}
+              onDelete={(message) => setDeleting(message)}
             />
           </div>
           <input
@@ -522,6 +564,70 @@ function ConversaDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={Boolean(editing)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditing(null);
+            setEditDraft("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar mensagem</DialogTitle>
+            <DialogDescription>
+              O texto é atualizado no WhatsApp do cliente. A Meta só aceita edição de texto até 15
+              minutos após o envio.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={editDraft}
+            onChange={(e) => setEditDraft(e.target.value)}
+            maxLength={4000}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={editMut.isPending || !editDraft.trim()}
+              onClick={() => {
+                if (!editing) return;
+                editMut.mutate({ message: editing, text: editDraft.trim() });
+              }}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar para todos?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A mensagem some no WhatsApp do cliente e no painel. Depende das regras da Meta (tipo
+              de mensagem e tempo desde o envio).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMut.isPending}
+              onClick={() => {
+                if (deleting) deleteMut.mutate(deleting);
+              }}
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

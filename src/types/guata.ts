@@ -56,6 +56,10 @@ export interface ChatMessage {
   /** Áudio de voz gerado pelo Guatá, mesmo quando o arquivo antigo não foi guardado. */
   outboundKind?: string;
   replyTo?: { authorLabel: string; text: string };
+  /** Apagada para todos (painel ou WhatsApp). */
+  deleted?: boolean;
+  /** Texto alterado após envio. */
+  edited?: boolean;
 }
 
 export interface Conversation {

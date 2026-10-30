@@ -489,6 +489,70 @@ export function typingDelayMs(text: string): number {
   return Math.round(Math.min(4000, 2000 + text.length * 8));
 }
 
+/** Apaga no WhatsApp uma mensagem enviada pelo número comercial (janela da Meta). */
+export async function deleteWhatsAppMessage(
+  target: WhatsAppTarget,
+  waMessageId: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+  const id = waMessageId.trim();
+  if (!id) return { ok: false, reason: "missing_message_id" };
+
+  const url = new URL(`https://graph.facebook.com/v21.0/${phoneId}/messages`);
+  url.searchParams.set("message_id", id);
+  const res = await fetch(url.toString(), {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  return { ok: true, messageId: id };
+}
+
+/** Edita texto de mensagem enviada pelo negócio (até ~15 min, só texto). */
+export async function editWhatsAppText(
+  target: WhatsAppTarget,
+  to: string,
+  waMessageId: string,
+  newText: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+  const id = waMessageId.trim();
+  const body = newText.trim().slice(0, 4000);
+  if (!id || !body) return { ok: false, reason: "invalid_payload" };
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: to.replace(/\D/g, ""),
+      type: "text",
+      text: { body },
+      edit: { message_id: id },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  const json = (await res.json()) as { messages?: Array<{ id?: string }> };
+  return { ok: true, messageId: json.messages?.[0]?.id ?? id };
+}
+
 export async function isMetaConfigured(
   organizationId: string,
   line: Line = "descubra",

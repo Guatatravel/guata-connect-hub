@@ -58,6 +58,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS channel_settings_organization_unique
 
 INSERT INTO public.channel_settings (
   organization_id,
+  singleton,
   persona_descubra,
   persona_viagens,
   horario_atendimento,
@@ -66,6 +67,7 @@ INSERT INTO public.channel_settings (
 )
 SELECT
   o.id,
+  false,
   COALESCE(
     (SELECT persona_descubra FROM public.channel_settings WHERE organization_id IS NOT NULL LIMIT 1),
     (SELECT persona_descubra FROM public.channel_settings LIMIT 1),
