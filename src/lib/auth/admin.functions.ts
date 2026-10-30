@@ -113,6 +113,11 @@ export const bootstrapFirstAdmin = createServerFn({ method: "POST" }).handler(
       throw new Error(roleErr.message);
     }
 
+    const { ensurePlatformAdminGuataMembership } = await import(
+      "@/lib/organizations.server"
+    );
+    await ensurePlatformAdminGuataMembership(userId);
+
     return {
       email: FIRST_ADMIN_EMAIL,
       tempPassword: returnedPassword,

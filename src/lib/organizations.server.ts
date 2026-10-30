@@ -227,12 +227,44 @@ export async function addOrganizationMember(
   userId: string,
   role: "owner" | "admin" | "member" = "member",
 ): Promise<void> {
+  if (await isMember(userId, organizationId)) return;
   const { error } = await supabaseAdmin.from("organization_members").insert({
     organization_id: organizationId,
     user_id: userId,
     role,
   });
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Admin global (user_roles.admin) entra automaticamente na org Guatá —
+ * equivalente ao owner no cadastro de parceiro.
+ */
+export async function ensurePlatformAdminGuataMembership(userId: string): Promise<void> {
+  const { data: roleRow } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (!roleRow) return;
+
+  const guataId = await getGuataOrganizationId();
+  await addOrganizationMember(guataId, userId, "admin");
+
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("active_organization_id")
+    .eq("id", userId)
+    .maybeSingle();
+  const active = profile?.active_organization_id as string | undefined;
+  if (!active || !(await isMember(userId, active))) {
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ active_organization_id: guataId })
+      .eq("id", userId);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function organizationUsesDescubra(orgId: string): Promise<boolean> {

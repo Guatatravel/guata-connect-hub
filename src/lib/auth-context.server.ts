@@ -3,6 +3,7 @@
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
+  ensurePlatformAdminGuataMembership,
   getGuataOrganizationId,
   isOrganizationAccessLiberado,
   listOrganizationsForUser,
@@ -47,6 +48,8 @@ export async function resolveActiveOrganizationId(userId: string): Promise<strin
 }
 
 export async function getPanelAuthContext(userId: string): Promise<PanelAuthContext> {
+  await ensurePlatformAdminGuataMembership(userId);
+
   const organizations = await listOrganizationsForUser(userId);
   const activeOrganizationId = await resolveActiveOrganizationId(userId);
   const hasOrganization = organizations.length > 0;
@@ -93,6 +96,7 @@ export async function getPanelAuthContext(userId: string): Promise<PanelAuthCont
 
 /** Operações do painel exigem vínculo com agência (admin plataforma incluído se membro). */
 export async function requireActiveOrganization(userId: string): Promise<string> {
+  await ensurePlatformAdminGuataMembership(userId);
   const orgId = await resolveActiveOrganizationId(userId);
   if (!orgId) {
     throw new Error(
