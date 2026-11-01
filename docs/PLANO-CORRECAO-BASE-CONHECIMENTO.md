@@ -118,7 +118,10 @@ Contexto: mapa de Campo Grande, link da agência fora de contexto, bot diz que n
 3. ~~Fase 1.3 (não link comercial em pedido de mapa)~~ ✅  
 4. ~~Fase 2.1 + 2.2 (match mapa + PDF escaneado)~~ ✅  
 5. ~~Filtros na lista (Links / PDFs / …)~~ ✅  
-6. Fase 4 (testes no WhatsApp após Publish Lovable).
+6. ~~Fase 4 (testes no WhatsApp após Publish Lovable).~~ operacional  
+7. ~~Fallback único PDF + mapa (título/descrição)~~ ✅  
+8. ~~Tag `[[ENVIAR_PDF]]`~~ ✅  
+9. ~~Webhook 200 imediato (processamento async)~~ ✅  
 
 ---
 

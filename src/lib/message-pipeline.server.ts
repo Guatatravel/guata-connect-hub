@@ -423,7 +423,7 @@ async function answerTurismo(
 
   // Base de conhecimento própria (documentos, textos e links anexados no painel)
   const { listSendableKnowledgeForPrompt } = await import("@/lib/knowledge.server");
-  const sendableCatalog = await listSendableKnowledgeForPrompt(orgId).catch(() => []);
+  const sendableCatalog = await listSendableKnowledgeForPrompt(orgId, line).catch(() => []);
 
   if (attendant?.usa_base_local !== false) {
     const { searchLocalKnowledge } = await import("@/lib/knowledge.server");
@@ -487,7 +487,7 @@ async function answerTurismo(
         sendableCatalog
           .map((s) => {
             if (s.kind === "pdf") {
-              return `- PDF ${s.id}: ${s.hint} (envio automático; não mencione título nem 📎 na resposta)`;
+              return `- PDF ${s.id}: ${s.hint} (envio automático ou [[ENVIAR_PDF:${s.id}]]; não mencione título nem 📎)`;
             }
             return `- Imagem ${s.id}: ${s.title} — ${s.hint} (se for o caso, termine com [[ENVIAR_MIDIA:${s.id}]])`;
           })
@@ -641,69 +641,6 @@ function samePhone(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
-const HANDOFF_TIMEOUT_MS = 10 * 60 * 1000;
-
-function resumeText(firstName?: string | null): string {
-  const n = firstName ? `, ${firstName}` : "";
-  return `Oi${n}! Enquanto nosso consultor finaliza outro atendimento, eu já sigo com você para adiantar tudo. Me conta: para quando você está pensando essa viagem e quantas pessoas vão?`;
-}
-
-/** Devolve a conversa ao Guatá e avisa o cliente. */
-async function resumeBotForSession(sessionId: string, reason: string) {
-  const { data: s } = await supabaseAdmin
-    .from("sessions")
-    .select("id, phone, line, contact_name, intake_data, organization_id")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!s) return;
-  const intake = { ...((s.intake_data ?? {}) as Record<string, unknown>) };
-  delete intake["owner_alert_at"];
-  intake["handoff_resumed_at"] = new Date().toISOString();
-  intake["handoff_resumed_reason"] = reason;
-  await supabaseAdmin
-    .from("sessions")
-    .update({ mode: "bot", intake_state: null, intake_data: intake as never })
-    .eq("id", sessionId);
-  const text = resumeText(String(s.contact_name ?? "").trim().split(/\s+/)[0] || null);
-  const rowId = await persistMessage(sessionId, "out", "bot", text, { handoff_resume: reason });
-  const res = await sendWhatsAppText(
-    { organizationId: s.organization_id as string, line: s.line as "descubra" | "viagens" },
-    String(s.phone),
-    text,
-  ).catch((e) => ({ ok: false, reason: String(e) }) as const);
-  if (res.ok) await attachWaMessageId(rowId, "messageId" in res ? res.messageId : undefined);
-  else console.error("[handoff] retomada falhou:", res.reason);
-}
-
-/** Conversas aguardando consultor sem resposta humana após 10 min voltam ao Guatá. */
-async function resumeStaleHandoffs(organizationId: string) {
-  const { data } = await supabaseAdmin
-    .from("sessions")
-    .select("id, intake_data")
-    .eq("organization_id", organizationId)
-    .eq("mode", "humano")
-    .limit(50);
-  const now = Date.now();
-  for (const s of data ?? []) {
-    const at = (s.intake_data as Record<string, unknown> | null)?.["owner_alert_at"];
-    if (typeof at !== "string" || now - Date.parse(at) < HANDOFF_TIMEOUT_MS) continue;
-    const { count } = await supabaseAdmin
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", s.id)
-      .eq("author", "agent")
-      .gte("created_at", at);
-    if ((count ?? 0) > 0) {
-      const intake = { ...((s.intake_data ?? {}) as Record<string, unknown>) };
-      delete intake["owner_alert_at"];
-      await supabaseAdmin.from("sessions").update({ intake_data: intake as never }).eq("id", s.id);
-      continue;
-    }
-    await resumeBotForSession(s.id, "timeout");
-  }
-}
-
-/** Resposta do dono ao alerta: 1/continuar ou 2/assumi. */
 async function handleOwnerCommand(msg: IncomingMessage): Promise<boolean> {
   if (!samePhone(msg.phone, ownerAlertPhone())) return false;
   const t = msg.text.trim().toLowerCase();
@@ -730,6 +667,7 @@ async function handleOwnerCommand(msg: IncomingMessage): Promise<boolean> {
   }
   const name = target.contact_name ?? "o cliente";
   if (isContinue) {
+    const { resumeBotForSession } = await import("@/lib/handoff-resume.server");
     await resumeBotForSession(target.id, "owner");
     await reply(`Certo! O Guatá voltou a atender ${name}.`);
   } else {
@@ -776,7 +714,9 @@ export async function processMessage(
   if (!(await isOrganizationAccessLiberado(msg.organizationId))) {
     return { replies: [], sessionId: "" };
   }
-  void resumeStaleHandoffs(msg.organizationId).catch((e) => console.error("[handoff] timeout:", e));
+  void import("@/lib/handoff-resume.server").then((m) =>
+    m.resumeStaleHandoffs(msg.organizationId).catch((e) => console.error("[handoff] timeout:", e)),
+  );
   if (await handleOwnerCommand(msg).catch((e) => (console.error("[owner-cmd]", e), false))) {
     return { replies: [], sessionId: "" };
   }
@@ -934,13 +874,16 @@ export async function processMessage(
       }
 
       const mediaTag = raw.match(/\[\[ENVIAR_MIDIA:([0-9a-f-]{36})\]\]/i);
+      const pdfTag = raw.match(/\[\[ENVIAR_PDF:([0-9a-f-]{36})\]\]/i);
       const body = raw
         .replace(/\[\[OFERTA_HUMANO\]\]/g, "")
         .replace(/\[\[ENVIAR_MIDIA:[0-9a-f-]{36}\]\]/gi, "")
+        .replace(/\[\[ENVIAR_PDF:[0-9a-f-]{36}\]\]/gi, "")
         .trim();
       replies.push(...splitWhatsAppMessages(body));
-      if (mediaTag?.[1]) {
-        (session.intake_data as Record<string, unknown>)["_pending_media_doc"] = mediaTag[1];
+      const taggedDocId = pdfTag?.[1] ?? mediaTag?.[1];
+      if (taggedDocId) {
+        (session.intake_data as Record<string, unknown>)["_pending_media_doc"] = taggedDocId;
       }
     } catch (err) {
       console.error("[brain] erro:", err);

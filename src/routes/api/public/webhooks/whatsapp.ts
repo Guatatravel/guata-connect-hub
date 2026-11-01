@@ -48,21 +48,19 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const sig = request.headers.get("x-hub-signature-256");
         const signatureOk = verifySig(body, sig);
 
-        let payload: any = null;
+        let payload: unknown = null;
         try {
           payload = JSON.parse(body);
         } catch {
           payload = { _raw: body.slice(0, 2000) };
         }
 
-        const value = payload?.entry?.[0]?.changes?.[0]?.value ?? {};
-        const phoneNumberId: string = value?.metadata?.phone_number_id ?? "";
-        const messages: any[] = Array.isArray(value.messages)
-          ? value.messages
-          : [];
-        const statuses: any[] = Array.isArray(value.statuses)
-          ? value.statuses
-          : [];
+        const value =
+          (payload as { entry?: { changes?: { value?: Record<string, unknown> }[] }[] })?.entry?.[0]
+            ?.changes?.[0]?.value ?? {};
+        const phoneNumberId: string = String(value?.metadata?.phone_number_id ?? "");
+        const messages: unknown[] = Array.isArray(value.messages) ? value.messages : [];
+        const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
         const eventKind = messages.length
           ? "message"
           : statuses.length
@@ -73,7 +71,6 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
           ? await resolveInboundChannel(phoneNumberId)
           : null;
 
-        // 1) Grava SEMPRE a entrega (inclusive as recusadas) — caixa de entrada bruta.
         const { supabaseAdmin } = await import(
           "@/integrations/supabase/client.server"
         );
@@ -88,8 +85,8 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               line: inboundMeta?.line ?? null,
               event_kind: eventKind,
               message_ids: [
-                ...messages.map((m) => String(m?.id ?? "")),
-                ...statuses.map((s) => String(s?.id ?? "")),
+                ...messages.map((m) => String((m as { id?: string })?.id ?? "")),
+                ...statuses.map((s) => String((s as { id?: string })?.id ?? "")),
               ].filter(Boolean),
               payload,
               error: signatureOk ? null : "assinatura inválida",
@@ -105,174 +102,23 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
           return new Response("Invalid signature", { status: 401 });
         }
 
-        // 2) Processa mensagens (deduplicadas por id).
-        const errors: string[] = [];
-        const { processMessage } = await import(
-          "@/lib/message-pipeline.server"
+        const { processWhatsAppWebhookDelivery } = await import(
+          "@/lib/whatsapp-webhook-process.server"
         );
-        const { normalizeWhatsAppInbound } = await import(
-          "@/lib/whatsapp-inbound.server"
-        );
-
-        for (const msg of messages) {
-          const msgId = String(msg?.id ?? "");
-          const msgType = String(msg?.type ?? "");
-
-          if (msgType === "revoke" && msg?.revoke?.original_message_id) {
-            try {
-              const { applyWhatsAppMessageRevoke } = await import(
-                "@/lib/message-revisions.server"
-              );
-              await applyWhatsAppMessageRevoke(String(msg.revoke.original_message_id));
-            } catch (err) {
-              console.error("[whatsapp-webhook] revoke:", err);
-            }
-            if (msgId) {
-              await supabaseAdmin
-                .from("whatsapp_processed_messages")
-                .insert({ message_id: msgId })
-                .then(() => {}, () => {});
-            }
-            continue;
-          }
-
-          if (msgType === "edit" && msg?.edit?.original_message_id) {
-            const inner = msg.edit.message as Record<string, unknown> | undefined;
-            const innerType = String(inner?.type ?? "text");
-            let newText: string | undefined;
-            if (innerType === "text") {
-              newText = (inner?.text as { body?: string } | undefined)?.body;
-            } else if (innerType === "image") {
-              newText = (inner?.image as { caption?: string } | undefined)?.caption ?? "";
-            } else if (innerType === "video") {
-              newText = (inner?.video as { caption?: string } | undefined)?.caption ?? "";
-            } else if (innerType === "document") {
-              newText = (inner?.document as { caption?: string } | undefined)?.caption ?? "";
-            }
-            if (newText !== undefined) {
-              try {
-                const { applyWhatsAppMessageEdit } = await import(
-                  "@/lib/message-revisions.server"
-                );
-                await applyWhatsAppMessageEdit(String(msg.edit.original_message_id), newText);
-              } catch (err) {
-                console.error("[whatsapp-webhook] edit:", err);
-              }
-            }
-            if (msgId) {
-              await supabaseAdmin
-                .from("whatsapp_processed_messages")
-                .insert({ message_id: msgId })
-                .then(() => {}, () => {});
-            }
-            continue;
-          }
-
-          if (msgId) {
-            const { error: dupErr } = await supabaseAdmin
-              .from("whatsapp_processed_messages")
-              .insert({ message_id: msgId });
-            if (dupErr) continue; // já processada
-          }
-          const phone: string = msg.from ?? "";
-          const contactName: string | undefined =
-            value.contacts?.[0]?.profile?.name;
-          if (!phone) continue;
-
-          if (!inboundMeta) continue;
-          const { organizationId, line } = inboundMeta;
-          let normalized;
-          try {
-            normalized = await normalizeWhatsAppInbound(line, msg as Record<string, unknown>);
-          } catch (err) {
-            const m = err instanceof Error ? err.message : String(err);
-            errors.push(`mídia: ${m}`);
-            console.error("[whatsapp-webhook] inbound:", err);
-            continue;
-          }
-          if (!normalized?.text) continue;
-
-          try {
-            const quotedWaMessageId =
-              typeof msg?.context?.id === "string" ? msg.context.id : undefined;
-            await processMessage({
-              organizationId,
-              line,
-              phone,
-              contactName,
-              text: normalized.text,
-              messageId: msgId || undefined,
-              quotedWaMessageId,
-              inboundKind: normalized.inboundKind,
-              mediaPath: normalized.attachment?.storagePath,
-              mediaMime: normalized.attachment?.mimeType,
-              mediaKind: normalized.attachment?.mediaKind,
-              mediaFilename: normalized.attachment?.filename,
-            });
-          } catch (err) {
-            const m = err instanceof Error ? err.message : String(err);
-            errors.push(m);
-            console.error("[whatsapp-webhook] pipeline:", err);
-          }
-        }
-
-        // 3) Recibos: enviada, entregue, visualizada ou falha — em qualquer tipo de mensagem.
-        const { applyWhatsAppDeliveryStatus } = await import(
-          "@/lib/whatsapp-status.server"
-        );
-        const echoes = [
-          ...(Array.isArray(value.message_echoes) ? value.message_echoes : []),
-          ...(Array.isArray(value.smb_message_echoes) ? value.smb_message_echoes : []),
-        ];
-        if (echoes.length && inboundMeta) {
-          const { persistPhoneEcho } = await import("@/lib/crm.server");
-          for (const echo of echoes) {
-            const text =
-              echo?.text?.body ??
-              echo?.image?.caption ??
-              echo?.button?.text ??
-              (echo?.type ? `[${echo.type} pelo celular]` : "");
-            const customer = String(echo?.to ?? "");
-            if (!customer) continue;
-            try {
-              await persistPhoneEcho({
-                organizationId: inboundMeta.organizationId,
-                line: inboundMeta.line,
-                customerPhone: customer,
-                text: String(text),
-                waMessageId: echo?.id ? String(echo.id) : undefined,
-              });
-            } catch (err) {
-              console.error("[whatsapp-webhook] eco do celular:", err);
-            }
-          }
-        }
-
-        for (const st of statuses) {
-          const waId = String(st?.id ?? "");
-          const status = String(st?.status ?? "");
-          if (!waId || !status) continue;
-          const detail =
-            st?.errors?.[0]?.title ?? st?.errors?.[0]?.message ?? undefined;
-          if (status === "failed") {
-            errors.push(`envio falhou para ${st.recipient_id}: ${detail ?? "falha"}`);
-          }
-          try {
-            await applyWhatsAppDeliveryStatus(waId, status, detail);
-          } catch (err) {
-            console.error("[whatsapp-webhook] status:", err);
-          }
-        }
-
-        if (deliveryId) {
-          await supabaseAdmin
-            .from("whatsapp_deliveries")
-            .update({
-              processed: true,
-              error: errors.length ? errors.join(" | ").slice(0, 500) : null,
-            })
-            .eq("id", deliveryId);
-        }
+        void processWhatsAppWebhookDelivery({
+          deliveryId,
+          payload,
+          phoneNumberId,
+          inboundMeta,
+        })
+          .catch((err) => console.error("[whatsapp-webhook] processamento async:", err))
+          .finally(() => {
+            void import("@/lib/handoff-resume.server").then((m) =>
+              m.resumeStaleHandoffsForAllOrganizations().catch((e) =>
+                console.error("[handoff] cron sweep:", e),
+              ),
+            );
+          });
 
         return Response.json({ ok: true });
       },

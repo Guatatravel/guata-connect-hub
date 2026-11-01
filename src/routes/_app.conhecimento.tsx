@@ -29,7 +29,8 @@ import {
   defaultKnowledgeTitleFromFilename,
   isKnowledgePdf,
   matchesKnowledgeListFilter,
-  type KnowledgeListFilter,
+  contentTabToListFilter,
+  type KnowledgeContentTab,
 } from "@/lib/knowledge-doc-ui";
 import {
   listKnowledge,
@@ -136,22 +137,21 @@ function KnowledgeBasePanel() {
   const [imgSendable, setImgSendable] = useState(true);
   const [imgFile, setImgFile] = useState<File | null>(null);
   const [listSearch, setListSearch] = useState("");
+  const [contentTab, setContentTab] = useState<KnowledgeContentTab>("arquivo");
   const [filePdfSendable, setFilePdfSendable] = useState(true);
-  const [filePdfKeywords, setFilePdfKeywords] = useState("");
   const [filePdfCaption, setFilePdfCaption] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [fileTitle, setFileTitle] = useState("");
   const [fileDescription, setFileDescription] = useState("");
-  const [listFilter, setListFilter] = useState<KnowledgeListFilter>("all");
 
-  const LIST_FILTERS: { id: KnowledgeListFilter; label: string }[] = [
-    { id: "all", label: "Todos" },
-    { id: "link", label: "Links" },
-    { id: "pdf", label: "PDFs" },
-    { id: "imagem", label: "Imagens" },
-    { id: "texto", label: "Textos" },
-    { id: "arquivo", label: "Outros arquivos" },
-  ];
+  const TAB_LIST_TITLE: Record<KnowledgeContentTab, string> = {
+    arquivo: "Arquivos nesta base",
+    texto: "Textos nesta base",
+    link: "Links nesta base",
+    imagem: "Imagens WhatsApp nesta base",
+  };
+
+  const listFilter = contentTabToListFilter(contentTab);
 
   const { data, isLoading } = useQuery({
     queryKey: ["knowledge"],
@@ -162,7 +162,7 @@ function KnowledgeBasePanel() {
     if (!data) return [];
     let rows = data.filter((doc) =>
       matchesKnowledgeListFilter(
-        { source_type: doc.source_type, title: doc.title },
+        { source_type: doc.source_type, title: doc.title, file_path: doc.file_path },
         listFilter,
       ),
     );
@@ -266,10 +266,10 @@ function KnowledgeBasePanel() {
       }
       if (editing.source_type === "arquivo") {
         payload.sendable = editSendable;
-        payload.keywords = editKeywords;
         payload.caption = editCaption;
         if (isKnowledgePdf({ source_type: editing.source_type, title: editing.title })) {
           payload.content = editContent;
+          payload.keywords = [];
           if (editReplacePdf) {
             const { storagePath } = await prepareFileUpload({
               data: { filename: editReplacePdf.name },
@@ -309,7 +309,7 @@ function KnowledgeBasePanel() {
           ...(isPdf
             ? {
                 sendable: filePdfSendable,
-                keywords: filePdfKeywords,
+                keywords: "",
                 caption: filePdfCaption,
                 description: fileDescription.trim(),
               }
@@ -323,7 +323,6 @@ function KnowledgeBasePanel() {
       setFileTitle("");
       setFileDescription("");
       setFilePdfSendable(true);
-      setFilePdfKeywords("");
       setFilePdfCaption("");
       invalidate();
     },
@@ -372,10 +371,13 @@ function KnowledgeBasePanel() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Adicionar conteúdo</CardTitle>
+          <CardTitle className="text-base">Base de conhecimento</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="arquivo">
+        <CardContent className="space-y-4">
+          <Tabs
+            value={contentTab}
+            onValueChange={(v) => setContentTab(v as KnowledgeContentTab)}
+          >
             <TabsList>
               <TabsTrigger value="arquivo">
                 <Upload className="h-4 w-4 mr-2" />
@@ -397,9 +399,8 @@ function KnowledgeBasePanel() {
 
             <TabsContent value="arquivo" className="space-y-3 pt-4">
               <p className="text-sm text-muted-foreground">
-                PDF, Word, planilhas ou texto, até 8 MB. O arquivo vai direto ao Supabase
-                Storage (sem passar pelo servidor). Imagens promocionais: aba &quot;Imagem
-                WhatsApp&quot;.
+                PDF, Word, planilhas ou texto, até 8 MB. Para PDF no WhatsApp, preencha título e
+                descrição para a IA — palavras-chave não são obrigatórias.
               </p>
               <input
                 ref={inputRef}
@@ -450,18 +451,11 @@ function KnowledgeBasePanel() {
                     <Label>Enviar PDF ao cliente quando relevante</Label>
                   </div>
                   {filePdfSendable && (
-                    <>
-                      <Input
-                        value={filePdfKeywords}
-                        onChange={(e) => setFilePdfKeywords(e.target.value)}
-                        placeholder="Palavras-chave (vírgula): mapa, campo grande"
-                      />
-                      <Input
-                        value={filePdfCaption}
-                        onChange={(e) => setFilePdfCaption(e.target.value)}
-                        placeholder="Legenda no WhatsApp (opcional)"
-                      />
-                    </>
+                    <Input
+                      value={filePdfCaption}
+                      onChange={(e) => setFilePdfCaption(e.target.value)}
+                      placeholder="Legenda no WhatsApp (opcional)"
+                    />
                   )}
                 </div>
               )}
@@ -521,11 +515,11 @@ function KnowledgeBasePanel() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Palavras-chave (vírgula)</Label>
+                <Label>Gatilhos de envio (vírgula) — recomendado em links comerciais</Label>
                 <Input
                   value={linkKeywords}
                   onChange={(e) => setLinkKeywords(e.target.value)}
-                  placeholder="vídeo, bonito, pantanal"
+                  placeholder="orçamento, pacote, contratar"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -542,8 +536,8 @@ function KnowledgeBasePanel() {
 
             <TabsContent value="imagem" className="space-y-3 pt-4">
               <p className="text-sm text-muted-foreground">
-                O bot pode enviar esta imagem na conversa quando o cliente pedir promoção ou
-                usar palavras-chave que você definir (não é disparo em massa).
+                Descreva a promoção com clareza; a IA usa título e descrição para decidir o envio.
+                Palavras-chave são opcionais.
               </p>
               <div className="space-y-2">
                 <Label>Título</Label>
@@ -563,11 +557,11 @@ function KnowledgeBasePanel() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Palavras-chave (vírgula)</Label>
+                <Label>Gatilhos opcionais (vírgula)</Label>
                 <Input
                   value={imgKeywords}
                   onChange={(e) => setImgKeywords(e.target.value)}
-                  placeholder="promoção, desconto, black friday"
+                  placeholder="promoção, desconto (opcional)"
                 />
               </div>
               <div className="space-y-2">
@@ -602,6 +596,119 @@ function KnowledgeBasePanel() {
               </div>
             </TabsContent>
           </Tabs>
+
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm font-medium">
+                {TAB_LIST_TITLE[contentTab]}
+                {data ? ` (${filteredDocs.length})` : ""}
+              </p>
+              <div className="relative max-w-md w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder="Buscar nesta aba…"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            {isLoading && (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            )}
+            {!isLoading && filteredDocs.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Nenhum item nesta aba ainda. Use o formulário acima para adicionar.
+              </p>
+            )}
+            {filteredDocs.map((doc) => (
+              <div
+                key={doc.id}
+                className="flex items-start gap-3 rounded-lg border p-3"
+              >
+                <FileText className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium truncate">{doc.title}</span>
+                    <Badge variant="outline">{doc.source_type}</Badge>
+                    {doc.whatsapp_sendable && (
+                      <Badge className="bg-emerald-600">
+                        {doc.source_type === "link"
+                          ? "envia link"
+                          : isKnowledgePdf({
+                                source_type: doc.source_type,
+                                title: doc.title,
+                                file_path: doc.file_path,
+                              })
+                            ? "envia PDF"
+                            : "envia no WhatsApp"}
+                      </Badge>
+                    )}
+                    {doc.url && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                        {doc.url}
+                      </span>
+                    )}
+                    {doc.status === "erro" ? (
+                      <Badge variant="destructive">falhou</Badge>
+                    ) : (
+                      <Badge variant="secondary">pronto</Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {formatSize(doc.size_bytes)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {doc.error ?? doc.preview ?? ""}
+                  </p>
+                  {doc.file_path &&
+                    (isKnowledgePdf({
+                      source_type: doc.source_type,
+                      title: doc.title,
+                      file_path: doc.file_path,
+                    }) ||
+                      doc.source_type === "imagem") && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto p-0 text-xs mt-1"
+                        onClick={() => openStoredFile(doc.id)}
+                      >
+                        {doc.source_type === "imagem" ? "Abrir imagem" : "Abrir PDF"}
+                      </Button>
+                    )}
+                  {doc.file_path && doc.size_bytes === 0 && doc.source_type === "arquivo" && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Arquivo pode estar ausente no storage — use Abrir PDF para conferir ou envie de
+                      novo.
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openEdit(doc as EditDoc)}
+                    aria-label="Editar"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deleteMutation.mutate(doc.id)}
+                    disabled={deleteMutation.isPending}
+                    aria-label="Excluir"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -637,7 +744,7 @@ function KnowledgeBasePanel() {
                   <Textarea rows={4} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Palavras-chave</Label>
+                  <Label>Gatilhos de envio (links comerciais)</Label>
                   <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
@@ -656,10 +763,6 @@ function KnowledgeBasePanel() {
                   <div className="space-y-2">
                     <Label>Descrição para a IA</Label>
                     <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Palavras-chave</Label>
-                    <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Legenda WhatsApp</Label>
@@ -691,7 +794,7 @@ function KnowledgeBasePanel() {
                   <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Palavras-chave</Label>
+                  <Label>Gatilhos opcionais</Label>
                   <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
                 </div>
                 <div className="space-y-2">
@@ -719,127 +822,6 @@ function KnowledgeBasePanel() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="space-y-3">
-          <CardTitle className="text-base">
-            Conteúdos cadastrados {data ? `(${filteredDocs.length}/${data.length})` : ""}
-          </CardTitle>
-          <div className="flex flex-wrap gap-2">
-            {LIST_FILTERS.map((f) => (
-              <Button
-                key={f.id}
-                type="button"
-                size="sm"
-                variant={listFilter === f.id ? "default" : "outline"}
-                onClick={() => setListFilter(f.id)}
-              >
-                {f.label}
-              </Button>
-            ))}
-          </div>
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={listSearch}
-              onChange={(e) => setListSearch(e.target.value)}
-              placeholder="Buscar por título, texto ou palavra-chave…"
-              className="pl-9"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {isLoading && (
-            <div className="space-y-2">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          )}
-          {!isLoading && (data?.length ?? 0) === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Nada por aqui ainda. Comece anexando um documento ou colando um texto.
-            </p>
-          )}
-          {filteredDocs.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-start gap-3 rounded-lg border p-3"
-            >
-              <FileText className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium truncate">{doc.title}</span>
-                  <Badge variant="outline">{doc.source_type}</Badge>
-                  {doc.whatsapp_sendable && (
-                    <Badge className="bg-emerald-600">
-                      {doc.source_type === "link"
-                        ? "envia link"
-                        : isKnowledgePdf({ source_type: doc.source_type, title: doc.title })
-                          ? "envia PDF"
-                          : "envia no WhatsApp"}
-                    </Badge>
-                  )}
-                  {doc.url && (
-                    <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                      {doc.url}
-                    </span>
-                  )}
-                  {doc.status === "erro" ? (
-                    <Badge variant="destructive">falhou</Badge>
-                  ) : (
-                    <Badge variant="secondary">pronto</Badge>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    {formatSize(doc.size_bytes)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                  {doc.error ?? doc.preview ?? ""}
-                </p>
-                {doc.file_path &&
-                  (isKnowledgePdf({
-                    source_type: doc.source_type,
-                    title: doc.title,
-                    file_path: doc.file_path,
-                  }) ||
-                    doc.source_type === "imagem") && (
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="h-auto p-0 text-xs mt-1"
-                      onClick={() => openStoredFile(doc.id)}
-                    >
-                      {doc.source_type === "imagem" ? "Abrir imagem" : "Abrir PDF"}
-                    </Button>
-                  )}
-                {doc.file_path && doc.size_bytes === 0 && doc.source_type === "arquivo" && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    Arquivo pode estar ausente no storage — use Abrir PDF para conferir ou envie de novo.
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => openEdit(doc as EditDoc)}
-                  aria-label="Editar"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => deleteMutation.mutate(doc.id)}
-                  disabled={deleteMutation.isPending}
-                  aria-label="Remover"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
     </div>
   );
 }

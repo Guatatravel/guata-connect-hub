@@ -35,6 +35,7 @@ import { Route as AppConversasIndexRouteImport } from './routes/_app.conversas.i
 import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 import { Route as AppTriagensIndexRouteImport } from './routes/_app.triagens.index'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
+import { Route as ApiPublicCronResumeHandoffsRouteImport } from './routes/api/public/cron/resume-handoffs'
 import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
 import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
 
@@ -167,6 +168,12 @@ const AppTriagensIdRoute = AppTriagensIdRouteImport.update({
   path: '/triagens/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiPublicCronResumeHandoffsRoute =
+  ApiPublicCronResumeHandoffsRouteImport.update({
+    id: '/api/public/cron/resume-handoffs',
+    path: '/api/public/cron/resume-handoffs',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWebhooksDescubraMsRoute =
   ApiPublicWebhooksDescubraMsRouteImport.update({
     id: '/api/public/webhooks/descubra-ms',
@@ -206,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/triagens/$id': typeof AppTriagensIdRoute
   '/conversas/': typeof AppConversasIndexRoute
   '/triagens/': typeof AppTriagensIndexRoute
+  '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -235,6 +243,7 @@ export interface FileRoutesByTo {
   '/triagens/$id': typeof AppTriagensIdRoute
   '/conversas': typeof AppConversasIndexRoute
   '/triagens': typeof AppTriagensIndexRoute
+  '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -266,6 +275,7 @@ export interface FileRoutesById {
   '/_app/triagens/$id': typeof AppTriagensIdRoute
   '/_app/conversas/': typeof AppConversasIndexRoute
   '/_app/triagens/': typeof AppTriagensIndexRoute
+  '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/triagens/$id'
     | '/conversas/'
     | '/triagens/'
+    | '/api/public/cron/resume-handoffs'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/whatsapp'
   fileRoutesByTo: FileRoutesByTo
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/triagens/$id'
     | '/conversas'
     | '/triagens'
+    | '/api/public/cron/resume-handoffs'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/whatsapp'
   id:
@@ -356,6 +368,7 @@ export interface FileRouteTypes {
     | '/_app/triagens/$id'
     | '/_app/conversas/'
     | '/_app/triagens/'
+    | '/api/public/cron/resume-handoffs'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/whatsapp'
   fileRoutesById: FileRoutesById
@@ -369,6 +382,7 @@ export interface RootRouteChildren {
   SemAgenciaRoute: typeof SemAgenciaRoute
   SetupRoute: typeof SetupRoute
   TrocarSenhaRoute: typeof TrocarSenhaRoute
+  ApiPublicCronResumeHandoffsRoute: typeof ApiPublicCronResumeHandoffsRoute
   ApiPublicWebhooksDescubraMsRoute: typeof ApiPublicWebhooksDescubraMsRoute
   ApiPublicWebhooksWhatsappRoute: typeof ApiPublicWebhooksWhatsappRoute
 }
@@ -557,6 +571,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTriagensIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/public/cron/resume-handoffs': {
+      id: '/api/public/cron/resume-handoffs'
+      path: '/api/public/cron/resume-handoffs'
+      fullPath: '/api/public/cron/resume-handoffs'
+      preLoaderRoute: typeof ApiPublicCronResumeHandoffsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/descubra-ms': {
       id: '/api/public/webhooks/descubra-ms'
       path: '/api/public/webhooks/descubra-ms'
@@ -627,6 +648,7 @@ const rootRouteChildren: RootRouteChildren = {
   SemAgenciaRoute: SemAgenciaRoute,
   SetupRoute: SetupRoute,
   TrocarSenhaRoute: TrocarSenhaRoute,
+  ApiPublicCronResumeHandoffsRoute: ApiPublicCronResumeHandoffsRoute,
   ApiPublicWebhooksDescubraMsRoute: ApiPublicWebhooksDescubraMsRoute,
   ApiPublicWebhooksWhatsappRoute: ApiPublicWebhooksWhatsappRoute,
 }

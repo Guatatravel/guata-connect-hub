@@ -1,5 +1,7 @@
 /** Filtros da lista de conhecimento no painel (client-safe). */
 
+export type KnowledgeContentTab = "arquivo" | "texto" | "link" | "imagem";
+
 export type KnowledgeListFilter =
   | "all"
   | "link"
@@ -8,6 +10,9 @@ export type KnowledgeListFilter =
   | "imagem"
   | "arquivo";
 
+export function contentTabToListFilter(tab: KnowledgeContentTab): KnowledgeListFilter {
+  return tab;
+}
 export function isKnowledgePdf(doc: {
   source_type: string;
   title: string;
@@ -36,8 +41,6 @@ export function matchesKnowledgeListFilter(
   if (filter === "texto") return doc.source_type === "texto";
   if (filter === "imagem") return doc.source_type === "imagem";
   if (filter === "pdf") return isKnowledgePdf(doc);
-  if (filter === "arquivo") {
-    return doc.source_type === "arquivo" && !isKnowledgePdf(doc);
-  }
+  if (filter === "arquivo") return doc.source_type === "arquivo";
   return true;
 }

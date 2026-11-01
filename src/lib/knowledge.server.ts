@@ -290,10 +290,15 @@ function linkKeywordHit(userText: string, keywords: string[]): boolean {
   return keywords.some((kw) => kw.length > 0 && q.includes(kw.toLowerCase()));
 }
 
-function mapDocumentBoost(userText: string, title: string, keywords: string[]): number {
+function mapDocumentBoost(
+  userText: string,
+  title: string,
+  content: string,
+  keywords: string[],
+): number {
   if (!/\bmapa\b/i.test(userText)) return 0;
   let b = 0;
-  const hay = `${title} ${keywords.join(" ")}`.toLowerCase();
+  const hay = `${title} ${content} ${keywords.join(" ")}`.toLowerCase();
   if (hay.includes("mapa")) b += 4;
   if (/\b(campo\s*grande|cg)\b/i.test(userText) && hay.includes("campo")) b += 3;
   return b;
@@ -833,15 +838,22 @@ export async function getSendableKnowledgeMediaById(
 function mediaOutboundAllowed(
   userText: string,
   title: string,
+  content: string,
   keywords: string[],
 ): boolean {
-  const kwHit = linkKeywordHit(userText, keywords);
-  const wantsFile = clientWantsKnowledgeFile(userText);
-  const mapBoost = mapDocumentBoost(userText, title, keywords);
+  if (keywords.length > 0 && linkKeywordHit(userText, keywords)) return true;
 
-  if (keywords.length > 0 && kwHit) return true;
-  if (wantsFile && mapBoost >= 4) return true;
-  return false;
+  const doc = { title, content, send_keywords: keywords };
+  const score = scoreSendableMatch(userText, doc);
+  const wantsFile = clientWantsKnowledgeFile(userText);
+  const mapBoost = mapDocumentBoost(userText, title, content, keywords);
+
+  if (wantsFile) {
+    if (score >= 2) return true;
+    if (mapBoost >= 3) return true;
+    return false;
+  }
+  return score >= 4;
 }
 
 export async function pickSendableKnowledgeMedia(
@@ -857,7 +869,16 @@ export async function pickSendableKnowledgeMedia(
     .not("file_path", "is", null)
     .limit(50);
 
-  const ranked = (data ?? [])
+  const rows = data ?? [];
+  const sendableRows = rows.filter((d) => {
+    const file_path = String(d.file_path ?? "");
+    return knowledgeFileDelivery(file_path) !== "unsupported";
+  });
+
+  const wantsFile = clientWantsKnowledgeFile(userText);
+  const minScore = wantsFile ? 2 : 4;
+
+  const ranked = sendableRows
     .map((d) => {
       const file_path = String(d.file_path ?? "");
       const delivery = knowledgeFileDelivery(file_path);
@@ -866,12 +887,14 @@ export async function pickSendableKnowledgeMedia(
         ? (d.send_keywords as string[])
         : [];
       const title = String(d.title ?? "");
-      if (!mediaOutboundAllowed(userText, title, keywords)) return null;
+      const content = String(d.content ?? "");
+      if (!mediaOutboundAllowed(userText, title, content, keywords)) return null;
 
-      const kwHit = linkKeywordHit(userText, keywords);
+      const kwHit = keywords.length > 0 && linkKeywordHit(userText, keywords);
       let score = kwHit ? 6 : 0;
-      score += mapDocumentBoost(userText, title, keywords);
-      if (clientWantsKnowledgeFile(userText)) score += 2;
+      score += scoreSendableMatch(userText, { title, content, send_keywords: keywords });
+      score += mapDocumentBoost(userText, title, content, keywords);
+      if (wantsFile) score += 2;
 
       return {
         id: d.id as string,
@@ -883,12 +906,28 @@ export async function pickSendableKnowledgeMedia(
         filename: file_path.split("/").pop() ?? "arquivo",
       };
     })
-    .filter(
-      (d) => d !== null && d.score >= 4,
-    )
-    .sort((a, b) => b!.score - a!.score);
+    .filter((d): d is SendableKnowledgeMedia => d !== null && d.score >= minScore)
+    .sort((a, b) => b.score - a.score);
 
-  return (ranked[0] as SendableKnowledgeMedia | undefined) ?? null;
+  if (ranked[0]) return ranked[0];
+
+  if (wantsFile && sendableRows.length === 1) {
+    const d = sendableRows[0]!;
+    const file_path = String(d.file_path ?? "");
+    const delivery = knowledgeFileDelivery(file_path);
+    if (delivery === "unsupported") return null;
+    return {
+      id: d.id as string,
+      title: String(d.title ?? ""),
+      file_path,
+      caption: (d.whatsapp_caption as string) ?? null,
+      score: 1,
+      delivery,
+      filename: file_path.split("/").pop() ?? "arquivo.pdf",
+    };
+  }
+
+  return null;
 }
 
 export async function pickSendableKnowledgeLink(
@@ -940,9 +979,12 @@ export async function pickSendableKnowledgeLink(
   for (const top of ranked) {
     const norm = normalizeOutboundUrl(top.url);
     if (excludeUrls.has(norm)) continue;
-    if (top.keywords.length === 0) continue;
-    if (!linkKeywordHit(userText, top.keywords)) continue;
-    if (isCommercialAgencyUrl(top.url) && !commercialIntent) continue;
+    if (isCommercialAgencyUrl(top.url)) {
+      if (!commercialIntent) continue;
+      if (top.keywords.length === 0 || !linkKeywordHit(userText, top.keywords)) continue;
+    } else if (top.keywords.length > 0 && !linkKeywordHit(userText, top.keywords)) {
+      continue;
+    }
     return { title: top.title, url: top.url };
   }
   return null;
@@ -950,10 +992,11 @@ export async function pickSendableKnowledgeLink(
 
 export async function listSendableKnowledgeForPrompt(
   organizationId: string,
+  line?: "descubra" | "viagens",
 ): Promise<Array<{ id: string; title: string; hint: string; kind: "image" | "pdf" }>> {
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
-    .select("id,title,content,send_keywords,source_type,file_path")
+    .select("id,title,content,send_keywords,source_type,file_path,url")
     .eq("organization_id", organizationId)
     .eq("status", "pronto")
     .eq("whatsapp_sendable", true)
@@ -968,13 +1011,14 @@ export async function listSendableKnowledgeForPrompt(
             ? "pdf"
             : null;
       if (!delivery) return null;
-      const kws = Array.isArray(d.send_keywords) ? (d.send_keywords as string[]).join(", ") : "";
+      if (line === "descubra") {
+        const url = String(d.url ?? "");
+        if (url && isCommercialAgencyUrl(url)) return null;
+      }
       return {
         id: d.id as string,
         title: String(d.title ?? ""),
-        hint: [String(d.content ?? "").slice(0, 120), kws ? `Palavras: ${kws}` : ""]
-          .filter(Boolean)
-          .join(" — "),
+        hint: String(d.content ?? "").slice(0, 160).trim() || String(d.title ?? ""),
         kind: delivery,
       };
     })
