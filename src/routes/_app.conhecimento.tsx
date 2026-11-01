@@ -51,12 +51,18 @@ type EditDoc = {
   source_type: string;
   url: string | null;
   file_path: string | null;
+  size_bytes: number;
   content: string;
   preview: string;
   whatsapp_sendable: boolean;
   send_keywords: string[];
   whatsapp_caption: string | null;
 };
+
+function storageFileName(filePath: string | null): string {
+  if (!filePath) return "—";
+  return filePath.split("/").pop() ?? filePath;
+}
 
 function editingIsPdf(doc: Pick<EditDoc, "source_type" | "title" | "file_path">) {
   return isKnowledgePdf({
@@ -107,6 +113,38 @@ function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function CurrentStoredFileNotice({
+  filePath,
+  sizeBytes,
+  kind,
+}: {
+  filePath: string | null;
+  sizeBytes: number;
+  kind: "PDF" | "imagem";
+}) {
+  const missing = Boolean(filePath) && sizeBytes === 0;
+  return (
+    <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm space-y-1">
+      <p className="font-medium">{kind} atual na base</p>
+      <p className="text-muted-foreground">
+        {filePath ? storageFileName(filePath) : "Nenhum arquivo vinculado"}
+        {sizeBytes > 0 ? ` · ${formatSize(sizeBytes)}` : filePath ? " · 0 B" : ""}
+      </p>
+      {!missing && (
+        <p className="text-xs text-muted-foreground">
+          Salvar alterações mantém este arquivo. Só troca se você escolher um novo abaixo.
+        </p>
+      )}
+      {missing && (
+        <p className="text-xs text-amber-600">
+          O arquivo pode estar ausente no storage — use &quot;Abrir {kind === "PDF" ? "PDF" : "imagem"}&quot; na
+          lista ou envie um arquivo novo abaixo.
+        </p>
+      )}
+    </div>
+  );
 }
 
 function KnowledgeBasePanel() {
@@ -779,40 +817,53 @@ function KnowledgeBasePanel() {
               </>
             )}
             {editing.source_type === "arquivo" && editingIsPdf(editing) && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Descrição para a IA</Label>
-                    <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Palavras-chave (vírgula)</Label>
-                    <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Legenda WhatsApp</Label>
-                    <Input value={editCaption} onChange={(e) => setEditCaption(e.target.value)} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={editSendable} onCheckedChange={setEditSendable} />
-                    <Label>Bot pode enviar este PDF no WhatsApp</Label>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Substituir PDF (opcional)</Label>
-                    <Input
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => setEditReplacePdf(e.target.files?.[0] ?? null)}
-                    />
-                    {editReplacePdf && (
-                      <p className="text-xs text-muted-foreground">
-                        Novo arquivo: {editReplacePdf.name} ({formatSize(editReplacePdf.size)})
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
+              <>
+                <CurrentStoredFileNotice
+                  filePath={editing.file_path}
+                  sizeBytes={editing.size_bytes}
+                  kind="PDF"
+                />
+                <div className="space-y-2">
+                  <Label>Descrição para a IA</Label>
+                  <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Palavras-chave (vírgula)</Label>
+                  <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Legenda WhatsApp</Label>
+                  <Input value={editCaption} onChange={(e) => setEditCaption(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={editSendable} onCheckedChange={setEditSendable} />
+                  <Label>Bot pode enviar este PDF no WhatsApp</Label>
+                </div>
+                <div className="space-y-2">
+                  <Label>Trocar PDF (opcional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Deixe em branco para manter o arquivo atual.
+                  </p>
+                  <Input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => setEditReplacePdf(e.target.files?.[0] ?? null)}
+                  />
+                  {editReplacePdf && (
+                    <p className="text-xs text-muted-foreground">
+                      Será substituído por: {editReplacePdf.name} ({formatSize(editReplacePdf.size)})
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
             {editing.source_type === "imagem" && (
               <>
+                <CurrentStoredFileNotice
+                  filePath={editing.file_path}
+                  sizeBytes={editing.size_bytes}
+                  kind="imagem"
+                />
                 <div className="space-y-2">
                   <Label>Descrição para a IA</Label>
                   <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
@@ -830,12 +881,20 @@ function KnowledgeBasePanel() {
                   <Label>Bot pode enviar imagem</Label>
                 </div>
                 <div className="space-y-2">
-                  <Label>Substituir imagem (opcional)</Label>
+                  <Label>Trocar imagem (opcional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Deixe em branco para manter a imagem atual.
+                  </p>
                   <Input
                     type="file"
                     accept={IMAGE_ACCEPT}
                     onChange={(e) => setEditReplaceImage(e.target.files?.[0] ?? null)}
                   />
+                  {editReplaceImage && (
+                    <p className="text-xs text-muted-foreground">
+                      Será substituída por: {editReplaceImage.name} ({formatSize(editReplaceImage.size)})
+                    </p>
+                  )}
                 </div>
               </>
             )}
