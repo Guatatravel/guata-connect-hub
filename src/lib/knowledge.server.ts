@@ -841,25 +841,32 @@ function mediaOutboundAllowed(
   content: string,
   keywords: string[],
 ): boolean {
-  if (keywords.length > 0 && linkKeywordHit(userText, keywords)) return true;
+  if (keywords.length > 0) {
+    return linkKeywordHit(userText, keywords);
+  }
 
   const doc = { title, content, send_keywords: keywords };
   const score = scoreSendableMatch(userText, doc);
   const wantsFile = clientWantsKnowledgeFile(userText);
   const mapBoost = mapDocumentBoost(userText, title, content, keywords);
+  const effectiveMin = wantsFile ? 1 : 2;
 
   if (wantsFile) {
-    if (score >= 2) return true;
+    if (score + mapBoost >= effectiveMin) return true;
     if (mapBoost >= 3) return true;
     return false;
   }
-  return score >= 4;
+  return score + mapBoost >= effectiveMin;
 }
 
 export async function pickSendableKnowledgeMedia(
   userText: string,
   organizationId: string,
+  minScore = 2,
 ): Promise<SendableKnowledgeMedia | null> {
+  const wantsFile = clientWantsKnowledgeFile(userText);
+  const effectiveMin = wantsFile ? 1 : minScore;
+
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
     .select("id,title,content,file_path,whatsapp_caption,send_keywords")
@@ -869,16 +876,7 @@ export async function pickSendableKnowledgeMedia(
     .not("file_path", "is", null)
     .limit(50);
 
-  const rows = data ?? [];
-  const sendableRows = rows.filter((d) => {
-    const file_path = String(d.file_path ?? "");
-    return knowledgeFileDelivery(file_path) !== "unsupported";
-  });
-
-  const wantsFile = clientWantsKnowledgeFile(userText);
-  const minScore = wantsFile ? 2 : 4;
-
-  const ranked = sendableRows
+  const ranked = (data ?? [])
     .map((d) => {
       const file_path = String(d.file_path ?? "");
       const delivery = knowledgeFileDelivery(file_path);
@@ -890,11 +888,9 @@ export async function pickSendableKnowledgeMedia(
       const content = String(d.content ?? "");
       if (!mediaOutboundAllowed(userText, title, content, keywords)) return null;
 
-      const kwHit = keywords.length > 0 && linkKeywordHit(userText, keywords);
-      let score = kwHit ? 6 : 0;
-      score += scoreSendableMatch(userText, { title, content, send_keywords: keywords });
-      score += mapDocumentBoost(userText, title, content, keywords);
-      if (wantsFile) score += 2;
+      const score =
+        scoreSendableMatch(userText, { title, content, send_keywords: keywords }) +
+        mapDocumentBoost(userText, title, content, keywords);
 
       return {
         id: d.id as string,
@@ -906,28 +902,13 @@ export async function pickSendableKnowledgeMedia(
         filename: file_path.split("/").pop() ?? "arquivo",
       };
     })
-    .filter((d): d is SendableKnowledgeMedia => d !== null && d.score >= minScore)
+    .filter(
+      (d): d is SendableKnowledgeMedia =>
+        d !== null && d.score >= effectiveMin,
+    )
     .sort((a, b) => b.score - a.score);
 
-  if (ranked[0]) return ranked[0];
-
-  if (wantsFile && sendableRows.length === 1) {
-    const d = sendableRows[0]!;
-    const file_path = String(d.file_path ?? "");
-    const delivery = knowledgeFileDelivery(file_path);
-    if (delivery === "unsupported") return null;
-    return {
-      id: d.id as string,
-      title: String(d.title ?? ""),
-      file_path,
-      caption: (d.whatsapp_caption as string) ?? null,
-      score: 1,
-      delivery,
-      filename: file_path.split("/").pop() ?? "arquivo.pdf",
-    };
-  }
-
-  return null;
+  return ranked[0] ?? null;
 }
 
 export async function pickSendableKnowledgeLink(

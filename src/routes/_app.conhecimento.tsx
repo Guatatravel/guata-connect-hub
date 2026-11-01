@@ -50,12 +50,21 @@ type EditDoc = {
   title: string;
   source_type: string;
   url: string | null;
+  file_path: string | null;
   content: string;
   preview: string;
   whatsapp_sendable: boolean;
   send_keywords: string[];
   whatsapp_caption: string | null;
 };
+
+function editingIsPdf(doc: Pick<EditDoc, "source_type" | "title" | "file_path">) {
+  return isKnowledgePdf({
+    source_type: doc.source_type,
+    title: doc.title,
+    file_path: doc.file_path,
+  });
+}
 
 export const Route = createFileRoute("/_app/conhecimento")({
   component: Conhecimento,
@@ -139,6 +148,7 @@ function KnowledgeBasePanel() {
   const [listSearch, setListSearch] = useState("");
   const [contentTab, setContentTab] = useState<KnowledgeContentTab>("arquivo");
   const [filePdfSendable, setFilePdfSendable] = useState(true);
+  const [filePdfKeywords, setFilePdfKeywords] = useState("");
   const [filePdfCaption, setFilePdfCaption] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [fileTitle, setFileTitle] = useState("");
@@ -267,9 +277,9 @@ function KnowledgeBasePanel() {
       if (editing.source_type === "arquivo") {
         payload.sendable = editSendable;
         payload.caption = editCaption;
-        if (isKnowledgePdf({ source_type: editing.source_type, title: editing.title })) {
+        if (editingIsPdf(editing)) {
           payload.content = editContent;
-          payload.keywords = [];
+          payload.keywords = editKeywords;
           if (editReplacePdf) {
             const { storagePath } = await prepareFileUpload({
               data: { filename: editReplacePdf.name },
@@ -309,7 +319,7 @@ function KnowledgeBasePanel() {
           ...(isPdf
             ? {
                 sendable: filePdfSendable,
-                keywords: "",
+                keywords: filePdfKeywords,
                 caption: filePdfCaption,
                 description: fileDescription.trim(),
               }
@@ -323,6 +333,7 @@ function KnowledgeBasePanel() {
       setFileTitle("");
       setFileDescription("");
       setFilePdfSendable(true);
+      setFilePdfKeywords("");
       setFilePdfCaption("");
       invalidate();
     },
@@ -399,8 +410,8 @@ function KnowledgeBasePanel() {
 
             <TabsContent value="arquivo" className="space-y-3 pt-4">
               <p className="text-sm text-muted-foreground">
-                PDF, Word, planilhas ou texto, até 8 MB. Para PDF no WhatsApp, preencha título e
-                descrição para a IA — palavras-chave não são obrigatórias.
+                PDF, Word, planilhas ou texto, até 8 MB. Para PDF no WhatsApp, configure título,
+                descrição e palavras-chave antes de enviar para a base.
               </p>
               <input
                 ref={inputRef}
@@ -451,11 +462,21 @@ function KnowledgeBasePanel() {
                     <Label>Enviar PDF ao cliente quando relevante</Label>
                   </div>
                   {filePdfSendable && (
-                    <Input
-                      value={filePdfCaption}
-                      onChange={(e) => setFilePdfCaption(e.target.value)}
-                      placeholder="Legenda no WhatsApp (opcional)"
-                    />
+                    <>
+                      <div className="space-y-2">
+                        <Label>Palavras-chave (vírgula)</Label>
+                        <Input
+                          value={filePdfKeywords}
+                          onChange={(e) => setFilePdfKeywords(e.target.value)}
+                          placeholder="mapa, campo grande, mapa turístico"
+                        />
+                      </div>
+                      <Input
+                        value={filePdfCaption}
+                        onChange={(e) => setFilePdfCaption(e.target.value)}
+                        placeholder="Legenda no WhatsApp (opcional)"
+                      />
+                    </>
                   )}
                 </div>
               )}
@@ -757,12 +778,15 @@ function KnowledgeBasePanel() {
                 </div>
               </>
             )}
-            {editing.source_type === "arquivo" &&
-              isKnowledgePdf({ source_type: editing.source_type, title: editing.title }) && (
+            {editing.source_type === "arquivo" && editingIsPdf(editing) && (
                 <>
                   <div className="space-y-2">
                     <Label>Descrição para a IA</Label>
                     <Textarea rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Palavras-chave (vírgula)</Label>
+                    <Input value={editKeywords} onChange={(e) => setEditKeywords(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>Legenda WhatsApp</Label>
