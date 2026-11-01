@@ -170,6 +170,7 @@ export type Database = {
           id: string
           image_path: string | null
           line: Database["public"]["Enums"]["channel_line"]
+          organization_id: string | null
           send_mode: string
           sent_fail: number
           sent_ok: number
@@ -190,6 +191,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           line?: Database["public"]["Enums"]["channel_line"]
+          organization_id?: string | null
           send_mode?: string
           sent_fail?: number
           sent_ok?: number
@@ -210,6 +212,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           line?: Database["public"]["Enums"]["channel_line"]
+          organization_id?: string | null
           send_mode?: string
           sent_fail?: number
           sent_ok?: number

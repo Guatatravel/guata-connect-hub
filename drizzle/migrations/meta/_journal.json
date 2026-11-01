@@ -15,6 +15,13 @@
       "when": 1791937198016,
       "tag": "0001_sessions_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793545566101,
+      "tag": "0002_campaigns_organization_id",
+      "breakpoints": true
     }
   ]
 }
