@@ -19,7 +19,11 @@ export function BrandLogo({
   className?: string;
   fallbackClassName?: string;
 }) {
-  const { data: url } = useLogoUrl();
+  const { data: url, isPending } = useLogoUrl();
+  if (isPending) {
+    // Espaço neutro enquanto carrega — evita o "pisca" emoji → logo
+    return <div className={cn("rounded-full bg-muted", className)} aria-hidden />;
+  }
   if (url) {
     return (
       <img

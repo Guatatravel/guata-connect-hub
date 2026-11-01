@@ -41,11 +41,9 @@ const navItems = [
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
   { to: "/atendentes", label: "Atendente virtual (IA)", icon: Bot },
-  { to: "/equipe", label: "Equipe (humanos)", icon: Users, orgTeamOnly: true },
+  { to: "/equipe", label: "Equipe", icon: Users, orgTeamOnly: true },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
   { to: "/solicitacoes", label: "Solicitações", icon: ClipboardList, adminOnly: true },
-  { to: "/organizacoes", label: "Agências", icon: Building2, guataOpsOnly: true },
-  { to: "/usuarios", label: "Usuários (Guatá)", icon: Users, adminOnly: true },
 ] as const;
 
 type Counts = { triagensAbertas: number; conversasHumano: number };
