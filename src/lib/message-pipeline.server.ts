@@ -624,10 +624,124 @@ async function deliverTextReplies(
   }
 }
 
-async function notifyOwner(msg: IncomingMessage, sessionId: string) {
-  const owner = process.env["OWNER_ALERT_PHONE"] || "5567992123617";
+function ownerAlertPhone(): string {
+  return (process.env["OWNER_ALERT_PHONE"] || "5567992123617").replace(/\D/g, "");
+}
+
+/** Mesmo número com/sem o 9 extra brasileiro. */
+function samePhone(a: string, b: string): boolean {
+  const norm = (p: string) => {
+    const d = p.replace(/\D/g, "");
+    return d.length === 13 && d.startsWith("55") ? d.slice(0, 4) + d.slice(5) : d;
+  };
+  return norm(a) === norm(b);
+}
+
+const HANDOFF_TIMEOUT_MS = 10 * 60 * 1000;
+
+function resumeText(firstName?: string | null): string {
+  const n = firstName ? `, ${firstName}` : "";
+  return `Oi${n}! Enquanto nosso consultor finaliza outro atendimento, eu já sigo com você para adiantar tudo. Me conta: para quando você está pensando essa viagem e quantas pessoas vão?`;
+}
+
+/** Devolve a conversa ao Guatá e avisa o cliente. */
+async function resumeBotForSession(sessionId: string, reason: string) {
+  const { data: s } = await supabaseAdmin
+    .from("sessions")
+    .select("id, phone, line, contact_name, intake_data, organization_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!s) return;
+  const intake = { ...((s.intake_data ?? {}) as Record<string, unknown>) };
+  delete intake["owner_alert_at"];
+  intake["handoff_resumed_at"] = new Date().toISOString();
+  intake["handoff_resumed_reason"] = reason;
+  await supabaseAdmin
+    .from("sessions")
+    .update({ mode: "bot", intake_state: null, intake_data: intake as never })
+    .eq("id", sessionId);
+  const text = resumeText(String(s.contact_name ?? "").trim().split(/\s+/)[0] || null);
+  const rowId = await persistMessage(sessionId, "out", "bot", text, { handoff_resume: reason });
+  const res = await sendWhatsAppText(
+    { organizationId: s.organization_id as string, line: s.line as "descubra" | "viagens" },
+    String(s.phone),
+    text,
+  ).catch((e) => ({ ok: false, reason: String(e) }) as const);
+  if (res.ok) await attachWaMessageId(rowId, "messageId" in res ? res.messageId : undefined);
+  else console.error("[handoff] retomada falhou:", res.reason);
+}
+
+/** Conversas aguardando consultor sem resposta humana após 10 min voltam ao Guatá. */
+async function resumeStaleHandoffs(organizationId: string) {
   const { data } = await supabaseAdmin
-    .from("sessions").select("dossie").eq("id", sessionId).maybeSingle();
+    .from("sessions")
+    .select("id, intake_data")
+    .eq("organization_id", organizationId)
+    .eq("mode", "humano")
+    .limit(50);
+  const now = Date.now();
+  for (const s of data ?? []) {
+    const at = (s.intake_data as Record<string, unknown> | null)?.["owner_alert_at"];
+    if (typeof at !== "string" || now - Date.parse(at) < HANDOFF_TIMEOUT_MS) continue;
+    const { count } = await supabaseAdmin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", s.id)
+      .eq("author", "agent")
+      .gte("created_at", at);
+    if ((count ?? 0) > 0) {
+      const intake = { ...((s.intake_data ?? {}) as Record<string, unknown>) };
+      delete intake["owner_alert_at"];
+      await supabaseAdmin.from("sessions").update({ intake_data: intake as never }).eq("id", s.id);
+      continue;
+    }
+    await resumeBotForSession(s.id, "timeout");
+  }
+}
+
+/** Resposta do dono ao alerta: 1/continuar ou 2/assumi. */
+async function handleOwnerCommand(msg: IncomingMessage): Promise<boolean> {
+  if (!samePhone(msg.phone, ownerAlertPhone())) return false;
+  const t = msg.text.trim().toLowerCase();
+  const isContinue = /^(1|continuar|continua|continue|guatá|guata)$/.test(t);
+  const isTake = /^(2|assumi|assumo|eu atendo)$/.test(t);
+  if (!isContinue && !isTake) return false;
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("id, contact_name, intake_data")
+    .eq("organization_id", msg.organizationId)
+    .eq("mode", "humano")
+    .limit(50);
+  const pending = (data ?? [])
+    .map((s) => ({ ...s, at: (s.intake_data as Record<string, unknown> | null)?.["owner_alert_at"] }))
+    .filter((s): s is typeof s & { at: string } => typeof s.at === "string")
+    .sort((a, b) => b.at.localeCompare(a.at));
+  const target = pending[0];
+  const reply = async (text: string) => {
+    await sendWhatsAppText({ organizationId: msg.organizationId, line: msg.line }, msg.phone, text);
+  };
+  if (!target) {
+    await reply("Não há nenhum cliente aguardando consultor agora.");
+    return true;
+  }
+  const name = target.contact_name ?? "o cliente";
+  if (isContinue) {
+    await resumeBotForSession(target.id, "owner");
+    await reply(`Certo! O Guatá voltou a atender ${name}.`);
+  } else {
+    const intake = { ...((target.intake_data ?? {}) as Record<string, unknown>) };
+    delete intake["owner_alert_at"];
+    intake["owner_took_at"] = new Date().toISOString();
+    await supabaseAdmin.from("sessions").update({ intake_data: intake as never }).eq("id", target.id);
+    await reply(`Combinado! ${name} fica com você — o Guatá segue pausado nessa conversa.`);
+  }
+  return true;
+}
+
+async function notifyOwner(msg: IncomingMessage, sessionId: string) {
+  const owner = ownerAlertPhone();
+  const { data } = await supabaseAdmin
+    .from("sessions").select("dossie, intake_data").eq("id", sessionId).maybeSingle();
   const d = (data?.dossie ?? {}) as Record<string, unknown>;
   const resumo = String(d["resumo"] ?? d["resumo_executivo"] ?? d["intencao"] ?? msg.text).slice(0, 400);
   const phone = msg.phone.replace(/\D/g, "");
@@ -636,7 +750,12 @@ async function notifyOwner(msg: IncomingMessage, sessionId: string) {
     `Nome: ${msg.contactName ?? "Sem nome"}\nContato: +${phone}\n` +
     `Resumo: ${resumo}\n\n` +
     `Responder pelo painel: https://guata-connect-hub.lovable.app/conversas/${sessionId}\n` +
-    `Chamar pelo seu WhatsApp: https://wa.me/${phone}`;
+    `Chamar pelo seu WhatsApp: https://wa.me/${phone}\n\n` +
+    `Responda aqui:\n1 ou CONTINUAR → o Guatá segue atendendo\n2 ou ASSUMI → você atende (Guatá pausado)\n` +
+    `Sem resposta em 10 min, o Guatá retoma sozinho.`;
+  const intake = { ...((data?.intake_data ?? {}) as Record<string, unknown>) };
+  intake["owner_alert_at"] = new Date().toISOString();
+  await supabaseAdmin.from("sessions").update({ intake_data: intake as never }).eq("id", sessionId);
   const orgId = await sessionOrganizationId(sessionId);
   const res = await sendWhatsAppText(
     { organizationId: orgId, line: msg.line },
@@ -651,6 +770,10 @@ export async function processMessage(
 ): Promise<{ replies: string[]; sessionId: string }> {
   const { isOrganizationAccessLiberado } = await import("@/lib/organizations.server");
   if (!(await isOrganizationAccessLiberado(msg.organizationId))) {
+    return { replies: [], sessionId: "" };
+  }
+  void resumeStaleHandoffs(msg.organizationId).catch((e) => console.error("[handoff] timeout:", e));
+  if (await handleOwnerCommand(msg).catch((e) => (console.error("[owner-cmd]", e), false))) {
     return { replies: [], sessionId: "" };
   }
   const waTarget = { organizationId: msg.organizationId, line: msg.line };
