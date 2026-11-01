@@ -14,9 +14,10 @@ export const getWhatsAppDiagnostics = createServerFn({ method: "POST" })
 
 export const sendWhatsAppTestMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { to: string; text?: string }) => ({
+  .inputValidator((input: { to: string; text?: string; line?: string }) => ({
     to: String(input?.to ?? "").slice(0, 30),
     text: String(input?.text ?? "").slice(0, 500),
+    line: input?.line === "descubra" ? "descubra" as const : "viagens" as const,
   }))
   .handler(async ({ data, context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
@@ -27,5 +28,6 @@ export const sendWhatsAppTestMessage = createServerFn({ method: "POST" })
     return sendTestWhatsApp(
       data.to,
       data.text || "Teste do Guatá Channel: a conexão com o WhatsApp está ativa.",
+      data.line,
     );
   });

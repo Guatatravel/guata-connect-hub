@@ -2,15 +2,13 @@
  * Download de mídia recebida via WhatsApp Cloud API.
  */
 import type { Line } from "@/lib/meta-send.server";
+import { metaAccessTokenForLine } from "@/lib/meta-env.server";
 
 /** Vídeo do WhatsApp chega a 16 MB. Abaixo disso o painel guarda o arquivo. */
 const MAX_BYTES = 16 * 1024 * 1024;
 
-function lineEnv(line: Line, key: "ACCESS_TOKEN"): string | undefined {
-  const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
-  return (
-    process.env[`META_${key}${suffix}`] ?? process.env[`META_${key}`]
-  );
+function lineEnv(line: Line): string | undefined {
+  return metaAccessTokenForLine(line);
 }
 
 export interface DownloadedMedia {
@@ -22,7 +20,7 @@ export async function downloadWhatsAppMedia(
   line: Line,
   mediaId: string,
 ): Promise<DownloadedMedia | null> {
-  const token = lineEnv(line, "ACCESS_TOKEN");
+  const token = lineEnv(line);
   if (!token || !mediaId) return null;
 
   const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {

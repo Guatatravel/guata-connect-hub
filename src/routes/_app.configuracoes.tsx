@@ -173,6 +173,13 @@ function ConfigPage() {
               Verify Token: use o valor que você definiu como secret <code className="text-[10px]">META_VERIFY_TOKEN</code>.
               Subscreva o campo <code className="text-[10px]">messages</code>.
             </p>
+            <p className="text-xs text-muted-foreground mt-2 rounded-lg border border-border/60 bg-muted/40 p-2">
+              <strong className="text-foreground">Secrets no Lovable:</strong> ao renovar o token na Meta, atualize{" "}
+              <code className="text-[10px]">META_ACCESS_TOKEN</code> (vale para todas as linhas). O Phone Number ID pode
+              ficar em <code className="text-[10px]">META_PHONE_NUMBER_ID_DESCUBRA</code> — a linha Guatá Viagens usa
+              esse ID automaticamente se não houver <code className="text-[10px]">_VIAGENS</code>. Depois, publique o app
+              de novo.
+            </p>
             <p className="text-xs mt-2">
               Credenciais de envio:{" "}
               <Link to="/conectar-meta" className="underline font-medium">

@@ -15,6 +15,11 @@ const TEMP: Record<string, { label: string; cls: string }> = {
   frio: { label: "Frio", cls: "bg-secondary text-secondary-foreground border-border" },
 };
 
+const EMPTY_DOSSIE = {
+  dossie: null,
+  at: null as string | null,
+};
+
 export function DossieCard({
   sessionId,
   onUseMessage,
@@ -31,7 +36,14 @@ export function DossieCard({
 
   const { data, isLoading } = useQuery({
     queryKey: key,
-    queryFn: () => fetchFn({ data: { id: sessionId } }),
+    queryFn: async () => {
+      try {
+        const result = await fetchFn({ data: { id: sessionId } });
+        return result ?? EMPTY_DOSSIE;
+      } catch {
+        return EMPTY_DOSSIE;
+      }
+    },
   });
 
   const regen = useMutation({

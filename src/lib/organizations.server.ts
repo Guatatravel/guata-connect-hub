@@ -2,6 +2,7 @@
  * Multi-organização (agências) — server-only.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { metaAccessTokenForLine, metaPhoneNumberIdForLine } from "@/lib/meta-env.server";
 
 let cachedGuataOrgId: string | null = null;
 
@@ -346,21 +347,21 @@ export async function resolveWhatsAppCredentials(
     .eq("is_active", true)
     .maybeSingle();
 
-  const token = (data?.access_token as string | undefined)?.trim();
-  const phoneId = (data?.phone_number_id as string | undefined)?.trim();
-  if (token && phoneId) return { token, phoneId };
+  const dbToken = (data?.access_token as string | undefined)?.trim();
+  const dbPhone = (data?.phone_number_id as string | undefined)?.trim();
 
   const guataId = await getGuataOrganizationId();
   if (organizationId !== guataId) {
+    if (dbToken && dbPhone) return { token: dbToken, phoneId: dbPhone };
     return {};
   }
 
-  const suffix = line === "descubra" ? "_DESCUBRA" : "_VIAGENS";
+  const envToken = metaAccessTokenForLine(line);
+  const envPhone = metaPhoneNumberIdForLine(line);
+  if (envToken && envPhone) return { token: envToken, phoneId: envPhone };
+  if (dbToken && dbPhone) return { token: dbToken, phoneId: dbPhone };
   return {
-    token:
-      process.env[`META_ACCESS_TOKEN${suffix}`] ?? process.env["META_ACCESS_TOKEN"],
-    phoneId:
-      process.env[`META_PHONE_NUMBER_ID${suffix}`] ??
-      process.env["META_PHONE_NUMBER_ID"],
+    token: envToken || dbToken,
+    phoneId: envPhone || dbPhone,
   };
 }

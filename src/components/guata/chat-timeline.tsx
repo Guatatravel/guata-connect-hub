@@ -13,9 +13,11 @@ function DeliveryMark({
   error?: string;
 }) {
   if (status === "failed") {
+    const detail = error?.trim() || "A Meta não entregou esta mensagem ao celular.";
     return (
-      <span className="text-red-700" title={error || "A Meta não entregou"}>
+      <span className="text-red-700 block text-left max-w-[220px]" title={detail}>
         não entregue
+        <span className="block text-[10px] leading-tight opacity-90">{detail}</span>
       </span>
     );
   }

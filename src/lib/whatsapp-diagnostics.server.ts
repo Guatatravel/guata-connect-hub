@@ -3,8 +3,13 @@
  * Nunca devolve credenciais: só status, datas e mensagens de erro da Meta.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { sendWhatsAppText } from "@/lib/meta-send.server";
+import { sendWhatsAppText, type Line } from "@/lib/meta-send.server";
 import { getGuataOrganizationId } from "@/lib/organizations.server";
+import {
+  isMetaEnvConfiguredForLine,
+  metaAccessTokenForLine,
+  metaPhoneNumberIdForLine,
+} from "@/lib/meta-env.server";
 
 export interface DeliveryRow {
   id: string;
@@ -53,21 +58,16 @@ export interface WhatsAppDiagnostics {
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
-function token(): string | undefined {
-  return (
-    process.env.META_ACCESS_TOKEN_DESCUBRA ?? process.env.META_ACCESS_TOKEN
-  );
+function token(line: Line = "viagens"): string | undefined {
+  return metaAccessTokenForLine(line);
 }
-function phoneId(): string | undefined {
-  return (
-    process.env.META_PHONE_NUMBER_ID_DESCUBRA ??
-    process.env.META_PHONE_NUMBER_ID
-  );
+function phoneId(line: Line = "viagens"): string | undefined {
+  return metaPhoneNumberIdForLine(line);
 }
 
-async function checkNumero(): Promise<WhatsAppDiagnostics["numero"]> {
-  const t = token();
-  const id = phoneId();
+async function checkNumero(line: Line = "viagens"): Promise<WhatsAppDiagnostics["numero"]> {
+  const t = token(line);
+  const id = phoneId(line);
   if (!t || !id) return { ok: false, error: "Credenciais ausentes." };
   try {
     const res = await fetch(
@@ -94,8 +94,8 @@ async function checkNumero(): Promise<WhatsAppDiagnostics["numero"]> {
   }
 }
 
-async function checkToken(): Promise<WhatsAppDiagnostics["token"]> {
-  const t = token();
+async function checkToken(line: Line = "viagens"): Promise<WhatsAppDiagnostics["token"]> {
+  const t = token(line);
   if (!t) return { ok: false, error: "Token de acesso não configurado." };
   try {
     const res = await fetch(
@@ -140,7 +140,7 @@ function previewOf(payload: any): string {
 }
 
 export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
-  const [numero, tok] = await Promise.all([checkNumero(), checkToken()]);
+  const [numero, tok] = await Promise.all([checkNumero("viagens"), checkToken("viagens")]);
 
   const total = await supabaseAdmin
     .from("whatsapp_deliveries")
@@ -183,14 +183,11 @@ export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
   return {
     ranAt: new Date().toISOString(),
     secrets: {
-      accessToken: Boolean(token()),
-      phoneNumberId: Boolean(phoneId()),
+      accessToken: Boolean(token("viagens")),
+      phoneNumberId: Boolean(phoneId("viagens")),
       appSecret: Boolean(process.env.META_APP_SECRET),
       verifyToken: Boolean(process.env.META_VERIFY_TOKEN),
-      viagensConfigurada: Boolean(
-        process.env.META_ACCESS_TOKEN_VIAGENS &&
-          process.env.META_PHONE_NUMBER_ID_VIAGENS,
-      ),
+      viagensConfigurada: isMetaEnvConfiguredForLine("viagens"),
     },
     entregas: {
       total: total.count ?? 0,
@@ -221,6 +218,7 @@ export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
 export async function sendTestWhatsApp(
   to: string,
   text: string,
+  line: Line = "viagens",
 ): Promise<{ ok: boolean; message: string }> {
   const digits = to.replace(/\D/g, "");
   if (digits.length < 10) {
@@ -230,15 +228,19 @@ export async function sendTestWhatsApp(
     };
   }
   const orgId = await getGuataOrganizationId();
-  const res = await sendWhatsAppText({ organizationId: orgId, line: "descubra" }, digits, text);
+  const res = await sendWhatsAppText({ organizationId: orgId, line }, digits, text);
   if (res.ok) {
     return {
       ok: true,
-      message: `Mensagem aceita pela Meta (id ${res.messageId ?? "—"}).`,
+      message: `Mensagem aceita pela Meta na linha ${line} (id ${res.messageId ?? "—"}).`,
     };
   }
   if (res.reason === "not_configured") {
-    return { ok: false, message: "Token ou número da Meta não configurados." };
+    return {
+      ok: false,
+      message:
+        "Token ou Phone Number ID não configurados para esta linha. No Lovable, use META_ACCESS_TOKEN e META_PHONE_NUMBER_ID_DESCUBRA (ou _VIAGENS).",
+    };
   }
   return { ok: false, message: `A Meta recusou: ${res.reason}` };
 }

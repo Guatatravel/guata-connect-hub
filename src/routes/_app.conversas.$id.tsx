@@ -109,7 +109,13 @@ function ConversaDetail() {
 
   const { data: conv, isLoading } = useQuery({
     queryKey: ["conversation", id],
-    queryFn: () => api.getConversation(id),
+    queryFn: async () => {
+      try {
+        return (await api.getConversation(id)) ?? null;
+      } catch {
+        return null;
+      }
+    },
     refetchInterval: 5000,
   });
 
