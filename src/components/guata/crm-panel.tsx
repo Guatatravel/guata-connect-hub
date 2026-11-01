@@ -13,6 +13,11 @@ import {
 import { CRM_COLUMNS, CRM_GUIDES, columnLabel } from "@/lib/crm.shared";
 import type { Conversation } from "@/types/guata";
 
+const EMPTY_QUICK_REPLIES = {
+  replies: [] as Array<{ id: string; title: string; body: string }>,
+  needsSql: false,
+};
+
 export function CrmPanel({
   conv,
   onUseReply,
@@ -31,7 +36,14 @@ export function CrmPanel({
 
   const replies = useQuery({
     queryKey: ["quick-replies"],
-    queryFn: () => loadReplies(),
+    queryFn: async () => {
+      try {
+        const data = await loadReplies();
+        return data ?? EMPTY_QUICK_REPLIES;
+      } catch {
+        return EMPTY_QUICK_REPLIES;
+      }
+    },
   });
 
   const crm = useMutation({

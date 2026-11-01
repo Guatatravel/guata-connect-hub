@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+const EMPTY_QUICK_REPLIES = {
+  replies: [] as Array<{ id: string; title: string; body: string }>,
+  needsSql: false,
+};
+
 export function QuickRepliesSettings() {
   const qc = useQueryClient();
   const load = useServerFn(listQuickReplies);
@@ -16,7 +21,14 @@ export function QuickRepliesSettings() {
   const [body, setBody] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: ["quick-replies"],
-    queryFn: () => load(),
+    queryFn: async () => {
+      try {
+        const result = await load();
+        return result ?? EMPTY_QUICK_REPLIES;
+      } catch {
+        return EMPTY_QUICK_REPLIES;
+      }
+    },
   });
   const create = useMutation({
     mutationFn: () => save({ data: { title, body } }),
