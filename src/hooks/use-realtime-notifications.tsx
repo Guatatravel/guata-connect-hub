@@ -122,7 +122,13 @@ export function useRealtimeNotifications() {
 
   const counts = useQuery({
     queryKey: ["unread-counts"],
-    queryFn: () => fetchUnreadCounts(),
+    queryFn: async () => {
+      try {
+        return await fetchUnreadCounts();
+      } catch {
+        return { triagensAbertas: 0, conversasHumano: 0, organizationId: undefined as string | undefined };
+      }
+    },
     enabled: Boolean(user),
     refetchOnWindowFocus: true,
     staleTime: 15_000,

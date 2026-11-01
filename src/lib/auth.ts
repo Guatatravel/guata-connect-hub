@@ -20,14 +20,27 @@ export function useAuth(): AuthState {
     let mounted = true;
 
     // Listener PRIMEIRO para não perder eventos
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
+      if (event === "TOKEN_REFRESHED" && !session) {
+        void supabase.auth.signOut();
+        setState({ loading: false, session: null, user: null });
+        return;
+      }
       setState({ loading: false, session, user: session?.user ?? null });
     });
 
     // Hidrata sessão atual
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!mounted) return;
+      if (error) {
+        const msg = error.message?.toLowerCase() ?? "";
+        if (msg.includes("refresh token") || msg.includes("invalid")) {
+          void supabase.auth.signOut();
+        }
+        setState({ loading: false, session: null, user: null });
+        return;
+      }
       setState({ loading: false, session, user: session?.user ?? null });
     });
 

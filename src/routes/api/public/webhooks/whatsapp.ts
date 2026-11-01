@@ -105,20 +105,24 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const { processWhatsAppWebhookDelivery } = await import(
           "@/lib/whatsapp-webhook-process.server"
         );
-        void processWhatsAppWebhookDelivery({
-          deliveryId,
-          payload,
-          phoneNumberId,
-          inboundMeta,
-        })
-          .catch((err) => console.error("[whatsapp-webhook] processamento async:", err))
-          .finally(() => {
-            void import("@/lib/handoff-resume.server").then((m) =>
-              m.resumeStaleHandoffsForAllOrganizations().catch((e) =>
-                console.error("[handoff] cron sweep:", e),
-              ),
-            );
+        try {
+          await processWhatsAppWebhookDelivery({
+            deliveryId,
+            payload,
+            phoneNumberId,
+            inboundMeta,
           });
+        } catch (err) {
+          console.error("[whatsapp-webhook] processamento:", err);
+        }
+        try {
+          const { resumeStaleHandoffsForAllOrganizations } = await import(
+            "@/lib/handoff-resume.server"
+          );
+          await resumeStaleHandoffsForAllOrganizations();
+        } catch (e) {
+          console.error("[handoff] cron sweep:", e);
+        }
 
         return Response.json({ ok: true });
       },
