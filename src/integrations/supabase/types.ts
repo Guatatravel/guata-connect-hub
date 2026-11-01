@@ -166,19 +166,18 @@ export type Database = {
           body: string
           created_at: string
           created_by: string | null
+          extra_phones: string | null
           id: string
           image_path: string | null
           line: Database["public"]["Enums"]["channel_line"]
+          send_mode: string
           sent_fail: number
           sent_ok: number
           sent_skip: number
-          organization_id: string
-          send_mode: string
-          template_name: string | null
-          template_language: string
-          template_uses_name: boolean
-          extra_phones: string | null
           status: string
+          template_language: string
+          template_name: string | null
+          template_uses_name: boolean
           title: string
           updated_at: string
         }
@@ -187,18 +186,18 @@ export type Database = {
           body?: string
           created_at?: string
           created_by?: string | null
+          extra_phones?: string | null
           id?: string
           image_path?: string | null
           line?: Database["public"]["Enums"]["channel_line"]
+          send_mode?: string
           sent_fail?: number
           sent_ok?: number
           sent_skip?: number
-          send_mode?: string
-          template_name?: string | null
-          template_language?: string
-          template_uses_name?: boolean
-          extra_phones?: string | null
           status?: string
+          template_language?: string
+          template_name?: string | null
+          template_uses_name?: boolean
           title: string
           updated_at?: string
         }
@@ -207,18 +206,18 @@ export type Database = {
           body?: string
           created_at?: string
           created_by?: string | null
+          extra_phones?: string | null
           id?: string
           image_path?: string | null
           line?: Database["public"]["Enums"]["channel_line"]
+          send_mode?: string
           sent_fail?: number
           sent_ok?: number
           sent_skip?: number
-          send_mode?: string
-          template_name?: string | null
-          template_language?: string
-          template_uses_name?: boolean
-          extra_phones?: string | null
           status?: string
+          template_language?: string
+          template_name?: string | null
+          template_uses_name?: boolean
           title?: string
           updated_at?: string
         }
@@ -579,38 +578,6 @@ export type Database = {
         }
         Relationships: []
       }
-      quick_replies: {
-        Row: {
-          body: string
-          created_at: string
-          id: string
-          organization_id: string
-          title: string
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          id?: string
-          organization_id: string
-          title: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          id?: string
-          organization_id?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "quick_replies_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           active_organization_id: string | null
@@ -643,6 +610,38 @@ export type Database = {
           {
             foreignKeyName: "profiles_active_organization_id_fkey"
             columns: ["active_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quick_replies: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          organization_id: string
+          title: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_replies_organization_id_fkey"
+            columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
