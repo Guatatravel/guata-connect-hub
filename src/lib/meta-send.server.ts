@@ -486,7 +486,7 @@ export async function markReadAndTyping(
 }
 
 export function typingDelayMs(text: string): number {
-  return Math.round(Math.min(4000, 2000 + text.length * 8));
+  return Math.round(Math.min(2500, 800 + text.length * 4));
 }
 
 /** Apaga no WhatsApp uma mensagem enviada pelo número comercial (janela da Meta). */

@@ -115,14 +115,6 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         } catch (err) {
           console.error("[whatsapp-webhook] processamento:", err);
         }
-        try {
-          const { resumeStaleHandoffsForAllOrganizations } = await import(
-            "@/lib/handoff-resume.server"
-          );
-          await resumeStaleHandoffsForAllOrganizations();
-        } catch (e) {
-          console.error("[handoff] cron sweep:", e);
-        }
 
         return Response.json({ ok: true });
       },

@@ -192,10 +192,28 @@ async function attachWaMessageId(rowId: string | null, waMessageId?: string) {
     .eq("id", rowId)
     .maybeSingle();
   const metadata = {
-    ...((data?.metadata as Record<string, unknown> | null) ?? {}),
+    ...((data?.metadata as { delivery_status?: string } | null) ?? {}),
     wa_message_id: waMessageId,
     delivery_status:
       (data?.metadata as { delivery_status?: string } | null)?.delivery_status || "sent",
+  };
+  await supabaseAdmin
+    .from("messages")
+    .update({ metadata: metadata as never })
+    .eq("id", rowId);
+}
+
+async function markOutboundDeliveryFailed(rowId: string | null, reason: string) {
+  if (!rowId) return;
+  const { data } = await supabaseAdmin
+    .from("messages")
+    .select("metadata")
+    .eq("id", rowId)
+    .maybeSingle();
+  const metadata = {
+    ...((data?.metadata as Record<string, unknown> | null) ?? {}),
+    delivery_status: "failed",
+    delivery_error: reason.slice(0, 500),
   };
   await supabaseAdmin
     .from("messages")
@@ -615,13 +633,16 @@ async function deliverTextReplies(
         : undefined;
     const rowId = await persistMessage(sessionId, "out", "bot", text, outMeta);
 
-    if (inboundWaMessageId) await markReadAndTyping(waTarget, inboundWaMessageId);
-    await new Promise((r) => setTimeout(r, typingDelayMs(text)));
+    if (inboundWaMessageId && i === 0) await markReadAndTyping(waTarget, inboundWaMessageId);
+    const delayMs = i === 0 ? typingDelayMs(text) : Math.min(400, 150 + text.length * 2);
+    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
     const res = await sendWhatsAppText(waTarget, phone, text).catch(
       (e) => ({ ok: false, reason: String(e) }) as const,
     );
-    if (!res.ok) console.error("[meta] send falhou:", res.reason);
-    else {
+    if (!res.ok) {
+      console.error("[meta] send falhou:", res.reason);
+      await markOutboundDeliveryFailed(rowId, res.reason ?? "meta_send_failed");
+    } else {
       console.log("[meta] enviado:", "messageId" in res ? res.messageId : "");
       await attachWaMessageId(rowId, "messageId" in res ? res.messageId : undefined);
     }
@@ -950,7 +971,7 @@ export async function processMessage(
           ? knowledgeWhatsappDocumentFilename(media.filename, media.title)
           : media.filename;
       const bytes = await downloadKnowledgeMediaBytes(media.file_path);
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 300));
       let chatMediaPath: string | undefined;
       const chatMime =
         media.delivery === "document" ? "application/pdf" : imageMimeFromFilename(media.filename);
@@ -1052,12 +1073,16 @@ export async function processMessage(
         const linkRowId = await persistMessage(session.id, "out", "bot", linkMsg, {
           knowledge_link: link.url,
         });
-        await new Promise((r) => setTimeout(r, typingDelayMs(linkMsg)));
+        await new Promise((r) => setTimeout(r, 300));
         const linkRes = await sendWhatsAppText(waTarget, msg.phone, linkMsg, {
           previewUrl: true,
         }).catch((e) => ({ ok: false, reason: String(e) }) as const);
-        if (!linkRes.ok) console.error("[meta] link falhou:", linkRes.reason);
-        else await attachWaMessageId(linkRowId, "messageId" in linkRes ? linkRes.messageId : undefined);
+        if (!linkRes.ok) {
+          console.error("[meta] link falhou:", linkRes.reason);
+          await markOutboundDeliveryFailed(linkRowId, linkRes.reason ?? "meta_link_failed");
+        } else {
+          await attachWaMessageId(linkRowId, "messageId" in linkRes ? linkRes.messageId : undefined);
+        }
       }
     }
   }
