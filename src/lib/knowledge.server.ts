@@ -884,12 +884,11 @@ export async function pickSendableKnowledgeMedia(
       };
     })
     .filter(
-      (d): d is SendableKnowledgeMedia =>
-        d !== null && d.score >= 4,
+      (d) => d !== null && d.score >= 4,
     )
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b!.score - a!.score);
 
-  return ranked[0] ?? null;
+  return (ranked[0] as SendableKnowledgeMedia | undefined) ?? null;
 }
 
 export async function pickSendableKnowledgeLink(

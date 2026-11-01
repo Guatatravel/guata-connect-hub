@@ -290,7 +290,7 @@ export async function uploadWhatsAppMedia(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,
   );
-  form.set("file", new Blob([slice], { type: mimeType }), filename);
+  form.set("file", new Blob([slice as ArrayBuffer], { type: mimeType }), filename);
 
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/media`, {
     method: "POST",
