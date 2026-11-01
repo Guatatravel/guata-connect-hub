@@ -131,7 +131,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               await supabaseAdmin
                 .from("whatsapp_processed_messages")
                 .insert({ message_id: msgId })
-                .catch(() => {});
+                .then(() => {}, () => {});
             }
             continue;
           }
@@ -163,7 +163,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               await supabaseAdmin
                 .from("whatsapp_processed_messages")
                 .insert({ message_id: msgId })
-                .catch(() => {});
+                .then(() => {}, () => {});
             }
             continue;
           }
