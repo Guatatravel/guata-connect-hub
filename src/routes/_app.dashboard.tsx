@@ -37,6 +37,29 @@ function DashboardPage() {
         </p>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Primeiros passos</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-2 text-muted-foreground">
+            <p>1. <Link to="/conectar-meta" className="text-primary underline">Conectar o WhatsApp</Link> da agência.</p>
+            <p>2. Cadastrar sua <Link to="/conhecimento" className="text-primary underline">base de conhecimento</Link> (passeios e valores fixos).</p>
+            <p>3. Convidar consultores em <Link to="/equipe" className="text-primary underline">Equipe</Link>.</p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl border-accent">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Evite bloqueio do WhatsApp</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-1 text-muted-foreground">
+            <p>• Mensagem livre só até 24h depois da última mensagem do cliente.</p>
+            <p>• Não dispare para listas compradas ou quem não pediu contato.</p>
+            <p>• Muitos bloqueios/denúncias derrubam a qualidade da linha.</p>
+          </CardContent>
+        </Card>
+      </div>
+
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {isLoading || !data ? (

@@ -41,7 +41,7 @@ export async function generateDossie(sessionId: string): Promise<Dossie | null> 
       {
         role: "system",
         content:
-          'Você é um analista de vendas de uma agência de turismo. Leia a conversa e devolva APENAS um JSON válido, em português do Brasil, sem markdown, com as chaves: "resumo" (até 3 frases), "interesse" (o que o cliente quer, 1 frase), "temperatura" ("quente"|"morno"|"frio" — chance de fechar), "dados" (objeto com dados coletados como nome, origem, destino, datas, pessoas, orçamento; só o que foi dito), "objecoes" (lista curta de dúvidas/objeções), "proximo_passo" (1 frase de ação para o vendedor), "mensagem_sugerida" (mensagem curta e cordial de WhatsApp para o vendedor enviar e avançar o fechamento). Seja conciso.',
+          'Você é um analista de vendas de uma agência de turismo. Leia a conversa e devolva APENAS um JSON válido, em português do Brasil, sem markdown, com as chaves: "resumo" (até 3 frases), "interesse" (o que o cliente quer, 1 frase), "temperatura" ("quente"|"morno"|"frio" — chance de fechar), "dados" (objeto com as chaves do briefing: "origem", "destino", "datas", "adultos", "criancas" (com idades), "hospedagem", "transporte", "orcamento"; preencha só o que foi dito, use "flexível" quando o cliente disser que não sabe, e "não informado" quando faltar), "objecoes" (lista curta de dúvidas/objeções), "proximo_passo" (1 frase de ação para o vendedor), "mensagem_sugerida" (mensagem curta e cordial de WhatsApp para o vendedor enviar e avançar o fechamento). Seja conciso.',
       },
       {
         role: "user",

@@ -113,7 +113,7 @@ export const fetchDashboardStats = createServerFn({ method: "GET" })
       conversasAtivas: 0,
       leadsQuentes: 0,
       postsPendentes: 0,
-      ultimasTriagens: [] as Array<Record<string, unknown>>,
+      ultimasTriagens: [] as never[],
     };
 
     if (orgSessionIds.length === 0) {
