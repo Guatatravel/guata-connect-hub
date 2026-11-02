@@ -58,7 +58,9 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const value =
           (payload as { entry?: { changes?: { value?: Record<string, unknown> }[] }[] })?.entry?.[0]
             ?.changes?.[0]?.value ?? {};
-        const phoneNumberId: string = String(value?.metadata?.phone_number_id ?? "");
+        const phoneNumberId: string = String(
+          (value?.metadata as { phone_number_id?: string } | undefined)?.phone_number_id ?? "",
+        );
         const messages: unknown[] = Array.isArray(value.messages) ? value.messages : [];
         const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
         const eventKind = messages.length
@@ -88,7 +90,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
                 ...messages.map((m) => String((m as { id?: string })?.id ?? "")),
                 ...statuses.map((s) => String((s as { id?: string })?.id ?? "")),
               ].filter(Boolean),
-              payload,
+              payload: payload as never,
               error: signatureOk ? null : "assinatura inválida",
             })
             .select("id")
