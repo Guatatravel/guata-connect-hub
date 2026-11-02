@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { fetchUnreadCounts } from "@/lib/notifications.functions";
+import { fetchUnreadCounts, markTriagesSeen } from "@/lib/notifications.functions";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { ChatMessage, Conversation } from "@/types/guata";
 
@@ -118,6 +119,9 @@ export function setSoundEnabled(enabled: boolean) {
 export function useRealtimeNotifications() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const mountedAt = useRef<number>(Date.now());
 
   const counts = useQuery({
@@ -156,8 +160,17 @@ export function useRealtimeNotifications() {
           if (createdAt && new Date(createdAt).getTime() < mountedAt.current - 5000) return;
           const protocol = (payload.new as { protocol?: string })?.protocol ?? "nova";
           const destino = (payload.new as { destino?: string })?.destino ?? "";
+          const triageId = (payload.new as { id?: string })?.id;
           toast.success(`Nova triagem ${protocol}`, {
-            description: destino ? `Destino: ${destino}` : "Aguardando consultor.",
+            description: destino ? `Destino: ${destino}` : "Toque em Abrir para ver o cliente.",
+            duration: 10000,
+            action: triageId
+              ? {
+                  label: "Abrir",
+                  onClick: () =>
+                    void navigateRef.current({ to: "/triagens/$id", params: { id: triageId } }),
+                }
+              : undefined,
           });
           playChime();
           qc.invalidateQueries({ queryKey: ["unread-counts"] });
@@ -245,4 +258,24 @@ export function useRealtimeNotifications() {
   }, [user, qc, counts.data?.organizationId]);
 
   return counts.data ?? { triagensAbertas: 0, conversasHumano: 0 };
+}
+
+/** Ao abrir Triagens (lista ou detalhe), marca como vistas e zera o contador da barra lateral. */
+export function useMarkTriagesSeen(id?: string) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    markTriagesSeen({ data: id ? { id } : {} })
+      .then(() => {
+        if (!cancelled) void qc.invalidateQueries({ queryKey: ["unread-counts"] });
+      })
+      .catch(() => {
+        /* silencioso: badge volta a atualizar no próximo refresh */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user, qc]);
 }

@@ -859,13 +859,31 @@ function mediaOutboundAllowed(
   return score + mapBoost >= effectiveMin;
 }
 
+/** Palavras genéricas que não identificam o assunto do material. */
+const GENERIC_SEND_WORDS = new Set([
+  "mapa", "mapas", "pdf", "arquivo", "folheto", "cartaz", "anexo", "foto", "fotos",
+  "imagem", "turismo", "roteiro", "passeio", "passeios", "guia", "viagem", "ms",
+]);
+
+/** Palavra-chave específica (cidade, atrativo, tema) presente na mensagem do cliente. */
+export function specificKeywordHit(userText: string, keywords: string[]): boolean {
+  const q = userText.toLowerCase();
+  return keywords.some((kw) => {
+    const k = kw.trim().toLowerCase();
+    return k.length > 2 && !GENERIC_SEND_WORDS.has(k) && q.includes(k);
+  });
+}
+
 export async function pickSendableKnowledgeMedia(
   userText: string,
   organizationId: string,
   minScore = 2,
+  opts?: { strict?: boolean },
 ): Promise<SendableKnowledgeMedia | null> {
   const wantsFile = clientWantsKnowledgeFile(userText);
-  const effectiveMin = wantsFile ? 1 : minScore;
+  // Modo estrito: só quando o cliente pede um arquivo E cita o assunto específico do material.
+  if (opts?.strict && !wantsFile) return null;
+  const effectiveMin = opts?.strict ? minScore : wantsFile ? 1 : minScore;
 
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
@@ -877,7 +895,7 @@ export async function pickSendableKnowledgeMedia(
     .limit(50);
 
   const ranked = (data ?? [])
-    .map((d) => {
+    .map((d): SendableKnowledgeMedia | null => {
       const file_path = String(d.file_path ?? "");
       const delivery = knowledgeFileDelivery(file_path);
       if (delivery === "unsupported") return null;
@@ -886,7 +904,11 @@ export async function pickSendableKnowledgeMedia(
         : [];
       const title = String(d.title ?? "");
       const content = String(d.content ?? "");
-      if (!mediaOutboundAllowed(userText, title, content, keywords)) return null;
+      if (opts?.strict) {
+        if (!specificKeywordHit(userText, keywords)) return null;
+      } else if (!mediaOutboundAllowed(userText, title, content, keywords)) {
+        return null;
+      }
 
       const score =
         scoreSendableMatch(userText, { title, content, send_keywords: keywords }) +
@@ -963,7 +985,8 @@ export async function pickSendableKnowledgeLink(
     if (isCommercialAgencyUrl(top.url)) {
       if (!commercialIntent) continue;
       if (top.keywords.length === 0 || !linkKeywordHit(userText, top.keywords)) continue;
-    } else if (top.keywords.length > 0 && !linkKeywordHit(userText, top.keywords)) {
+    } else if (!specificKeywordHit(userText, top.keywords)) {
+      // Link só sai sozinho quando o cliente cita o assunto específico do link.
       continue;
     }
     return { title: top.title, url: top.url };

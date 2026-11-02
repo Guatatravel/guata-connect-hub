@@ -911,8 +911,8 @@ function KnowledgeBasePanel() {
 
 function Conhecimento() {
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-6 max-w-5xl mx-auto w-full">
+      <div className="text-center">
         <h1 className="text-2xl font-semibold">Conhecimento e disparos</h1>
         <p className="text-muted-foreground text-sm">
           Na aba Base, ensine o Guatá. Na aba Disparos, envie promoções para quem já
@@ -921,7 +921,7 @@ function Conhecimento() {
       </div>
 
       <Tabs defaultValue="base" className="space-y-4">
-        <TabsList>
+        <TabsList className="mx-auto flex w-fit">
           <TabsTrigger value="base">
             <BookOpen className="h-4 w-4 mr-2" />
             Base

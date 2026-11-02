@@ -67,7 +67,7 @@ function ChannelForm({
     <Card className="rounded-2xl">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-base">{label}</CardTitle>
-        <Badge variant="outline">{initial.has_token ? "Token no painel" : "Usando env / pendente"}</Badge>
+        <Badge variant="outline">{initial.has_token ? "Token salvo" : "Usando configuração do servidor"}</Badge>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="space-y-1">
@@ -88,6 +88,9 @@ function ChannelForm({
             autoComplete="off"
           />
         </div>
+        <p className="text-xs text-muted-foreground">
+          Ao salvar, o Guatá passa a receber e responder as mensagens por este número.
+        </p>
         <Button disabled={mut.isPending} onClick={() => mut.mutate()}>
           Salvar canal
         </Button>
@@ -111,7 +114,7 @@ function ConectarMeta() {
           Organização:{" "}
           {isLoading ? "…" : data?.organization.name ?? "—"}
           {data?.organization.isGuata && (
-            <span className="ml-2 text-primary">(Guatá — base Descubra MS ativa)</span>
+            <span className="ml-2 text-primary">(base Descubra MS conectada)</span>
           )}
         </p>
         <p className="text-xs text-muted-foreground mt-1">
@@ -143,13 +146,15 @@ function ConectarMeta() {
       {isLoading || !data ? (
         <Skeleton className="h-48 rounded-2xl" />
       ) : (
+        // Um único número oficial por organização (sem linhas duplicadas).
         data.channels
-          .filter((ch) => data.organization.isGuata || ch.line === "descubra")
+          .filter((ch) => ch.line === "descubra")
+          .slice(0, 1)
           .map((ch) => (
           <ChannelForm
             key={ch.id}
             line={ch.line}
-            label={ch.label || (ch.line === "descubra" ? (data.organization.isGuata ? "Descubra MS" : "WhatsApp") : "Guatá Viagens")}
+            label="Guatá — WhatsApp Oficial"
             initial={{
               waba_id: ch.waba_id,
               phone_number_id: ch.phone_number_id,

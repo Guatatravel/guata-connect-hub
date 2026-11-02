@@ -34,7 +34,8 @@ export const fetchUnreadCounts = createServerFn({ method: "GET" })
         .from("travel_intake")
         .select("id", { count: "exact", head: true })
         .in("session_id", sessionIds)
-        .in("status", ["aberta", "novo"]),
+        .in("status", ["aberta", "novo"])
+        .is("staff_seen_at", null),
       supabaseAdmin
         .from("sessions")
         .select("last_message_at, staff_seen_at")
@@ -48,4 +49,25 @@ export const fetchUnreadCounts = createServerFn({ method: "GET" })
       ).length,
       organizationId: orgId,
     };
+  });
+
+
+/** Marca triagens como vistas (uma específica ou todas da org ativa) e zera o badge. */
+export const markTriagesSeen = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i: unknown) => z.object({ id: z.string().uuid().optional() }).parse(i ?? {}))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const sessionIds = await sessionIdsForOrganization(orgId);
+    if (sessionIds.length === 0) return { ok: true };
+    let q = supabaseAdmin
+      .from("travel_intake")
+      .update({ staff_seen_at: new Date().toISOString() })
+      .in("session_id", sessionIds)
+      .is("staff_seen_at", null);
+    if (data.id) q = q.eq("id", data.id);
+    const { error } = await q;
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });

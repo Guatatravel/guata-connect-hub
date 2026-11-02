@@ -51,11 +51,6 @@ const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
   all_sessions: "Todas as conversas da linha",
 };
 
-const LINE_LABEL: Record<CampaignLine, string> = {
-  descubra: "Guatá",
-  viagens: "Guatá",
-};
-
 const STATUS_LABEL: Record<string, string> = {
   rascunho: "Rascunho",
   enviando: "Enviando…",
@@ -103,6 +98,7 @@ export function CampaignsTab() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [savedImagePath, setSavedImagePath] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  // Linha única: o WhatsApp oficial do Guatá.
   const [line, setLine] = useState<CampaignLineSelect>("descubra");
   const [audience, setAudience] = useState<CampaignAudience>("active_7d");
   const [body, setBody] = useState("");
@@ -132,7 +128,7 @@ export function CampaignsTab() {
     setEditingDraftId(c.status === "rascunho" ? c.id : null);
     setSavedImagePath(c.image_path);
     setTitle(c.title.replace(/\s*·\s*(Descubra|Viagens)\s*$/i, "").trim());
-    setLine(c.line as CampaignLine);
+    setLine("descubra");
     setAudience(c.audience as CampaignAudience);
     setBody(c.body ?? "");
     setSendMode(c.send_mode === "template" ? "template" : "sessao");
@@ -301,17 +297,12 @@ export function CampaignsTab() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-2xl border-dashed">
-        <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
-        </CardContent>
-      </Card>
-
       {!lineReady && meta && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            A linha selecionada não tem WhatsApp configurado no servidor. Ajuste as variáveis Meta
-            em Lovable (Configurações do projeto → Secrets) e publique de novo.
+            O WhatsApp oficial do Guatá ainda não está conectado. Conclua a conexão em
+            "Conectar WhatsApp" antes de disparar.
           </AlertDescription>
         </Alert>
       )}
@@ -339,17 +330,10 @@ export function CampaignsTab() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Linha WhatsApp</Label>
-              <Select value={line} onValueChange={(v) => setLine(v as CampaignLineSelect)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="descubra">{LINE_LABEL.descubra}</SelectItem>
-                  <SelectItem value="viagens">{LINE_LABEL.viagens}</SelectItem>
-                  <SelectItem value="both">Ambas as linhas (2 disparos)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Enviar pelo</Label>
+              <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                Guatá (WhatsApp Oficial)
+              </div>
             </div>
           </div>
 
@@ -450,8 +434,10 @@ export function CampaignsTab() {
             />
           </div>
 
-          {sendMode === "sessao" && <div className="space-y-2">
-            <Label>Cartaz (opcional)</Label>
+          <div className="space-y-2">
+            <Label>
+              {sendMode === "template" ? "Imagem do cabeçalho (só se o template aprovado tiver imagem)" : "Cartaz (opcional)"}
+            </Label>
             <input
               ref={imageRef}
               type="file"
@@ -473,7 +459,7 @@ export function CampaignsTab() {
                 <span className="text-xs text-muted-foreground">Cartaz salvo no rascunho</span>
               )}
             </div>
-          </div>}
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
@@ -521,7 +507,6 @@ export function CampaignsTab() {
                 <p className="text-xs text-muted-foreground line-clamp-2">{c.body || "—"}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Badge variant="outline">{STATUS_LABEL[c.status] ?? c.status}</Badge>
-                  <Badge variant="outline">{LINE_LABEL[c.line as CampaignLine]}</Badge>
                   <Badge variant="outline">{c.send_mode === "template" ? "Template" : "Sessão 24h"}</Badge>
                   <Badge variant="secondary">
                     {AUDIENCE_LABEL[c.audience as CampaignAudience]}

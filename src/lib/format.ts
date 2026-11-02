@@ -20,12 +20,11 @@ export function formatDateTime(iso: string): string {
   }
 }
 
-export function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("pt-BR");
-  } catch {
-    return iso;
-  }
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "a definir";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "a definir";
+  return d.toLocaleDateString("pt-BR");
 }
 
 export function formatPhone(phone: string): string {

@@ -28,12 +28,14 @@ import { type TriagemStatus } from "@/types/guata";
 import { formatDate } from "@/lib/format";
 import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 import { lineFilterOptions } from "@/lib/org-ui";
+import { useMarkTriagesSeen } from "@/hooks/use-realtime-notifications";
 
 export const Route = createFileRoute("/_app/triagens/")({
   component: TriagensPage,
 });
 
 function TriagensPage() {
+  useMarkTriagesSeen();
   const [status, setStatus] = useState<TriagemStatus | "all">("all");
   const [line, setLine] = useState<string>("all");
   const [consultor, setConsultor] = useState<string>("all");

@@ -100,7 +100,7 @@ function ConfigPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl mx-auto w-full">
       <div>
         <h1 className="font-display text-3xl font-semibold text-primary">
           Configurações
@@ -139,16 +139,8 @@ function ConfigPage() {
             <div className="flex gap-2">
               <StatusBadge
                 state={settings.metaConfiguredDescubra ? "ok" : "warn"}
-                label={settings.isGuataOrg ? "Linha Descubra" : "WhatsApp"}
+                label="WhatsApp Oficial"
               />
-              {settings.isGuataOrg && (
-                <StatusBadge
-                  state={settings.metaConfiguredViagens ? "ok" : "idle"}
-                  label={
-                    settings.metaConfiguredViagens ? "Linha Viagens" : "Linha Viagens (opcional)"
-                  }
-                />
-              )}
             </div>
           </CardTitle>
         </CardHeader>
@@ -172,13 +164,6 @@ function ConfigPage() {
             <p className="text-xs text-muted-foreground mt-1">
               Verify Token: use o valor que você definiu como secret <code className="text-[10px]">META_VERIFY_TOKEN</code>.
               Subscreva o campo <code className="text-[10px]">messages</code>.
-            </p>
-            <p className="text-xs text-muted-foreground mt-2 rounded-lg border border-border/60 bg-muted/40 p-2">
-              <strong className="text-foreground">Secrets no Lovable:</strong> ao renovar o token na Meta, atualize{" "}
-              <code className="text-[10px]">META_ACCESS_TOKEN</code> (vale para todas as linhas). O Phone Number ID pode
-              ficar em <code className="text-[10px]">META_PHONE_NUMBER_ID_DESCUBRA</code> — a linha Guatá Viagens usa
-              esse ID automaticamente se não houver <code className="text-[10px]">_VIAGENS</code>. Depois, publique o app
-              de novo.
             </p>
             <p className="text-xs mt-2">
               Credenciais de envio:{" "}

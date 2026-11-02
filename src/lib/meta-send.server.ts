@@ -382,6 +382,8 @@ export async function sendWhatsAppTemplate(
     name: string;
     language?: string;
     bodyParams?: string[];
+    /** Imagem do cabeçalho (templates aprovados com cabeçalho de mídia). */
+    headerImageUrl?: string;
     replyToWaId?: string;
   },
 ): Promise<SendResult> {
@@ -390,10 +392,11 @@ export async function sendWhatsAppTemplate(
     return { ok: false, reason: "not_configured" };
   }
 
+  type TplParam = { type: string; text?: string; image?: { link: string } };
   const payload: {
     name: string;
     language: { code: string };
-    components?: Array<{ type: string; parameters: Array<{ type: string; text: string }> }>;
+    components?: Array<{ type: string; parameters: TplParam[] }>;
   } = {
     name: template.name.trim(),
     language: { code: (template.language || "pt_BR").trim() || "pt_BR" },
@@ -403,9 +406,15 @@ export async function sendWhatsAppTemplate(
     .filter(Boolean)
     .slice(0, 10)
     .map((text) => ({ type: "text", text: text.slice(0, 1024) }));
-  if (params.length > 0) {
-    payload.components = [{ type: "body", parameters: params }];
+  const components: Array<{ type: string; parameters: TplParam[] }> = [];
+  if (template.headerImageUrl) {
+    components.push({
+      type: "header",
+      parameters: [{ type: "image", image: { link: template.headerImageUrl } }],
+    });
   }
+  if (params.length > 0) components.push({ type: "body", parameters: params });
+  if (components.length > 0) payload.components = components;
 
   const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
     method: "POST",
@@ -418,10 +427,42 @@ export async function sendWhatsAppTemplate(
 
   if (!res.ok) {
     const err = await res.text().catch(() => "");
-    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 300)}` };
+    return { ok: false, reason: explainTemplateError(res.status, err) };
   }
   const json = (await res.json()) as { messages?: Array<{ id?: string }> };
   return { ok: true, messageId: json.messages?.[0]?.id };
+}
+
+/** Traduz a recusa da Meta para algo que o atendente entenda. */
+export function explainTemplateError(status: number, raw: string): string {
+  let code = 0;
+  let detail = "";
+  try {
+    const j = JSON.parse(raw) as {
+      error?: { code?: number; message?: string; error_data?: { details?: string } };
+    };
+    code = Number(j.error?.code ?? 0);
+    detail = j.error?.error_data?.details || j.error?.message || "";
+  } catch {
+    detail = raw;
+  }
+  const known: Record<number, string> = {
+    132001: "Template não encontrado: confira o nome exato e o idioma (ex.: pt_BR) aprovados na Meta.",
+    132000: "Número de variáveis diferente do aprovado: marque/desmarque a opção de nome ({{1}}).",
+    132012: "Formato dos parâmetros não confere com o template (ex.: o template exige imagem no cabeçalho, ou não aceita imagem).",
+    132015: "Template pausado pela Meta por baixa qualidade.",
+    132016: "Template desativado pela Meta.",
+    132007: "O texto do template viola as políticas da Meta.",
+    131047: "Fora da janela de 24h — use um template aprovado.",
+    131026: "Este número não pode receber mensagens (não tem WhatsApp ou bloqueou).",
+    131049: "A Meta segurou a entrega para proteger a qualidade da linha (muitas mensagens de marketing para essa pessoa).",
+    131050: "A pessoa optou por não receber mensagens de marketing.",
+    130472: "A Meta não entregou: o contato faz parte de um experimento de marketing da Meta.",
+    131053: "A imagem não pôde ser carregada pela Meta (formato ou tamanho).",
+  };
+  const human = known[code];
+  const base = human ?? (detail ? `Meta recusou: ${detail}` : `Meta recusou (erro ${status}).`);
+  return `meta_${status}${code ? `_${code}` : ""}: ${base}`.slice(0, 500);
 }
 
 export async function sendWhatsAppAudio(
