@@ -25,6 +25,7 @@ import { type TriagemStatus } from "@/types/guata";
 import { formatDate, waLink, formatPhone } from "@/lib/format";
 import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 import { ArrowLeft, MessageCircle, Send } from "lucide-react";
+import { useMarkTriagesSeen } from "@/hooks/use-realtime-notifications";
 
 export const Route = createFileRoute("/_app/triagens/$id")({
   component: TriagemDetailPage,
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/_app/triagens/$id")({
 
 function TriagemDetailPage() {
   const { id } = Route.useParams();
+  useMarkTriagesSeen(id);
   const qc = useQueryClient();
   const { ui: orgUi } = useOrgLineUi();
 
