@@ -985,7 +985,8 @@ export async function pickSendableKnowledgeLink(
     if (isCommercialAgencyUrl(top.url)) {
       if (!commercialIntent) continue;
       if (top.keywords.length === 0 || !linkKeywordHit(userText, top.keywords)) continue;
-    } else if (top.keywords.length > 0 && !linkKeywordHit(userText, top.keywords)) {
+    } else if (!specificKeywordHit(userText, top.keywords)) {
+      // Link só sai sozinho quando o cliente cita o assunto específico do link.
       continue;
     }
     return { title: top.title, url: top.url };
