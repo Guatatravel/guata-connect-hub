@@ -301,8 +301,8 @@ export function CampaignsTab() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            A linha selecionada não tem WhatsApp configurado no servidor. Ajuste as variáveis Meta
-            em Lovable (Configurações do projeto → Secrets) e publique de novo.
+            O WhatsApp oficial do Guatá ainda não está conectado. Conclua a conexão em
+            "Conectar WhatsApp" antes de disparar.
           </AlertDescription>
         </Alert>
       )}
