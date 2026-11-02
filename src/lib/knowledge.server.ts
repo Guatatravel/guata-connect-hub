@@ -859,13 +859,31 @@ function mediaOutboundAllowed(
   return score + mapBoost >= effectiveMin;
 }
 
+/** Palavras genéricas que não identificam o assunto do material. */
+const GENERIC_SEND_WORDS = new Set([
+  "mapa", "mapas", "pdf", "arquivo", "folheto", "cartaz", "anexo", "foto", "fotos",
+  "imagem", "turismo", "roteiro", "passeio", "passeios", "guia", "viagem", "ms",
+]);
+
+/** Palavra-chave específica (cidade, atrativo, tema) presente na mensagem do cliente. */
+export function specificKeywordHit(userText: string, keywords: string[]): boolean {
+  const q = userText.toLowerCase();
+  return keywords.some((kw) => {
+    const k = kw.trim().toLowerCase();
+    return k.length > 2 && !GENERIC_SEND_WORDS.has(k) && q.includes(k);
+  });
+}
+
 export async function pickSendableKnowledgeMedia(
   userText: string,
   organizationId: string,
   minScore = 2,
+  opts?: { strict?: boolean },
 ): Promise<SendableKnowledgeMedia | null> {
   const wantsFile = clientWantsKnowledgeFile(userText);
-  const effectiveMin = wantsFile ? 1 : minScore;
+  // Modo estrito: só quando o cliente pede um arquivo E cita o assunto específico do material.
+  if (opts?.strict && !wantsFile) return null;
+  const effectiveMin = opts?.strict ? minScore : wantsFile ? 1 : minScore;
 
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
