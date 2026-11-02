@@ -731,6 +731,7 @@ export type Database = {
           preferencias: Json
           protocol: string
           session_id: string
+          staff_seen_at: string | null
           status: string
           updated_at: string
         }
@@ -748,6 +749,7 @@ export type Database = {
           preferencias?: Json
           protocol: string
           session_id: string
+          staff_seen_at?: string | null
           status?: string
           updated_at?: string
         }
@@ -765,6 +767,7 @@ export type Database = {
           preferencias?: Json
           protocol?: string
           session_id?: string
+          staff_seen_at?: string | null
           status?: string
           updated_at?: string
         }
