@@ -895,7 +895,7 @@ export async function pickSendableKnowledgeMedia(
     .limit(50);
 
   const ranked = (data ?? [])
-    .map((d) => {
+    .map((d): SendableKnowledgeMedia | null => {
       const file_path = String(d.file_path ?? "");
       const delivery = knowledgeFileDelivery(file_path);
       if (delivery === "unsupported") return null;
