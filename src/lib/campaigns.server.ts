@@ -767,6 +767,23 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
       `Nenhuma mensagem entregue: ${row.sent_skip} contato(s) fora da janela de 24h da Meta. No modo template, use um modelo aprovado. No modo sessão, a pessoa precisa ter falado hoje.`,
     );
   }
+  if (sentOk === 0 && sentFail > 0) {
+    const { data: failed } = await supabaseAdmin
+      .from("broadcast_recipients")
+      .select("error")
+      .eq("campaign_id", campaignId)
+      .eq("status", "falhou")
+      .not("error", "is", null)
+      .limit(1)
+      .maybeSingle();
+    const reason = String(failed?.error ?? "")
+      .replace(/^meta_\d+(_\d+)?:\s*/, "")
+      .trim();
+    throw new Error(
+      `Nenhuma mensagem entregue (${sentFail} falha${sentFail > 1 ? "s" : ""}).` +
+        (reason ? ` Motivo da Meta: ${reason}` : ""),
+    );
+  }
   return row;
 }
 
