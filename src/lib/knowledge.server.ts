@@ -904,7 +904,11 @@ export async function pickSendableKnowledgeMedia(
         : [];
       const title = String(d.title ?? "");
       const content = String(d.content ?? "");
-      if (!mediaOutboundAllowed(userText, title, content, keywords)) return null;
+      if (opts?.strict) {
+        if (!specificKeywordHit(userText, keywords)) return null;
+      } else if (!mediaOutboundAllowed(userText, title, content, keywords)) {
+        return null;
+      }
 
       const score =
         scoreSendableMatch(userText, { title, content, send_keywords: keywords }) +
