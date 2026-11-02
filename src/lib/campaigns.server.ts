@@ -577,6 +577,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
           name: templateName,
           language: String(campaign.template_language || "pt_BR"),
           bodyParams: first ? [first] : undefined,
+          headerImageUrl: imageUrl ?? undefined,
         });
         if (!tplRes.ok) {
           sentFail += 1;
