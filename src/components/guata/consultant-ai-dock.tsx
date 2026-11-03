@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DossieCard } from "@/components/guata/dossie-card";
 import { CopilotCard } from "@/components/guata/copilot-card";
+import { QuoteBuilder } from "@/components/guata/quote-builder";
 
 export function ConsultantAiDock({
   sessionId,
@@ -27,15 +28,19 @@ export function ConsultantAiDock({
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="resumo">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
             <TabsTrigger value="perguntar">Perguntar</TabsTrigger>
+            <TabsTrigger value="cotacao">Cotação</TabsTrigger>
           </TabsList>
           <TabsContent value="resumo" className="mt-3">
             <DossieCard sessionId={sessionId} onUseMessage={onUseMessage ? useMessage : undefined} embedded />
           </TabsContent>
           <TabsContent value="perguntar" className="mt-3 flex max-h-[28rem] flex-col">
             <CopilotCard sessionId={sessionId} onUseMessage={useMessage} embedded />
+          </TabsContent>
+          <TabsContent value="cotacao" className="mt-3">
+            <QuoteBuilder onUseMessage={useMessage} />
           </TabsContent>
         </Tabs>
       </CardContent>
