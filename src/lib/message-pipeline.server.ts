@@ -965,8 +965,22 @@ export async function processMessage(
       ? await getSendableKnowledgeMediaById(taggedId, msg.organizationId)
       : null;
     if (!media) {
+      // Assunto imediato: resposta que o Guatá acabou de dar + últimas falas do cliente.
+      // Janela curta de propósito — falando de Rondônia, um mapa de Campo Grande não pode sair.
+      const { data: recent } = await supabaseAdmin
+        .from("messages")
+        .select("text")
+        .eq("session_id", session.id)
+        .eq("author", "user")
+        .order("created_at", { ascending: false })
+        .limit(3);
+      const contextText = [
+        ...replies,
+        ...(recent ?? []).map((m) => String(m.text ?? "")),
+      ].join("\n");
       media = await pickSendableKnowledgeMedia(msg.text, msg.organizationId, 3, {
         strict: true,
+        contextText,
       });
     }
     let knowledgeMediaSent = false;

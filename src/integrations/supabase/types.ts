@@ -581,6 +581,62 @@ export type Database = {
         }
         Relationships: []
       }
+      passhub_settings: {
+        Row: {
+          api_key: string | null
+          auto_payment: boolean
+          auto_search: boolean
+          created_at: string
+          enabled: boolean
+          mod_aereo: boolean
+          mod_hotel: boolean
+          mod_rodoviario: boolean
+          mod_seguro: boolean
+          organization_id: string
+          quote_validity_minutes: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          auto_payment?: boolean
+          auto_search?: boolean
+          created_at?: string
+          enabled?: boolean
+          mod_aereo?: boolean
+          mod_hotel?: boolean
+          mod_rodoviario?: boolean
+          mod_seguro?: boolean
+          organization_id: string
+          quote_validity_minutes?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          auto_payment?: boolean
+          auto_search?: boolean
+          created_at?: string
+          enabled?: boolean
+          mod_aereo?: boolean
+          mod_hotel?: boolean
+          mod_rodoviario?: boolean
+          mod_seguro?: boolean
+          organization_id?: string
+          quote_validity_minutes?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passhub_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           active_organization_id: string | null

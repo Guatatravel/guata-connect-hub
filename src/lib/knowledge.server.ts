@@ -859,6 +859,25 @@ function mediaOutboundAllowed(
   return score + mapBoost >= effectiveMin;
 }
 
+/** Idioma provável da mensagem do cliente (para escolher a versão certa do material). */
+export function detectClientLanguage(text: string): "pt" | "en" | "es" {
+  const t = text.toLowerCase();
+  if (/\b(the|please|can you|could you|send me|map of|thanks|hello|hi there|english)\b/.test(t)) return "en";
+  if (/\b(por favor|puedes|envíame|enviame|mándame|mandame|gracias|hola|quiero el|el mapa|español)\b/.test(t)) return "es";
+  return "pt";
+}
+
+/** Prefere o material no idioma do cliente quando há versões em PT/EN/ES. */
+export function languageBoost(userText: string, docText: string): number {
+  const d = docText.toLowerCase();
+  const lang = detectClientLanguage(userText);
+  const isEn = /\b(inglês|ingles|english)\b/.test(d);
+  const isEs = /\b(espanhol|español|espanol|spanish)\b/.test(d);
+  if (lang === "en") return isEn ? 2 : 0;
+  if (lang === "es") return isEs ? 2 : 0;
+  return isEn || isEs ? 0 : 1;
+}
+
 /** Palavras genéricas que não identificam o assunto do material. */
 const GENERIC_SEND_WORDS = new Set([
   "mapa", "mapas", "pdf", "arquivo", "folheto", "cartaz", "anexo", "foto", "fotos",
@@ -878,12 +897,14 @@ export async function pickSendableKnowledgeMedia(
   userText: string,
   organizationId: string,
   minScore = 2,
-  opts?: { strict?: boolean },
+  opts?: { strict?: boolean; contextText?: string },
 ): Promise<SendableKnowledgeMedia | null> {
   const wantsFile = clientWantsKnowledgeFile(userText);
-  // Modo estrito: só quando o cliente pede um arquivo E cita o assunto específico do material.
+  // Modo estrito: só quando o cliente pede um arquivo E o assunto específico do material
+  // aparece na mensagem ou na conversa recente (ex.: "manda o mapa" falando de Campo Grande).
   if (opts?.strict && !wantsFile) return null;
-  const effectiveMin = opts?.strict ? minScore : wantsFile ? 1 : minScore;
+  const effectiveMin = opts?.strict ? 1 : wantsFile ? 1 : minScore;
+  const strictHay = `${userText}\n${opts?.contextText ?? ""}`;
 
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
@@ -905,14 +926,19 @@ export async function pickSendableKnowledgeMedia(
       const title = String(d.title ?? "");
       const content = String(d.content ?? "");
       if (opts?.strict) {
-        if (!specificKeywordHit(userText, keywords)) return null;
+        if (!specificKeywordHit(strictHay, keywords)) return null;
       } else if (!mediaOutboundAllowed(userText, title, content, keywords)) {
         return null;
       }
 
       const score =
-        scoreSendableMatch(userText, { title, content, send_keywords: keywords }) +
-        mapDocumentBoost(userText, title, content, keywords);
+        scoreSendableMatch(opts?.strict ? strictHay : userText, {
+          title,
+          content,
+          send_keywords: keywords,
+        }) +
+        mapDocumentBoost(opts?.strict ? strictHay : userText, title, content, keywords) +
+        languageBoost(userText, `${title} ${keywords.join(" ")}`);
 
       return {
         id: d.id as string,
@@ -998,13 +1024,16 @@ export async function listSendableKnowledgeForPrompt(
   organizationId: string,
   line?: "descubra" | "viagens",
 ): Promise<Array<{ id: string; title: string; hint: string; kind: "image" | "pdf" }>> {
+  // Só arquivos (PDF/imagem): links não entram aqui, senão ocupam o catálogo e o mapa some.
   const { data } = await supabaseAdmin
     .from("knowledge_documents")
     .select("id,title,content,send_keywords,source_type,file_path,url")
     .eq("organization_id", organizationId)
     .eq("status", "pronto")
     .eq("whatsapp_sendable", true)
-    .limit(12);
+    .not("file_path", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(40);
   return (data ?? [])
     .map((d) => {
       const file_path = String(d.file_path ?? "");
@@ -1019,10 +1048,12 @@ export async function listSendableKnowledgeForPrompt(
         const url = String(d.url ?? "");
         if (url && isCommercialAgencyUrl(url)) return null;
       }
+      const kws = Array.isArray(d.send_keywords) ? (d.send_keywords as string[]) : [];
+      const base = String(d.content ?? "").slice(0, 140).trim() || String(d.title ?? "");
       return {
         id: d.id as string,
         title: String(d.title ?? ""),
-        hint: String(d.content ?? "").slice(0, 160).trim() || String(d.title ?? ""),
+        hint: kws.length > 0 ? `${base} (palavras: ${kws.join(", ")})` : base,
         kind: delivery,
       };
     })

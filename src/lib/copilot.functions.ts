@@ -20,6 +20,11 @@ export const askCopilot = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { chatCompletion } = await import("@/lib/ai-gateway.server");
+    const { assertSessionBelongsToUserOrg } = await import("@/lib/auth-context.server");
+    const { quoteValidityForOrg } = await import("@/lib/passhub.server");
+    const { quotePromptRules } = await import("@/lib/quote-format");
+    const { organizationId } = await assertSessionBelongsToUserOrg(context.userId, data.sessionId);
+    const validity = await quoteValidityForOrg(organizationId);
     const { data: msgs } = await supabaseAdmin
       .from("messages")
       .select("author, text")
@@ -38,7 +43,10 @@ export const askCopilot = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Você é o Copiloto interno do Guatá, assistente do consultor da Guatá Viagens e Turismo (turismo em Mato Grosso do Sul). O cliente NÃO vê esta conversa. Ajude o consultor a entender o cliente, sugerir estratégia de venda, traduzir e explicar mensagens em outros idiomas (ex.: inglês), e redigir respostas prontas. Responda em português, de forma objetiva, sem Markdown pesado. Quando sugerir uma mensagem para o cliente, coloque-a no idioma do cliente entre as linhas 'MENSAGEM:' e o fim.\n\nConversa com o cliente:\n" +
+              "Você é o Copiloto interno do Guatá, assistente do consultor da agência Guatá. O cliente NÃO vê esta conversa. Ajude o consultor a entender o cliente, sugerir estratégia de venda, traduzir e explicar mensagens em outros idiomas (ex.: inglês), e redigir respostas prontas. Responda em português, de forma objetiva, sem Markdown pesado. Quando sugerir uma mensagem para o cliente, coloque-a no idioma do cliente entre as linhas 'MENSAGEM:' e o fim.\n" +
+              quotePromptRules(validity) +
+              "- Quando o consultor passar voos/valores, monte a cotação nesse padrão (✈️ Cotação de Voos — Guatá, Trecho, Data, Opção 1/2/3 com '• Sem bagagem despachada' e '• Com bagagem despachada', passageiros, ⚠️ IMPORTANTE com prazo e aviso, e 'Cotação realizada em'). Se faltar dado, pergunte ao consultor; nunca invente valores.\n" +
+              "\nConversa com o cliente:\n" +
               (transcript || "(sem mensagens ainda)"),
           },
           ...data.history,

@@ -23,6 +23,7 @@ import {
   Link2,
   Building2,
   ClipboardList,
+  Ticket,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
@@ -40,10 +41,11 @@ const navItems = [
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
+  { to: "/passhub", label: "Passhub", icon: Ticket },
   { to: "/atendentes", label: "Atendente virtual (IA)", icon: Bot },
   { to: "/equipe", label: "Equipe", icon: Users, orgTeamOnly: true },
-  { to: "/configuracoes", label: "Configurações", icon: Settings },
   { to: "/solicitacoes", label: "Solicitações", icon: ClipboardList, adminOnly: true },
+  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
 type Counts = { triagensAbertas: number; conversasHumano: number };

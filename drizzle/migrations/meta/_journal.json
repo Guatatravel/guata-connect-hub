@@ -29,6 +29,13 @@
       "when": 1793586280258,
       "tag": "0003_travel_intake_staff_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793717688636,
+      "tag": "0004_passhub_settings",
+      "breakpoints": true
     }
   ]
 }

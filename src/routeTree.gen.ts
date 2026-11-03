@@ -27,6 +27,7 @@ import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagno
 import { Route as AppEquipeRouteImport } from './routes/_app.equipe'
 import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
 import { Route as AppOrganizacoesRouteImport } from './routes/_app.organizacoes'
+import { Route as AppPasshubRouteImport } from './routes/_app.passhub'
 import { Route as AppQuadroRouteImport } from './routes/_app.quadro'
 import { Route as AppRespostasRouteImport } from './routes/_app.respostas'
 import { Route as AppSolicitacoesRouteImport } from './routes/_app.solicitacoes'
@@ -128,6 +129,11 @@ const AppOrganizacoesRoute = AppOrganizacoesRouteImport.update({
   path: '/organizacoes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPasshubRoute = AppPasshubRouteImport.update({
+  id: '/passhub',
+  path: '/passhub',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppQuadroRoute = AppQuadroRouteImport.update({
   id: '/quadro',
   path: '/quadro',
@@ -205,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
   '/organizacoes': typeof AppOrganizacoesRoute
+  '/passhub': typeof AppPasshubRoute
   '/quadro': typeof AppQuadroRoute
   '/respostas': typeof AppRespostasRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByTo {
   '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
   '/organizacoes': typeof AppOrganizacoesRoute
+  '/passhub': typeof AppPasshubRoute
   '/quadro': typeof AppQuadroRoute
   '/respostas': typeof AppRespostasRoute
   '/solicitacoes': typeof AppSolicitacoesRoute
@@ -267,6 +275,7 @@ export interface FileRoutesById {
   '/_app/equipe': typeof AppEquipeRoute
   '/_app/extensao': typeof AppExtensaoRoute
   '/_app/organizacoes': typeof AppOrganizacoesRoute
+  '/_app/passhub': typeof AppPasshubRoute
   '/_app/quadro': typeof AppQuadroRoute
   '/_app/respostas': typeof AppRespostasRoute
   '/_app/solicitacoes': typeof AppSolicitacoesRoute
@@ -299,6 +308,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/extensao'
     | '/organizacoes'
+    | '/passhub'
     | '/quadro'
     | '/respostas'
     | '/solicitacoes'
@@ -329,6 +339,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/extensao'
     | '/organizacoes'
+    | '/passhub'
     | '/quadro'
     | '/respostas'
     | '/solicitacoes'
@@ -360,6 +371,7 @@ export interface FileRouteTypes {
     | '/_app/equipe'
     | '/_app/extensao'
     | '/_app/organizacoes'
+    | '/_app/passhub'
     | '/_app/quadro'
     | '/_app/respostas'
     | '/_app/solicitacoes'
@@ -515,6 +527,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrganizacoesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/passhub': {
+      id: '/_app/passhub'
+      path: '/passhub'
+      fullPath: '/passhub'
+      preLoaderRoute: typeof AppPasshubRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/quadro': {
       id: '/_app/quadro'
       path: '/quadro'
@@ -606,6 +625,7 @@ interface AppRouteChildren {
   AppEquipeRoute: typeof AppEquipeRoute
   AppExtensaoRoute: typeof AppExtensaoRoute
   AppOrganizacoesRoute: typeof AppOrganizacoesRoute
+  AppPasshubRoute: typeof AppPasshubRoute
   AppQuadroRoute: typeof AppQuadroRoute
   AppRespostasRoute: typeof AppRespostasRoute
   AppSolicitacoesRoute: typeof AppSolicitacoesRoute
@@ -627,6 +647,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppEquipeRoute: AppEquipeRoute,
   AppExtensaoRoute: AppExtensaoRoute,
   AppOrganizacoesRoute: AppOrganizacoesRoute,
+  AppPasshubRoute: AppPasshubRoute,
   AppQuadroRoute: AppQuadroRoute,
   AppRespostasRoute: AppRespostasRoute,
   AppSolicitacoesRoute: AppSolicitacoesRoute,
