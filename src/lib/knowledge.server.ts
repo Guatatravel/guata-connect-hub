@@ -859,6 +859,25 @@ function mediaOutboundAllowed(
   return score + mapBoost >= effectiveMin;
 }
 
+/** Idioma provável da mensagem do cliente (para escolher a versão certa do material). */
+export function detectClientLanguage(text: string): "pt" | "en" | "es" {
+  const t = text.toLowerCase();
+  if (/\b(the|please|can you|could you|send me|map of|thanks|hello|hi there|english)\b/.test(t)) return "en";
+  if (/\b(por favor|puedes|envíame|enviame|mándame|mandame|gracias|hola|quiero el|el mapa|español)\b/.test(t)) return "es";
+  return "pt";
+}
+
+/** Prefere o material no idioma do cliente quando há versões em PT/EN/ES. */
+export function languageBoost(userText: string, docText: string): number {
+  const d = docText.toLowerCase();
+  const lang = detectClientLanguage(userText);
+  const isEn = /\b(inglês|ingles|english)\b/.test(d);
+  const isEs = /\b(espanhol|español|espanol|spanish)\b/.test(d);
+  if (lang === "en") return isEn ? 2 : 0;
+  if (lang === "es") return isEs ? 2 : 0;
+  return isEn || isEs ? 0 : 1;
+}
+
 /** Palavras genéricas que não identificam o assunto do material. */
 const GENERIC_SEND_WORDS = new Set([
   "mapa", "mapas", "pdf", "arquivo", "folheto", "cartaz", "anexo", "foto", "fotos",
@@ -913,8 +932,13 @@ export async function pickSendableKnowledgeMedia(
       }
 
       const score =
-        scoreSendableMatch(userText, { title, content, send_keywords: keywords }) +
-        mapDocumentBoost(userText, title, content, keywords);
+        scoreSendableMatch(opts?.strict ? strictHay : userText, {
+          title,
+          content,
+          send_keywords: keywords,
+        }) +
+        mapDocumentBoost(opts?.strict ? strictHay : userText, title, content, keywords) +
+        languageBoost(userText, `${title} ${keywords.join(" ")}`);
 
       return {
         id: d.id as string,
