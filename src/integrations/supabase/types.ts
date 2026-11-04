@@ -583,7 +583,13 @@ export type Database = {
       }
       passhub_settings: {
         Row: {
+          agency_contact_email: string | null
+          agency_contact_phone: string | null
           api_key: string | null
+          api_key_aereo: string | null
+          api_key_hotel: string | null
+          api_key_rodoviario: string | null
+          api_key_seguro: string | null
           auto_payment: boolean
           auto_search: boolean
           created_at: string
@@ -598,7 +604,13 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          agency_contact_email?: string | null
+          agency_contact_phone?: string | null
           api_key?: string | null
+          api_key_aereo?: string | null
+          api_key_hotel?: string | null
+          api_key_rodoviario?: string | null
+          api_key_seguro?: string | null
           auto_payment?: boolean
           auto_search?: boolean
           created_at?: string
@@ -613,7 +625,13 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          agency_contact_email?: string | null
+          agency_contact_phone?: string | null
           api_key?: string | null
+          api_key_aereo?: string | null
+          api_key_hotel?: string | null
+          api_key_rodoviario?: string | null
+          api_key_seguro?: string | null
           auto_payment?: boolean
           auto_search?: boolean
           created_at?: string
