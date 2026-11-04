@@ -18,7 +18,16 @@ import { CRM_COLUMNS, CRM_GUIDES, columnLabel } from "@/lib/crm.shared";
 import { updateConversationCrm } from "@/lib/crm.functions";
 
 export const Route = createFileRoute("/_app/conversas/")({
-  head: () => ({ meta: [{ title: "Conversas — Guatá Channel" }] }),
+  head: () => ({
+    meta: [
+      { title: "Conversas — Guatá Channel" },
+      { name: "description", content: "Conversas do WhatsApp atendidas pelo Guatá e pela equipe." },
+      { property: "og:title", content: "Conversas — Guatá Channel" },
+      { property: "og:description", content: "Conversas do WhatsApp atendidas pelo Guatá e pela equipe." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: ConversasPage,
 });
 
@@ -112,36 +121,54 @@ function ConversasPage() {
   );
 
   return (
-    <div className="space-y-6 w-full max-w-3xl mx-auto">
-      <div>
+    <div className="space-y-4 w-full max-w-3xl mx-auto">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-semibold text-primary">Conversas</h1>
-        <p className="text-muted-foreground">
-          Arquive para limpar a lista — o histórico fica guardado e volta sozinho se o cliente escrever de novo.
-        </p>
+        <Button size="sm" onClick={() => setNewOpen((v) => !v)}>
+          <Phone className="h-4 w-4 mr-1" /> Nova conversa
+        </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar por nome ou telefone (inclui arquivadas)" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="relative">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input className="pl-9" placeholder="Buscar nome ou telefone" value={q} onChange={(e) => setQ(e.target.value)} />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-full bg-muted p-1" role="tablist">
+          {(
+            [
+              ["ativas", "Ativas"],
+              ["leads", "Leads"],
+              ["vendas", "Vendas"],
+              ["arquivadas", "Arquivadas"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={
+                "px-3 py-1 text-sm rounded-full transition " +
+                (tab === id ? "bg-card text-primary font-medium shadow-sm" : "text-muted-foreground hover:text-foreground")
+              }
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <Button variant={tab === "ativas" ? "default" : "outline"} size="sm" onClick={() => setTab("ativas")}>Ativas</Button>
-        <Button variant={tab === "arquivadas" ? "default" : "outline"} size="sm" onClick={() => setTab("arquivadas")}>Arquivadas</Button>
-        <Button variant={tab === "leads" ? "default" : "outline"} size="sm" onClick={() => setTab("leads")}>Leads</Button>
-        <Button variant={tab === "vendas" ? "default" : "outline"} size="sm" onClick={() => setTab("vendas")}>Vendas</Button>
         <select
-          className="h-8 rounded-md border bg-background px-2 text-sm"
+          className="h-8 rounded-full border bg-card px-3 text-sm text-muted-foreground"
           value={guide}
           onChange={(e) => setGuide(e.target.value)}
+          aria-label="Filtrar por guia"
         >
           <option value="">Todas as guias</option>
           {CRM_GUIDES.map((g) => (
             <option key={g} value={g}>{g}</option>
           ))}
         </select>
-        <Button size="sm" variant="secondary" onClick={() => setNewOpen((v) => !v)}>
-          <Phone className="h-4 w-4 mr-1" /> Nova conversa
-        </Button>
       </div>
 
       {newOpen && (
@@ -154,13 +181,8 @@ function ConversasPage() {
               Abrir conversa
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Se o cliente não falou com o Guatá nas últimas 24h, a Meta pode não entregar mensagem livre.
-          </p>
         </Card>
       )}
-      <div className="hidden">
-      </div>
 
       {isLoading ? (
         <Card className="rounded-2xl p-4 space-y-3">

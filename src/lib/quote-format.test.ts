@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { clampValidity, formatFlightQuote, quoteWarningLines } from "./quote-format";
 
 const opt = (airline: string, noBag: string, withBag: string) => ({

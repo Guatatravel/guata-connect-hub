@@ -25,6 +25,7 @@ import {
   setSoundEnabled,
 } from "@/hooks/use-realtime-notifications";
 import { QuickRepliesSettings } from "@/components/guata/quick-replies-settings";
+import { AccountDangerZone } from "@/components/guata/account-danger-zone";
 
 // URL pública estável (não muda ao renomear o projeto).
 const STABLE_PUBLIC_URL =
@@ -306,6 +307,7 @@ function ConfigPage() {
 
       <NotificationSettingsCard />
 
+      <AccountDangerZone />
     </div>
   );
 }

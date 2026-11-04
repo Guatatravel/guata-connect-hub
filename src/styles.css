@@ -64,24 +64,25 @@
 :root {
   --radius: 0.625rem;
   /* Guatá Channel brand: verde floresta #1F4D2C, dourado #C9A24C, bege #FAF6EC */
-  --background: oklch(0.965 0.022 90);
+  /* Fundo linho e cartões marfim — sem branco puro para não cansar a vista */
+  --background: oklch(0.94 0.024 86);
   --foreground: oklch(0.22 0.04 150);
-  --card: oklch(0.99 0.01 90);
+  --card: oklch(0.967 0.017 86);
   --card-foreground: oklch(0.22 0.04 150);
-  --popover: oklch(0.99 0.01 90);
+  --popover: oklch(0.967 0.017 86);
   --popover-foreground: oklch(0.22 0.04 150);
   --primary: oklch(0.36 0.07 148);
   --primary-foreground: oklch(0.98 0.015 90);
-  --secondary: oklch(0.93 0.03 88);
+  --secondary: oklch(0.91 0.03 86);
   --secondary-foreground: oklch(0.3 0.05 150);
-  --muted: oklch(0.93 0.025 90);
+  --muted: oklch(0.915 0.025 86);
   --muted-foreground: oklch(0.48 0.03 120);
   --accent: oklch(0.74 0.12 82);
   --accent-foreground: oklch(0.2 0.04 80);
   --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(0.98 0.01 0);
-  --border: oklch(0.86 0.03 90);
-  --input: oklch(0.9 0.025 90);
+  --border: oklch(0.85 0.03 86);
+  --input: oklch(0.87 0.028 86);
   --ring: oklch(0.36 0.07 148);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);

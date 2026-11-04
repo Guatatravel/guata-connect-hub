@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { BedDouble, Bus, ExternalLink, KeyRound, Plane, ShieldCheck, Timer } from "lucide-react";
+import { BedDouble, Bus, ExternalLink, Mail, Phone, Plane, ShieldCheck, Timer } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,13 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchPasshubSettings, savePasshubSettings } from "@/lib/passhub.functions";
-import { PASSHUB_REFERRAL_URL, type PasshubSettingsView } from "@/lib/passhub.shared";
+import {
+  PASSHUB_PRODUCTS,
+  PASSHUB_PRODUCT_LABEL,
+  PASSHUB_REFERRAL_URL,
+  type PasshubProduct,
+  type PasshubSettingsView,
+} from "@/lib/passhub.shared";
 
 export const Route = createFileRoute("/_app/passhub")({
   head: () => ({
@@ -20,7 +26,7 @@ export const Route = createFileRoute("/_app/passhub")({
       { title: "Passhub — Guatá Channel" },
       {
         name: "description",
-        content: "Conecte o Passhub para cotar passagens, hotéis, seguro viagem e ônibus com o Guatá.",
+        content: "Conecte o Passhub com uma chave por produto: aéreo, hotel, seguro viagem e ônibus.",
       },
       { property: "og:title", content: "Passhub — Guatá Channel" },
       {
@@ -34,11 +40,39 @@ export const Route = createFileRoute("/_app/passhub")({
   component: PasshubPage,
 });
 
-type Form = Omit<PasshubSettingsView, "hasApiKey" | "apiKeyHint" | "canEdit"> & {
-  apiKey: string;
+type ProductForm = { enabled: boolean; apiKey: string; clearKey?: boolean };
+type Form = {
+  enabled: boolean;
+  products: Record<PasshubProduct, ProductForm>;
+  autoSearch: boolean;
+  autoPayment: boolean;
+  quoteValidityMinutes: number;
+  agencyContactEmail: string;
+  agencyContactPhone: string;
 };
 
 const VALIDITY_PRESETS = [15, 20, 30];
+const ICONS: Record<PasshubProduct, typeof Plane> = {
+  aereo: Plane,
+  hotel: BedDouble,
+  seguro: ShieldCheck,
+  rodoviario: Bus,
+};
+
+function toForm(d: PasshubSettingsView): Form {
+  const products = Object.fromEntries(
+    PASSHUB_PRODUCTS.map((p) => [p, { enabled: d.products[p].enabled, apiKey: "" }]),
+  ) as Form["products"];
+  return {
+    enabled: d.enabled,
+    products,
+    autoSearch: d.autoSearch,
+    autoPayment: d.autoPayment,
+    quoteValidityMinutes: d.quoteValidityMinutes,
+    agencyContactEmail: d.agencyContactEmail,
+    agencyContactPhone: d.agencyContactPhone,
+  };
+}
 
 function PasshubPage() {
   const qc = useQueryClient();
@@ -48,18 +82,25 @@ function PasshubPage() {
   const [form, setForm] = useState<Form | null>(null);
 
   useEffect(() => {
-    if (data && !form) {
-      const { hasApiKey: _h, apiKeyHint: _a, canEdit: _c, ...rest } = data;
-      setForm({ ...rest, apiKey: "" });
-    }
+    if (data && !form) setForm(toForm(data));
   }, [data, form]);
 
   const save = useMutation({
-    mutationFn: (f: Form & { clearApiKey?: boolean }) =>
-      saveFn({ data: { ...f, apiKey: f.apiKey || null } }),
+    mutationFn: (f: Form) =>
+      saveFn({
+        data: {
+          ...f,
+          products: Object.fromEntries(
+            PASSHUB_PRODUCTS.map((p) => [
+              p,
+              { enabled: f.products[p].enabled, apiKey: f.products[p].apiKey || null, clearKey: f.products[p].clearKey },
+            ]),
+          ) as Record<PasshubProduct, { enabled: boolean; apiKey: string | null; clearKey?: boolean }>,
+        },
+      }),
     onSuccess: () => {
       toast.success("Passhub salvo");
-      setForm((f) => (f ? { ...f, apiKey: "" } : f));
+      setForm(null);
       qc.invalidateQueries({ queryKey: ["passhub"] });
     },
     onError: (e: Error) => toast.error(e.message || "Não foi possível salvar"),
@@ -68,7 +109,7 @@ function PasshubPage() {
   if (isLoading || !data || !form) {
     return (
       <div className="w-full max-w-3xl mx-auto space-y-4">
-        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-10 w-64 mx-auto" />
         <Skeleton className="h-40" />
         <Skeleton className="h-56" />
       </div>
@@ -76,13 +117,16 @@ function PasshubPage() {
   }
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm({ ...form, [k]: v });
+  const setProduct = (p: PasshubProduct, patch: Partial<ProductForm>) =>
+    setForm({ ...form, products: { ...form.products, [p]: { ...form.products[p], ...patch } } });
   const disabled = !data.canEdit || save.isPending;
+  const keysSaved = PASSHUB_PRODUCTS.filter((p) => data.products[p].hasKey).length;
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-5">
       <div className="text-center space-y-1">
         <h1 className="font-display text-3xl font-semibold text-primary">Passhub</h1>
-        <p className="text-muted-foreground">Passagens aéreas, hotéis, seguro viagem e ônibus no atendimento do Guatá.</p>
+        <p className="text-muted-foreground">Uma chave para cada produto. O Guatá só usa o que estiver ligado e com chave.</p>
       </div>
 
       <Card className="rounded-2xl border-accent/50 bg-accent/10">
@@ -90,13 +134,13 @@ function PasshubPage() {
           <div className="flex-1 space-y-1">
             <div className="font-medium">Ainda não tem conta no Passhub?</div>
             <p className="text-sm text-muted-foreground">
-              É a plataforma de emissão que reúne várias consolidadoras em um só lugar, sem custo para a agência.
-              Crie sua conta por este link de indicação.
+              Crie pelo link de indicação. Depois, em Passhub → Configurações → API, gere uma chave para cada módulo
+              contratado (aéreo, hospedagem, seguro, rodoviário).
             </p>
           </div>
-          <Button asChild variant="default">
+          <Button asChild>
             <a href={PASSHUB_REFERRAL_URL} target="_blank" rel="noopener noreferrer">
-              Criar conta no Passhub <ExternalLink className="h-4 w-4 ml-1" />
+              Criar conta <ExternalLink className="h-4 w-4 ml-1" />
             </a>
           </Button>
         </CardContent>
@@ -109,46 +153,88 @@ function PasshubPage() {
       )}
 
       <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-accent" /> Conexão
-            {data.hasApiKey ? <Badge variant="secondary">Chave salva {data.apiKeyHint}</Badge> : <Badge variant="outline">Sem chave</Badge>}
-          </CardTitle>
-          <CardDescription>Cole a chave de acesso que o Passhub fornece para a sua agência.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Row label="Usar o Passhub nesta agência" checked={form.enabled} onChange={(v) => set("enabled", v)} disabled={disabled} />
-          <div className="space-y-1.5">
-            <Label htmlFor="passhub-key">Chave do Passhub</Label>
-            <div className="flex gap-2">
-              <Input
-                id="passhub-key"
-                type="password"
-                autoComplete="off"
-                placeholder={data.hasApiKey ? "Deixe em branco para manter a chave atual" : "Cole a chave aqui"}
-                value={form.apiKey}
-                onChange={(e) => set("apiKey", e.target.value)}
-                disabled={disabled}
-              />
-              {data.hasApiKey && (
-                <Button variant="outline" disabled={disabled} onClick={() => save.mutate({ ...form, apiKey: "", clearApiKey: true })}>
-                  Remover
-                </Button>
-              )}
-            </div>
-          </div>
+        <CardContent className="p-5">
+          <Row
+            label="Usar o Passhub nesta agência"
+            hint={`${keysSaved} de 4 chaves salvas`}
+            checked={form.enabled}
+            onChange={(v) => set("enabled", v)}
+            disabled={disabled}
+          />
         </CardContent>
       </Card>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        {PASSHUB_PRODUCTS.map((p) => {
+          const Icon = ICONS[p];
+          const view = data.products[p];
+          const f = form.products[p];
+          return (
+            <Card key={p} className="rounded-2xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Icon className="h-4 w-4 text-primary" />
+                  <span className="flex-1">{PASSHUB_PRODUCT_LABEL[p]}</span>
+                  <Switch
+                    checked={f.enabled}
+                    onCheckedChange={(v) => setProduct(p, { enabled: v })}
+                    disabled={disabled}
+                    aria-label={`Ativar ${PASSHUB_PRODUCT_LABEL[p]}`}
+                  />
+                </CardTitle>
+                <div>
+                  {f.clearKey ? (
+                    <Badge variant="destructive">Chave será removida ao salvar</Badge>
+                  ) : view.hasKey ? (
+                    <Badge variant="secondary">Chave salva {view.keyHint}</Badge>
+                  ) : (
+                    <Badge variant="outline">Sem chave</Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Label htmlFor={`key-${p}`} className="text-xs text-muted-foreground">
+                  Chave de API — {PASSHUB_PRODUCT_LABEL[p]}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id={`key-${p}`}
+                    type="password"
+                    autoComplete="off"
+                    placeholder={view.hasKey ? "Em branco mantém a atual" : "Cole a chave aqui"}
+                    value={f.apiKey}
+                    onChange={(e) => setProduct(p, { apiKey: e.target.value, clearKey: false })}
+                    disabled={disabled}
+                  />
+                  {view.hasKey && !f.clearKey && (
+                    <Button variant="outline" size="sm" className="h-9" disabled={disabled} onClick={() => setProduct(p, { apiKey: "", clearKey: true })}>
+                      Remover
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
       <Card className="rounded-2xl">
         <CardHeader>
-          <CardTitle className="text-lg">O que o Guatá pode cotar</CardTitle>
+          <CardTitle className="text-lg">Contatos da agência nas reservas</CardTitle>
+          <CardDescription>
+            Nas emissões vai sempre o e-mail e o telefone da agência — nunca os do cliente. Assim a agência recebe os
+            avisos de alteração ou cancelamento da companhia e avisa o cliente.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          <Module icon={Plane} label="Passagens aéreas" checked={form.modAereo} onChange={(v) => set("modAereo", v)} disabled={disabled} />
-          <Module icon={BedDouble} label="Hospedagem" checked={form.modHotel} onChange={(v) => set("modHotel", v)} disabled={disabled} />
-          <Module icon={ShieldCheck} label="Seguro viagem" checked={form.modSeguro} onChange={(v) => set("modSeguro", v)} disabled={disabled} />
-          <Module icon={Bus} label="Passagens de ônibus" checked={form.modRodoviario} onChange={(v) => set("modRodoviario", v)} disabled={disabled} />
+          <div className="space-y-1.5">
+            <Label htmlFor="ag-email" className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> E-mail da agência</Label>
+            <Input id="ag-email" type="email" placeholder="reservas@suaagencia.com.br" value={form.agencyContactEmail} onChange={(e) => set("agencyContactEmail", e.target.value)} disabled={disabled} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ag-phone" className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Telefone da agência</Label>
+            <Input id="ag-phone" placeholder="(67) 99999-9999" value={form.agencyContactPhone} onChange={(e) => set("agencyContactPhone", e.target.value)} disabled={disabled} />
+          </div>
         </CardContent>
       </Card>
 
@@ -178,13 +264,7 @@ function PasshubPage() {
             </Label>
             <div className="flex flex-wrap items-center gap-2">
               {VALIDITY_PRESETS.map((m) => (
-                <Button
-                  key={m}
-                  size="sm"
-                  variant={form.quoteValidityMinutes === m ? "default" : "outline"}
-                  onClick={() => set("quoteValidityMinutes", m)}
-                  disabled={disabled}
-                >
+                <Button key={m} size="sm" variant={form.quoteValidityMinutes === m ? "default" : "outline"} onClick={() => set("quoteValidityMinutes", m)} disabled={disabled}>
                   {m} min
                 </Button>
               ))}
@@ -198,17 +278,27 @@ function PasshubPage() {
                 disabled={disabled}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Toda cotação sai com este prazo e com o aviso de que os valores podem mudar sem aviso prévio.
-            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card className="rounded-2xl bg-muted/50">
-        <CardContent className="p-4 text-sm text-muted-foreground">
-          A busca automática de tarifas começa a funcionar quando o Passhub liberar o acesso de integração para a sua
-          conta. Até lá, o Guatá coleta o briefing e o consultor monta a cotação no padrão de 3 opções dentro da conversa.
+        <CardHeader>
+          <CardTitle className="text-lg">Depois de colocar a chave, como funciona</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ol className="list-decimal pl-5 space-y-1.5 text-sm text-muted-foreground">
+            <li>O cliente pede uma viagem e o Guatá coleta o briefing (origem, destino, datas, passageiros, hospedagem).</li>
+            <li>Com o produto ligado e com chave, a cotação daquele produto usa o Passhub. Sem chave, o consultor cota.</li>
+            <li>A cotação sai no padrão da agência: 3 opções, prazo de pagamento e aviso de que os valores podem mudar.</li>
+            <li>Cliente escolheu: o Guatá pede Nome completo (igual ao documento), CPF e Data de nascimento.</li>
+            <li>Pagamento por link — enviado pelo consultor (ou pelo Guatá, se você liberar acima).</li>
+            <li>Emissão com os contatos da agência; o consultor envia o voucher pela conversa.</li>
+          </ol>
+          <p className="text-xs text-muted-foreground mt-3">
+            A busca automática de tarifas entra em funcionamento quando o Passhub liberar o acesso de integração da sua
+            conta. Até lá as chaves ficam guardadas com segurança e o consultor monta a cotação na conversa.
+          </p>
         </CardContent>
       </Card>
 
@@ -240,28 +330,6 @@ function Row({
         <div className="text-sm font-medium">{label}</div>
         {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
-    </div>
-  );
-}
-
-function Module({
-  icon: Icon,
-  label,
-  checked,
-  onChange,
-  disabled,
-}: {
-  icon: typeof Plane;
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border bg-background/60 p-3">
-      <Icon className="h-4 w-4 text-primary" />
-      <span className="flex-1 text-sm">{label}</span>
       <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
     </div>
   );
