@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fetchQuoteValidity } from "@/lib/passhub.functions";
 import { formatFlightQuote, type FlightQuoteOption } from "@/lib/quote-format";
+import { reservationDataRequest } from "@/lib/reservation-rules";
 
 const emptyOption = (): FlightQuoteOption => ({
   airline: "",
@@ -73,6 +74,13 @@ export function QuoteBuilder({ onUseMessage }: { onUseMessage: (t: string) => vo
         }
       >
         Usar como resposta ({ready} de 3 opções)
+      </Button>
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={() => onUseMessage(reservationDataRequest(passengers))}
+      >
+        Cliente fechou? Pedir dados da reserva
       </Button>
     </div>
   );
