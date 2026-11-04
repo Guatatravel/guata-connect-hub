@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { PasshubSettingsView } from "@/lib/passhub.shared";
+import { maskKey, PASSHUB_PRODUCTS, type PasshubSettingsView } from "@/lib/passhub.shared";
 
 export const fetchPasshubSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -11,33 +11,43 @@ export const fetchPasshubSettings = createServerFn({ method: "GET" })
     const { loadPasshubSettings } = await import("@/lib/passhub.server");
     const orgId = await requireActiveOrganization(context.userId);
     const s = await loadPasshubSettings(orgId);
-    const key = s.api_key ?? "";
+    const products = Object.fromEntries(
+      PASSHUB_PRODUCTS.map((p) => {
+        const key = s[`api_key_${p}`];
+        return [p, { enabled: s[`mod_${p}`], hasKey: Boolean(key?.trim()), keyHint: maskKey(key) }];
+      }),
+    ) as PasshubSettingsView["products"];
     return {
       enabled: s.enabled,
-      hasApiKey: key.length > 0,
-      apiKeyHint: key.length > 4 ? `••••${key.slice(-4)}` : key ? "••••" : null,
-      modAereo: s.mod_aereo,
-      modHotel: s.mod_hotel,
-      modSeguro: s.mod_seguro,
-      modRodoviario: s.mod_rodoviario,
+      products,
       autoSearch: s.auto_search,
       autoPayment: s.auto_payment,
       quoteValidityMinutes: s.quote_validity_minutes,
+      agencyContactEmail: s.agency_contact_email ?? "",
+      agencyContactPhone: s.agency_contact_phone ?? "",
       canEdit: await userCanManageOrgWhatsApp(context.userId, orgId),
     };
   });
 
-const saveSchema = z.object({
+const productSchema = z.object({
   enabled: z.boolean(),
   apiKey: z.string().max(500).optional().nullable(),
-  clearApiKey: z.boolean().optional(),
-  modAereo: z.boolean(),
-  modHotel: z.boolean(),
-  modSeguro: z.boolean(),
-  modRodoviario: z.boolean(),
+  clearKey: z.boolean().optional(),
+});
+
+const saveSchema = z.object({
+  enabled: z.boolean(),
+  products: z.object({
+    aereo: productSchema,
+    hotel: productSchema,
+    seguro: productSchema,
+    rodoviario: productSchema,
+  }),
   autoSearch: z.boolean(),
   autoPayment: z.boolean(),
   quoteValidityMinutes: z.number().int().min(5).max(120),
+  agencyContactEmail: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().nullable(),
+  agencyContactPhone: z.string().trim().max(40).optional().nullable(),
 });
 
 export const savePasshubSettings = createServerFn({ method: "POST" })
