@@ -1,4 +1,4 @@
-import { Instagram,
+import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -10,7 +10,7 @@ import { Instagram,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Instagram, Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { Instagram,
   LayoutDashboard,
   Plane,
