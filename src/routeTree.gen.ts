@@ -26,6 +26,7 @@ import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
 import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagnostico-whatsapp'
 import { Route as AppEquipeRouteImport } from './routes/_app.equipe'
 import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
+import { Route as AppInstagramRouteImport } from './routes/_app.instagram'
 import { Route as AppOrganizacoesRouteImport } from './routes/_app.organizacoes'
 import { Route as AppPasshubRouteImport } from './routes/_app.passhub'
 import { Route as AppQuadroRouteImport } from './routes/_app.quadro'
@@ -38,6 +39,7 @@ import { Route as AppTriagensIndexRouteImport } from './routes/_app.triagens.ind
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as ApiPublicCronResumeHandoffsRouteImport } from './routes/api/public/cron/resume-handoffs'
 import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
+import { Route as ApiPublicWebhooksInstagramRouteImport } from './routes/api/public/webhooks/instagram'
 import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
 
 const IndexRoute = IndexRouteImport.update({
@@ -124,6 +126,11 @@ const AppExtensaoRoute = AppExtensaoRouteImport.update({
   path: '/extensao',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInstagramRoute = AppInstagramRouteImport.update({
+  id: '/instagram',
+  path: '/instagram',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrganizacoesRoute = AppOrganizacoesRouteImport.update({
   id: '/organizacoes',
   path: '/organizacoes',
@@ -186,6 +193,12 @@ const ApiPublicWebhooksDescubraMsRoute =
     path: '/api/public/webhooks/descubra-ms',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicWebhooksInstagramRoute =
+  ApiPublicWebhooksInstagramRouteImport.update({
+    id: '/api/public/webhooks/instagram',
+    path: '/api/public/webhooks/instagram',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWebhooksWhatsappRoute =
   ApiPublicWebhooksWhatsappRouteImport.update({
     id: '/api/public/webhooks/whatsapp',
@@ -210,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
+  '/instagram': typeof AppInstagramRoute
   '/organizacoes': typeof AppOrganizacoesRoute
   '/passhub': typeof AppPasshubRoute
   '/quadro': typeof AppQuadroRoute
@@ -222,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/triagens/': typeof AppTriagensIndexRoute
   '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
+  '/api/public/webhooks/instagram': typeof ApiPublicWebhooksInstagramRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
 export interface FileRoutesByTo {
@@ -241,6 +256,7 @@ export interface FileRoutesByTo {
   '/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
+  '/instagram': typeof AppInstagramRoute
   '/organizacoes': typeof AppOrganizacoesRoute
   '/passhub': typeof AppPasshubRoute
   '/quadro': typeof AppQuadroRoute
@@ -253,6 +269,7 @@ export interface FileRoutesByTo {
   '/triagens': typeof AppTriagensIndexRoute
   '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
+  '/api/public/webhooks/instagram': typeof ApiPublicWebhooksInstagramRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
 export interface FileRoutesById {
@@ -274,6 +291,7 @@ export interface FileRoutesById {
   '/_app/diagnostico-whatsapp': typeof AppDiagnosticoWhatsappRoute
   '/_app/equipe': typeof AppEquipeRoute
   '/_app/extensao': typeof AppExtensaoRoute
+  '/_app/instagram': typeof AppInstagramRoute
   '/_app/organizacoes': typeof AppOrganizacoesRoute
   '/_app/passhub': typeof AppPasshubRoute
   '/_app/quadro': typeof AppQuadroRoute
@@ -286,6 +304,7 @@ export interface FileRoutesById {
   '/_app/triagens/': typeof AppTriagensIndexRoute
   '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
+  '/api/public/webhooks/instagram': typeof ApiPublicWebhooksInstagramRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
 }
 export interface FileRouteTypes {
@@ -307,6 +326,7 @@ export interface FileRouteTypes {
     | '/diagnostico-whatsapp'
     | '/equipe'
     | '/extensao'
+    | '/instagram'
     | '/organizacoes'
     | '/passhub'
     | '/quadro'
@@ -319,6 +339,7 @@ export interface FileRouteTypes {
     | '/triagens/'
     | '/api/public/cron/resume-handoffs'
     | '/api/public/webhooks/descubra-ms'
+    | '/api/public/webhooks/instagram'
     | '/api/public/webhooks/whatsapp'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -338,6 +359,7 @@ export interface FileRouteTypes {
     | '/diagnostico-whatsapp'
     | '/equipe'
     | '/extensao'
+    | '/instagram'
     | '/organizacoes'
     | '/passhub'
     | '/quadro'
@@ -350,6 +372,7 @@ export interface FileRouteTypes {
     | '/triagens'
     | '/api/public/cron/resume-handoffs'
     | '/api/public/webhooks/descubra-ms'
+    | '/api/public/webhooks/instagram'
     | '/api/public/webhooks/whatsapp'
   id:
     | '__root__'
@@ -370,6 +393,7 @@ export interface FileRouteTypes {
     | '/_app/diagnostico-whatsapp'
     | '/_app/equipe'
     | '/_app/extensao'
+    | '/_app/instagram'
     | '/_app/organizacoes'
     | '/_app/passhub'
     | '/_app/quadro'
@@ -382,6 +406,7 @@ export interface FileRouteTypes {
     | '/_app/triagens/'
     | '/api/public/cron/resume-handoffs'
     | '/api/public/webhooks/descubra-ms'
+    | '/api/public/webhooks/instagram'
     | '/api/public/webhooks/whatsapp'
   fileRoutesById: FileRoutesById
 }
@@ -396,6 +421,7 @@ export interface RootRouteChildren {
   TrocarSenhaRoute: typeof TrocarSenhaRoute
   ApiPublicCronResumeHandoffsRoute: typeof ApiPublicCronResumeHandoffsRoute
   ApiPublicWebhooksDescubraMsRoute: typeof ApiPublicWebhooksDescubraMsRoute
+  ApiPublicWebhooksInstagramRoute: typeof ApiPublicWebhooksInstagramRoute
   ApiPublicWebhooksWhatsappRoute: typeof ApiPublicWebhooksWhatsappRoute
 }
 
@@ -520,6 +546,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppExtensaoRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/instagram': {
+      id: '/_app/instagram'
+      path: '/instagram'
+      fullPath: '/instagram'
+      preLoaderRoute: typeof AppInstagramRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/organizacoes': {
       id: '/_app/organizacoes'
       path: '/organizacoes'
@@ -604,6 +637,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWebhooksDescubraMsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/webhooks/instagram': {
+      id: '/api/public/webhooks/instagram'
+      path: '/api/public/webhooks/instagram'
+      fullPath: '/api/public/webhooks/instagram'
+      preLoaderRoute: typeof ApiPublicWebhooksInstagramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/whatsapp': {
       id: '/api/public/webhooks/whatsapp'
       path: '/api/public/webhooks/whatsapp'
@@ -624,6 +664,7 @@ interface AppRouteChildren {
   AppDiagnosticoWhatsappRoute: typeof AppDiagnosticoWhatsappRoute
   AppEquipeRoute: typeof AppEquipeRoute
   AppExtensaoRoute: typeof AppExtensaoRoute
+  AppInstagramRoute: typeof AppInstagramRoute
   AppOrganizacoesRoute: typeof AppOrganizacoesRoute
   AppPasshubRoute: typeof AppPasshubRoute
   AppQuadroRoute: typeof AppQuadroRoute
@@ -646,6 +687,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDiagnosticoWhatsappRoute: AppDiagnosticoWhatsappRoute,
   AppEquipeRoute: AppEquipeRoute,
   AppExtensaoRoute: AppExtensaoRoute,
+  AppInstagramRoute: AppInstagramRoute,
   AppOrganizacoesRoute: AppOrganizacoesRoute,
   AppPasshubRoute: AppPasshubRoute,
   AppQuadroRoute: AppQuadroRoute,
@@ -671,6 +713,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrocarSenhaRoute: TrocarSenhaRoute,
   ApiPublicCronResumeHandoffsRoute: ApiPublicCronResumeHandoffsRoute,
   ApiPublicWebhooksDescubraMsRoute: ApiPublicWebhooksDescubraMsRoute,
+  ApiPublicWebhooksInstagramRoute: ApiPublicWebhooksInstagramRoute,
   ApiPublicWebhooksWhatsappRoute: ApiPublicWebhooksWhatsappRoute,
 }
 export const routeTree = rootRouteImport
