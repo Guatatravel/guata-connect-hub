@@ -375,6 +375,97 @@ export type Database = {
           },
         ]
       }
+      instagram_events: {
+        Row: {
+          comment_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          media_id: string | null
+          organization_id: string | null
+          status: string
+          text: string | null
+          username: string | null
+        }
+        Insert: {
+          comment_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          media_id?: string | null
+          organization_id?: string | null
+          status?: string
+          text?: string | null
+          username?: string | null
+        }
+        Update: {
+          comment_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          media_id?: string | null
+          organization_id?: string | null
+          status?: string
+          text?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      instagram_settings: {
+        Row: {
+          access_token: string | null
+          comment_replies: string[]
+          dm_extra: string | null
+          enabled: boolean
+          ig_account_id: string | null
+          keywords: string[]
+          organization_id: string
+          reply_any_question: boolean
+          updated_at: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          comment_replies?: string[]
+          dm_extra?: string | null
+          enabled?: boolean
+          ig_account_id?: string | null
+          keywords?: string[]
+          organization_id: string
+          reply_any_question?: boolean
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          comment_replies?: string[]
+          dm_extra?: string | null
+          enabled?: boolean
+          ig_account_id?: string | null
+          keywords?: string[]
+          organization_id?: string
+          reply_any_question?: boolean
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_documents: {
         Row: {
           content: string

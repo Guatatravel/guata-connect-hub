@@ -43,6 +43,13 @@
       "when": 1793819143959,
       "tag": "0005_passhub_product_keys_agency_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793976714561,
+      "tag": "0006_instagram_bridge",
+      "breakpoints": true
     }
   ]
 }
