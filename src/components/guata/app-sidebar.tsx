@@ -1,4 +1,4 @@
-import {
+import { Instagram,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -10,8 +10,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import {
+import { Instagram, Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { Instagram,
   LayoutDashboard,
   Plane,
   MessageSquare,
@@ -41,6 +41,7 @@ const navItems = [
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },
+  { to: "/instagram", label: "Instagram", icon: Instagram },
   { to: "/passhub", label: "Passhub", icon: Ticket },
   { to: "/atendentes", label: "Atendente virtual (IA)", icon: Bot },
   { to: "/equipe", label: "Equipe", icon: Users, orgTeamOnly: true },
