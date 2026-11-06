@@ -6,3 +6,4 @@
 - Passhub credentials are stored per product (api_key_aereo/hotel/seguro/rodoviario) in passhub_settings, readable only by server code; the legacy single api_key column is deprecated — Passhub issues a separate key per module.
 - Account deletion and WhatsApp disconnect live in src/lib/account.server.ts; platform admins and the official Guatá org are never deleted there — prevents locking out the platform owner.
 - Unit tests use bun:test and are excluded from tsconfig — vitest is not installed.
+- Instagram is only a lead bridge: comments trigger a public reply + Direct with a wa.me link; selling stays on WhatsApp. Settings/token live in instagram_settings (server-only) — keeps one sales channel and the token off the browser.
