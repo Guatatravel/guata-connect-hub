@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Facebook, Loader2 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -12,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchInstagramSettings, saveInstagramSettings } from "@/lib/instagram.functions";
+import { startInstagramOAuth, fetchInstagramOAuthResult, finishInstagramOAuth } from "@/lib/instagram-oauth.functions";
 
 export const Route = createFileRoute("/_app/instagram")({
   head: () => ({
@@ -44,8 +46,79 @@ function InstagramPage() {
   const qc = useQueryClient();
   const fetchFn = useServerFn(fetchInstagramSettings);
   const saveFn = useServerFn(saveInstagramSettings);
+  const startOAuth = useServerFn(startInstagramOAuth);
+  const getOAuthResult = useServerFn(fetchInstagramOAuthResult);
+  const finishOAuth = useServerFn(finishInstagramOAuth);
   const { data, isLoading } = useQuery({ queryKey: ["instagram"], queryFn: () => fetchFn() });
   const [form, setForm] = useState<Form | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<Array<{ id: string; pageId: string; name: string }>>([]);
+
+  useEffect(() => {
+    if (!attemptId) return;
+    let cancelled = false;
+    let busy = false;
+    const poll = async () => {
+      if (busy || cancelled) return;
+      busy = true;
+      try {
+        const result = await getOAuthResult({ data: { id: attemptId } });
+        if (cancelled) return;
+        if (result.status === "ready") {
+          setAccounts(result.accounts);
+          setConnecting(false);
+          cancelled = true;
+        } else if (result.status === "error") {
+          toast.error("O Facebook não concluiu a autorização. Confira as permissões e se o Instagram está ligado à Página.");
+          setAttemptId(null);
+          setConnecting(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "Não foi possível conferir a conexão.");
+          setAttemptId(null);
+          setConnecting(false);
+        }
+      } finally { busy = false; }
+    };
+    const timer = window.setInterval(poll, 2000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [attemptId, getOAuthResult]);
+
+  const connectFacebook = async () => {
+    // Open synchronously to avoid browser popup blocking after the request.
+    const popup = window.open("about:blank", "guata-instagram-facebook", "popup,width=620,height=760");
+    if (!popup) { toast.error("Permita abrir a janela do Facebook neste navegador."); return; }
+    setConnecting(true);
+    setAccounts([]);
+    try {
+      const result = await startOAuth();
+      popup.location.href = result.url;
+      setAttemptId(result.id);
+    } catch (error) {
+      popup.close();
+      setConnecting(false);
+      toast.error(error instanceof Error ? error.message : "Não foi possível iniciar a conexão.");
+    }
+  };
+
+  const selectAccount = async (accountId: string) => {
+    if (!attemptId) return;
+    setConnecting(true);
+    try {
+      const result = await finishOAuth({ data: { id: attemptId, accountId } });
+      setForm(current => current ? { ...current, igAccountId: result.accountId, accessToken: "" } : current);
+      setAttemptId(null);
+      setAccounts([]);
+      await qc.invalidateQueries({ queryKey: ["instagram"] });
+      toast.success(`Instagram ${result.name} conectado`);
+    } catch (error) {
+      setAttemptId(null);
+      setAccounts([]);
+      toast.error(error instanceof Error ? error.message : "Não foi possível conectar esta conta.");
+    } finally { setConnecting(false); }
+  };
 
   useEffect(() => {
     if (data && !form)
@@ -92,7 +165,7 @@ function InstagramPage() {
     );
   }
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm({ ...form, [k]: v });
-  const disabled = !data.canEdit || save.isPending;
+  const disabled = !data.canEdit || save.isPending || connecting;
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-5">
@@ -119,7 +192,22 @@ function InstagramPage() {
           <CardDescription>Uma conta do Instagram Business por agência.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={connectFacebook} disabled={disabled || !data.facebookReady}>
+              {connecting ? <Loader2 className="size-4 animate-spin" /> : <Facebook className="size-4" />}
+              {connecting ? "Aguardando Facebook…" : data.hasToken ? "Reconectar pelo Facebook" : "Conectar Instagram pelo Facebook"}
+            </Button>
+            <Badge variant={data.hasToken ? "secondary" : "outline"}>{data.hasToken ? "Credencial salva" : "Não conectado"}</Badge>
+            {connecting && <Button variant="ghost" onClick={() => { setAttemptId(null); setConnecting(false); }}>Cancelar</Button>}
+          </div>
+          {!data.facebookReady && <p className="text-sm text-muted-foreground">A conexão pelo Facebook aguarda a configuração do aplicativo Meta.</p>}
+          {accounts.length > 0 && <div className="space-y-2">
+            <Label>Selecione o Instagram da agência</Label>
+            {accounts.map(account => <Button key={account.id} variant="outline" className="w-full justify-start h-auto whitespace-normal text-left py-3" disabled={disabled} onClick={() => selectAccount(account.id)}>{account.name}</Button>)}
+          </div>}
+          <details className="space-y-3">
+            <summary className="cursor-pointer text-sm text-muted-foreground">Conexão manual (avançado)</summary>
+          <div className="space-y-1.5 mt-3">
             <Label>ID da conta do Instagram Business</Label>
             <Input value={form.igAccountId} onChange={(e) => set("igAccountId", e.target.value)} disabled={disabled} placeholder="1784..." />
           </div>
@@ -133,16 +221,10 @@ function InstagramPage() {
               placeholder={data.hasToken ? "Token salvo •••• (deixe vazio para manter)" : "Cole o token aqui"}
             />
           </div>
+          </details>
           <div className="space-y-1.5">
             <Label>WhatsApp de destino (com DDI)</Label>
             <Input value={form.whatsappNumber} onChange={(e) => set("whatsappNumber", e.target.value)} disabled={disabled} placeholder="5567999999999" />
-          </div>
-          <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">Passo a passo na Meta</p>
-            <p>1. Conta do Instagram como Profissional e ligada a uma Página do Facebook.</p>
-            <p>2. No app da Meta, adicione o produto Instagram e as permissões instagram_manage_comments e instagram_manage_messages.</p>
-            <p>3. Em Webhooks → Instagram, use a URL <code>/api/public/webhooks/instagram</code> deste site com o mesmo token de verificação do WhatsApp e assine “comments”.</p>
-            <p>4. Cole aqui o ID da conta e o token.</p>
           </div>
         </CardContent>
       </Card>

@@ -38,6 +38,7 @@ import { Route as AppConversasIdRouteImport } from './routes/_app.conversas.$id'
 import { Route as AppTriagensIndexRouteImport } from './routes/_app.triagens.index'
 import { Route as AppTriagensIdRouteImport } from './routes/_app.triagens.$id'
 import { Route as ApiPublicCronResumeHandoffsRouteImport } from './routes/api/public/cron/resume-handoffs'
+import { Route as ApiPublicOauthInstagramRouteImport } from './routes/api/public/oauth/instagram'
 import { Route as ApiPublicWebhooksDescubraMsRouteImport } from './routes/api/public/webhooks/descubra-ms'
 import { Route as ApiPublicWebhooksInstagramRouteImport } from './routes/api/public/webhooks/instagram'
 import { Route as ApiPublicWebhooksWhatsappRouteImport } from './routes/api/public/webhooks/whatsapp'
@@ -187,6 +188,11 @@ const ApiPublicCronResumeHandoffsRoute =
     path: '/api/public/cron/resume-handoffs',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicOauthInstagramRoute = ApiPublicOauthInstagramRouteImport.update({
+  id: '/api/public/oauth/instagram',
+  path: '/api/public/oauth/instagram',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWebhooksDescubraMsRoute =
   ApiPublicWebhooksDescubraMsRouteImport.update({
     id: '/api/public/webhooks/descubra-ms',
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/conversas/': typeof AppConversasIndexRoute
   '/triagens/': typeof AppTriagensIndexRoute
   '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
+  '/api/public/oauth/instagram': typeof ApiPublicOauthInstagramRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/instagram': typeof ApiPublicWebhooksInstagramRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/conversas': typeof AppConversasIndexRoute
   '/triagens': typeof AppTriagensIndexRoute
   '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
+  '/api/public/oauth/instagram': typeof ApiPublicOauthInstagramRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/instagram': typeof ApiPublicWebhooksInstagramRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
@@ -303,6 +311,7 @@ export interface FileRoutesById {
   '/_app/conversas/': typeof AppConversasIndexRoute
   '/_app/triagens/': typeof AppTriagensIndexRoute
   '/api/public/cron/resume-handoffs': typeof ApiPublicCronResumeHandoffsRoute
+  '/api/public/oauth/instagram': typeof ApiPublicOauthInstagramRoute
   '/api/public/webhooks/descubra-ms': typeof ApiPublicWebhooksDescubraMsRoute
   '/api/public/webhooks/instagram': typeof ApiPublicWebhooksInstagramRoute
   '/api/public/webhooks/whatsapp': typeof ApiPublicWebhooksWhatsappRoute
@@ -338,6 +347,7 @@ export interface FileRouteTypes {
     | '/conversas/'
     | '/triagens/'
     | '/api/public/cron/resume-handoffs'
+    | '/api/public/oauth/instagram'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/instagram'
     | '/api/public/webhooks/whatsapp'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/conversas'
     | '/triagens'
     | '/api/public/cron/resume-handoffs'
+    | '/api/public/oauth/instagram'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/instagram'
     | '/api/public/webhooks/whatsapp'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/_app/conversas/'
     | '/_app/triagens/'
     | '/api/public/cron/resume-handoffs'
+    | '/api/public/oauth/instagram'
     | '/api/public/webhooks/descubra-ms'
     | '/api/public/webhooks/instagram'
     | '/api/public/webhooks/whatsapp'
@@ -420,6 +432,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   TrocarSenhaRoute: typeof TrocarSenhaRoute
   ApiPublicCronResumeHandoffsRoute: typeof ApiPublicCronResumeHandoffsRoute
+  ApiPublicOauthInstagramRoute: typeof ApiPublicOauthInstagramRoute
   ApiPublicWebhooksDescubraMsRoute: typeof ApiPublicWebhooksDescubraMsRoute
   ApiPublicWebhooksInstagramRoute: typeof ApiPublicWebhooksInstagramRoute
   ApiPublicWebhooksWhatsappRoute: typeof ApiPublicWebhooksWhatsappRoute
@@ -630,6 +643,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronResumeHandoffsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/oauth/instagram': {
+      id: '/api/public/oauth/instagram'
+      path: '/api/public/oauth/instagram'
+      fullPath: '/api/public/oauth/instagram'
+      preLoaderRoute: typeof ApiPublicOauthInstagramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/descubra-ms': {
       id: '/api/public/webhooks/descubra-ms'
       path: '/api/public/webhooks/descubra-ms'
@@ -712,6 +732,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   TrocarSenhaRoute: TrocarSenhaRoute,
   ApiPublicCronResumeHandoffsRoute: ApiPublicCronResumeHandoffsRoute,
+  ApiPublicOauthInstagramRoute: ApiPublicOauthInstagramRoute,
   ApiPublicWebhooksDescubraMsRoute: ApiPublicWebhooksDescubraMsRoute,
   ApiPublicWebhooksInstagramRoute: ApiPublicWebhooksInstagramRoute,
   ApiPublicWebhooksWhatsappRoute: ApiPublicWebhooksWhatsappRoute,
