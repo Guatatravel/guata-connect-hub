@@ -1,5 +1,8 @@
 # Roadmap
 
+- [ ] Conexão do Instagram pelo Facebook com seleção segura de conta
+- [ ] Validar conexão e informar configuração Meta pendente
+
 - [x] Envio contextual de materiais da Base (sem mapa fora do assunto)
 - [x] Triagens: toast clicável e zerar contador ao abrir
 - [x] Centralizar Configurações e Conhecimento/Disparos
