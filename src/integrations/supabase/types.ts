@@ -419,6 +419,44 @@ export type Database = {
           },
         ]
       }
+      instagram_oauth_attempts: {
+        Row: {
+          accounts: Json
+          created_at: string
+          expires_at: string
+          id: string
+          organization_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          accounts?: Json
+          created_at?: string
+          expires_at: string
+          id: string
+          organization_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          accounts?: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instagram_oauth_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instagram_settings: {
         Row: {
           access_token: string | null
