@@ -50,6 +50,13 @@
       "when": 1793976714561,
       "tag": "0006_instagram_bridge",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794154521429,
+      "tag": "0007_instagram_facebook_oauth",
+      "breakpoints": true
     }
   ]
 }

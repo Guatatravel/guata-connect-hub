@@ -21,6 +21,7 @@ export const fetchInstagramSettings = createServerFn({ method: "GET" })
       enabled: s?.enabled ?? false,
       igAccountId: s?.ig_account_id ?? "",
       hasToken: Boolean(s?.access_token),
+      facebookReady: Boolean(process.env['META_APP_ID'] && process.env['META_APP_SECRET'] && process.env['INSTAGRAM_OAUTH_SESSION_SECRET']),
       whatsappNumber: s?.whatsapp_number ?? "",
       keywords: s?.keywords ?? ["quero", "eu quero", "valor", "roteiro", "pacote", "preço"],
       replyAnyQuestion: s?.reply_any_question ?? false,
