@@ -28,7 +28,7 @@ import {
   loginWithEmbeddedSignup,
   rememberEmbeddedSignupMessage,
   waitForEmbeddedSession,
-} from "@/lib/whatsapp-embedded.client";
+} from "@/lib/whatsapp-embedded.browser";
 import { embeddedSignupToast, type EmbeddedSignupSession } from "@/lib/whatsapp-embedded.shared";
 import { META_WHATSAPP_SETUP } from "@/lib/meta-setup-guide";
 import { useEffect, useRef, useState } from "react";
