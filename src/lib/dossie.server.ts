@@ -3,7 +3,7 @@
  * Server-only.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { chatCompletion } from "@/lib/ai-gateway.server";
+import { chatForOrganization } from "@/lib/ai-quota.server";
 
 export interface Dossie {
   resumo: string;
@@ -36,7 +36,18 @@ export async function generateDossie(sessionId: string): Promise<Dossie | null> 
     .join("\n")
     .slice(-12000);
 
-  const raw = await chatCompletion(
+  const { data: owner } = await supabaseAdmin
+    .from("sessions")
+    .select("organization_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const organizationId = owner?.organization_id as string | undefined;
+  if (!organizationId) return null;
+
+  let raw = "";
+  try {
+    raw = await chatForOrganization(
+      organizationId,
     [
       {
         role: "system",
@@ -49,7 +60,10 @@ export async function generateDossie(sessionId: string): Promise<Dossie | null> 
       },
     ],
     { temperature: 0.3 },
-  );
+    );
+  } catch {
+    return null;
+  }
 
   let dossie: Dossie;
   try {

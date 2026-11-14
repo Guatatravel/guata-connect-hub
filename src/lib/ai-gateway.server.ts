@@ -22,9 +22,9 @@ const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 async function gatewayRequest(
   messages: ChatMessage[] | ChatMessageParts[],
-  opts: { model?: string; maxTokens?: number; temperature?: number },
+  opts: { model?: string; maxTokens?: number; temperature?: number; apiKey?: string },
 ): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
+  const key = opts.apiKey?.trim() || process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY não configurada");
 
   const res = await fetch(GATEWAY_URL, {
@@ -65,7 +65,7 @@ async function gatewayRequest(
 
 export async function chatCompletion(
   messages: ChatMessage[],
-  opts: { model?: string; maxTokens?: number; temperature?: number } = {},
+  opts: { model?: string; maxTokens?: number; temperature?: number; apiKey?: string } = {},
 ): Promise<string> {
   return gatewayRequest(messages, opts);
 }

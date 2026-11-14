@@ -19,7 +19,7 @@ export const askCopilot = createServerFn({ method: "POST" })
     if (!isStaff) throw new Error("Acesso restrito à equipe.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { chatCompletion } = await import("@/lib/ai-gateway.server");
+    const { chatForOrganization } = await import("@/lib/ai-quota.server");
     const { assertSessionBelongsToUserOrg } = await import("@/lib/auth-context.server");
     const { quoteValidityForOrg } = await import("@/lib/passhub.server");
     const { quotePromptRules } = await import("@/lib/quote-format");
@@ -38,7 +38,8 @@ export const askCopilot = createServerFn({ method: "POST" })
       .slice(-10000);
 
     try {
-      const answer = await chatCompletion(
+      const answer = await chatForOrganization(
+        organizationId,
         [
           {
             role: "system",
@@ -57,7 +58,8 @@ export const askCopilot = createServerFn({ method: "POST" })
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "rate_limit") throw new Error("Muitas solicitações. Tente em alguns segundos.");
-      if (msg === "credits_exhausted") throw new Error("Créditos de IA esgotados.");
+      if (msg === "credits_exhausted") throw new Error("Créditos de IA esgotados. Volta no dia 10, ou quando a Lovable liberar.");
+      if (msg === "ai_quota") throw new Error("O teto de respostas desta agência acabou. Volta no dia 10.");
       throw new Error("Falha ao consultar o Copiloto.");
     }
   });

@@ -25,6 +25,7 @@ import {
   setSoundEnabled,
 } from "@/hooks/use-realtime-notifications";
 import { QuickRepliesSettings } from "@/components/guata/quick-replies-settings";
+import { AiQuotaSettings } from "@/components/guata/ai-quota-settings";
 import { AccountDangerZone } from "@/components/guata/account-danger-zone";
 
 // URL pública estável (não muda ao renomear o projeto).
@@ -117,6 +118,8 @@ function ConfigPage() {
       </div>
 
       <QuickRepliesSettings />
+
+      <AiQuotaSettings />
 
       <Card className="rounded-2xl border-primary/20 bg-primary/5">
         <CardContent className="pt-6 flex gap-3 items-start text-sm">

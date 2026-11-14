@@ -784,6 +784,66 @@ export type Database = {
           },
         ]
       }
+      organization_ai_settings: {
+        Row: {
+          api_key: string | null
+          credits_blocked_period: string | null
+          organization_id: string
+          updated_at: string
+          use_own_key: boolean
+        }
+        Insert: {
+          api_key?: string | null
+          credits_blocked_period?: string | null
+          organization_id: string
+          updated_at?: string
+          use_own_key?: boolean
+        }
+        Update: {
+          api_key?: string | null
+          credits_blocked_period?: string | null
+          organization_id?: string
+          updated_at?: string
+          use_own_key?: boolean
+        }
+        Relationships: []
+      }
+      organization_ai_usage: {
+        Row: {
+          calls: number
+          organization_id: string
+          period_key: string
+        }
+        Insert: {
+          calls?: number
+          organization_id: string
+          period_key: string
+        }
+        Update: {
+          calls?: number
+          organization_id?: string
+          period_key?: string
+        }
+        Relationships: []
+      }
+      platform_ai_policy: {
+        Row: {
+          credits_blocked_period: string | null
+          id: number
+          reply_cap: number | null
+        }
+        Insert: {
+          credits_blocked_period?: string | null
+          id: number
+          reply_cap?: number | null
+        }
+        Update: {
+          credits_blocked_period?: string | null
+          id?: number
+          reply_cap?: number | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active_organization_id: string | null

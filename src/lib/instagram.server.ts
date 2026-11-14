@@ -53,10 +53,16 @@ async function graphPost(path: string, token: string, body: unknown) {
   return res.json();
 }
 
-async function writeDm(commentText: string, username: string, extra: string | null): Promise<string> {
-  const { chatCompletion } = await import("@/lib/ai-gateway.server");
+async function writeDm(
+  organizationId: string,
+  commentText: string,
+  username: string,
+  extra: string | null,
+): Promise<string> {
+  const { chatForOrganization } = await import("@/lib/ai-quota.server");
   try {
-    const out = await chatCompletion(
+    const out = await chatForOrganization(
+      organizationId,
       [
         {
           role: "system",
@@ -119,7 +125,7 @@ export async function handleIgComment(input: {
     );
     await graphPost(`/${input.commentId}/replies`, s.access_token, { message: reply });
 
-    const dm = await writeDm(input.text, input.username, s.dm_extra);
+    const dm = await writeDm(s.organization_id, input.text, input.username, s.dm_extra);
     const link = whatsappLink(s.whatsapp_number, `Olá! Vim pelo Instagram: "${input.text.slice(0, 120)}"`);
     await graphPost(`/${s.ig_account_id}/messages`, s.access_token, {
       recipient: { comment_id: input.commentId },

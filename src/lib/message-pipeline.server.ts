@@ -9,7 +9,6 @@ import {
   listDescubraEvents,
   isDescubraConfigured,
 } from "@/integrations/descubra/admin.server";
-import { chatCompletion } from "@/lib/ai-gateway.server";
 import { quotePromptRules } from "@/lib/quote-format";
 import { reservationPromptRules } from "@/lib/reservation-rules";
 import { quoteValidityForOrg } from "@/lib/passhub.server";
@@ -523,7 +522,9 @@ async function answerTurismo(
           .join("\n")
       : "");
 
-  const raw = await chatCompletion(
+  const { chatForOrganization } = await import("@/lib/ai-quota.server");
+  const raw = await chatForOrganization(
+    orgId,
     [{ role: "system", content: persona + context + whatsappRules }, ...history],
     {
       maxTokens: 1400,

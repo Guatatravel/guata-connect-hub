@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtimeNotifications } from "@/hooks/use-realtime-notifications";
 import { fetchPanelAccessGate } from "@/lib/organizations.functions";
+import { AiQuotaBanner } from "@/components/guata/ai-quota-settings";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -86,6 +87,7 @@ function AppLayoutInner({
             </div>
           </header>
           <main className="flex-1 p-6">
+            <AiQuotaBanner />
             <Outlet />
           </main>
         </SidebarInset>
