@@ -44,9 +44,9 @@ export function embeddedLoginOptions(configId = EMBEDDED_SIGNUP_CONFIG_ID) {
     response_type: "code" as const,
     override_default_response_type: true,
     extras: {
-      feature: "whatsapp_embedded_signup" as const,
-      version: 2 as const,
-      sessionInfoVersion: 2 as const,
+      setup: {},
+      featureType: "whatsapp_business_app_onboarding" as const,
+      sessionInfoVersion: "3" as const,
     },
   };
 }

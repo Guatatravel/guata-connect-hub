@@ -27,7 +27,11 @@ describe("WhatsApp embedded signup", () => {
       config_id: "1148937487787969",
       response_type: "code",
       override_default_response_type: true,
-      extras: { feature: "whatsapp_embedded_signup", version: 2, sessionInfoVersion: 2 },
+      extras: {
+        setup: {},
+        featureType: "whatsapp_business_app_onboarding",
+        sessionInfoVersion: "3",
+      },
     });
   });
 
