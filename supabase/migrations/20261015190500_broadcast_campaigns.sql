@@ -70,10 +70,6 @@ create policy "staff upload campaigns bucket"
     and public.is_staff (auth.uid ())
   );
 
-create policy "public read campaigns bucket"
-  on storage.objects for select
-  using (bucket_id = 'campaigns');
-
 create policy "staff delete campaigns bucket"
   on storage.objects for delete
   using (

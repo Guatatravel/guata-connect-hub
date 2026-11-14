@@ -71,6 +71,13 @@
       "when": 1794300001000,
       "tag": "0009_hide_customer_phones_from_client",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794300002000,
+      "tag": "0010_campaigns_bucket_no_public_list",
+      "breakpoints": true
     }
   ]
 }
