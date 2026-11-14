@@ -24,10 +24,20 @@ async function authorizedOrganization(userId: string): Promise<string> {
 export const fetchWhatsAppEmbeddedState = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { resolveOrganizationForUser } = await import("./organizations.server");
+    const { resolveOrganizationForUser, userCanManageOrgWhatsApp } = await import("./organizations.server");
     const { readEmbeddedSignupState } = await import("./whatsapp-embedded.server");
+    const { connectionForViewer } = await import("./whatsapp-embedded.shared");
     const orgId = await resolveOrganizationForUser(context.userId);
-    return readEmbeddedSignupState(orgId);
+    const canManage = await userCanManageOrgWhatsApp(context.userId, orgId);
+    const state = await readEmbeddedSignupState(orgId);
+    if (canManage) return { ...state, canManage: true };
+    return {
+      appId: "",
+      configId: "",
+      ready: false,
+      canManage: false,
+      connection: connectionForViewer(state.connection, false),
+    };
   });
 
 export const completeWhatsAppEmbeddedSignup = createServerFn({ method: "POST" })

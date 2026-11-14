@@ -29,6 +29,7 @@ export interface WhatsAppEmbeddedState {
   appId: string;
   configId: string;
   ready: boolean;
+  canManage: boolean;
   connection: WhatsAppConnectionView;
 }
 
@@ -48,7 +49,7 @@ export function readEmbeddedConfig(): { appId: string; configId: string; ready: 
 
 export async function readEmbeddedSignupState(organizationId: string): Promise<WhatsAppEmbeddedState> {
   const config = readEmbeddedConfig();
-  return { ...config, connection: await readOfficialConnection(organizationId) };
+  return { ...config, canManage: true, connection: await readOfficialConnection(organizationId) };
 }
 
 export async function completeEmbeddedSignup(

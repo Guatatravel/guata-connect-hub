@@ -211,6 +211,7 @@ function ConectarMeta() {
   };
 
   const connection = embedded.data?.connection;
+  const canManage = embedded.data?.canManage ?? data?.canManageWhatsApp;
   const official = data?.channels.filter((ch) => ch.line === "descubra").slice(0, 1) ?? [];
 
   return (
@@ -244,7 +245,7 @@ function ConectarMeta() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          {connection?.connected && (
+          {connection?.connected && canManage !== false && (
             <p className="text-foreground">
               {connection.displayPhone
                 ? `Número conectado: ${connection.displayPhone}`
@@ -252,23 +253,32 @@ function ConectarMeta() {
               {connection.verifiedName ? ` · ${connection.verifiedName}` : ""}
             </p>
           )}
+          {connection?.connected && canManage === false && (
+            <p className="text-foreground">A linha oficial desta agência está conectada.</p>
+          )}
           <p className="text-muted-foreground">
             Status, etiqueta do aplicativo e catálogo continuam no celular. Guias, quadro e follow-up ficam neste painel.
           </p>
-          <Button
-            className="rounded-xl"
-            disabled={connecting || embedded.isLoading || (Boolean(embedded.data?.ready) && !sdkReady)}
-            onClick={() => void connect()}
-          >
-            {connecting ? <Loader2 className="animate-spin" /> : <WhatsAppIcon />}
-            Conectar WhatsApp via Meta
-          </Button>
+          {canManage === false ? (
+            <p className="text-xs text-muted-foreground">
+              Somente o dono ou administrador da agência vê o número e pode conectar o WhatsApp.
+            </p>
+          ) : (
+            <Button
+              className="rounded-xl"
+              disabled={connecting || embedded.isLoading || (Boolean(embedded.data?.ready) && !sdkReady)}
+              onClick={() => void connect()}
+            >
+              {connecting ? <Loader2 className="animate-spin" /> : <WhatsAppIcon />}
+              Conectar WhatsApp via Meta
+            </Button>
+          )}
           {embedded.isError && (
             <p className="text-xs text-destructive">
               {embedded.error instanceof Error ? embedded.error.message : "Não foi possível carregar a conexão."}
             </p>
           )}
-          {!embedded.isLoading && embedded.data && !embedded.data.ready && (
+          {canManage && !embedded.isLoading && embedded.data && !embedded.data.ready && (
             <p className="text-xs text-muted-foreground">
               A conexão oficial aguarda a configuração do aplicativo Meta no servidor.
             </p>
@@ -279,6 +289,7 @@ function ConectarMeta() {
         </CardContent>
       </Card>
 
+      {canManage !== false && (
       <Accordion type="single" collapsible className="rounded-2xl border bg-card px-6">
         <AccordionItem value="manual" className="border-b-0">
           <AccordionTrigger>Configuração Manual Avançada</AccordionTrigger>
@@ -328,6 +339,7 @@ function ConectarMeta() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      )}
     </div>
   );
 }

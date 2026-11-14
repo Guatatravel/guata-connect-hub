@@ -131,6 +131,21 @@ export function pickPhoneNumber(preferred: string | undefined, phones: GraphPhon
   throw new Error("Há mais de um número nesta conta. Conclua o cadastro escolhendo o número da agência.");
 }
 
+/** Consultor vê só se a linha está ativa. Número, nome e ids ficam com o administrador. */
+export function connectionForViewer(
+  connection: WhatsAppConnectionView,
+  canManage: boolean,
+): WhatsAppConnectionView {
+  if (canManage) return connection;
+  return {
+    connected: connection.connected,
+    displayPhone: null,
+    verifiedName: null,
+    phoneNumberId: null,
+    wabaId: null,
+  };
+}
+
 /** O navegador só recebe o número e os ids. O token fica de fora de propósito. */
 export function publicWhatsAppConnection(input: {
   accessToken?: string;

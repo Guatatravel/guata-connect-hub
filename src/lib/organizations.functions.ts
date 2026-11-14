@@ -85,6 +85,10 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
     const hasViagensChannel = channels.some(
       (c) => c.line === "viagens" && Boolean(c.phone_number_id?.trim()),
     );
+    const canManageWhatsApp = await userCanManageOrgWhatsApp(context.userId, orgId);
+    const visibleChannels = canManageWhatsApp
+      ? channels
+      : channels.map((channel) => ({ ...channel, waba_id: null, phone_number_id: null }));
     const accessLiberado = await isOrganizationAccessLiberado(orgId);
     return {
       organization: {
@@ -96,7 +100,8 @@ export const fetchOrganizationContext = createServerFn({ method: "GET" })
         accessLiberado,
       },
       hasViagensChannel,
-      channels,
+      canManageWhatsApp,
+      channels: visibleChannels,
     };
   });
 

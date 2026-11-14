@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  connectionForViewer,
   embeddedLoginOptions,
   metaConnectionError,
   embeddedSignupToast,
@@ -91,5 +92,22 @@ describe("WhatsApp embedded signup", () => {
       verifiedName: null,
     });
     expect(metaConnectionError(403, { error: { message: "permission denied" } })).toMatch(/permiss/);
+  });
+
+  test("members do not receive the phone, profile or account ids", () => {
+    const full = publicWhatsAppConnection({
+      phoneNumberId: "444455556666",
+      wabaId: "111122223333",
+      displayPhone: "+55 67 99999-0000",
+      verifiedName: "Agência",
+    });
+    expect(connectionForViewer(full, false)).toEqual({
+      connected: true,
+      displayPhone: null,
+      verifiedName: null,
+      phoneNumberId: null,
+      wabaId: null,
+    });
+    expect(connectionForViewer(full, true)).toEqual(full);
   });
 });
