@@ -81,10 +81,10 @@ async function resolveStaffName(userId: string | null): Promise<string | null> {
   if (!userId) return null;
   const { data } = await supabaseAdmin
     .from("profiles")
-    .select("name, email")
+    .select("name")
     .eq("id", userId)
     .maybeSingle();
-  return data?.name?.trim() || data?.email || null;
+  return data?.name?.trim() || null;
 }
 
 // =========================================================
@@ -827,9 +827,9 @@ async function hydrateTriages(rows: Array<Record<string, unknown>>) {
     assignedIds.length
       ? supabaseAdmin
           .from("profiles")
-          .select("id, name, email")
+          .select("id, name")
           .in("id", assignedIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; name: string; email: string }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
   ]);
   const sMap = new Map((sess ?? []).map((s) => [s.id, s]));
   const pMap = new Map((profs ?? []).map((p) => [p.id, p]));
@@ -858,7 +858,7 @@ async function hydrateTriages(rows: Array<Record<string, unknown>>) {
           : undefined,
       status: t.status === "aberta" ? "novo" : (t.status as string),
       assignedTo: (t.assigned_to as string) ?? undefined,
-      assignedToName: p ? (p.name?.trim() || p.email) : undefined,
+      assignedToName: p?.name?.trim() || undefined,
       notes: (t.notes as string) ?? undefined,
       sessionId: t.session_id as string,
       createdAt: t.created_at as string,
@@ -1220,12 +1220,12 @@ export const fetchStaff = createServerFn({ method: "GET" })
     if (!ids.length) return [] as Array<{ id: string; name: string; role: string }>;
     const { data: profs } = await supabaseAdmin
       .from("profiles")
-      .select("id, name, email")
+      .select("id, name")
       .in("id", ids);
     const roleByUser = new Map((roles ?? []).map((r) => [r.user_id, r.role]));
     return (profs ?? []).map((p) => ({
       id: p.id,
-      name: p.name?.trim() || p.email,
+      name: p.name?.trim() || "Consultor",
       role: roleByUser.get(p.id) ?? "consultor",
     }));
   });
