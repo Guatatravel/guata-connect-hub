@@ -1,19 +1,37 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { toast } from "sonner";
 import {
   fetchOrganizationContext,
   saveWhatsAppChannel,
 } from "@/lib/organizations.functions";
-import { useState } from "react";
+import {
+  completeWhatsAppEmbeddedSignup,
+  fetchWhatsAppEmbeddedState,
+} from "@/lib/whatsapp-embedded.functions";
+import {
+  loadFacebookSdk,
+  loginWithEmbeddedSignup,
+  rememberEmbeddedSignupMessage,
+  waitForEmbeddedSession,
+} from "@/lib/whatsapp-embedded.client";
+import { embeddedSignupToast, type EmbeddedSignupSession } from "@/lib/whatsapp-embedded.shared";
 import { META_WHATSAPP_SETUP } from "@/lib/meta-setup-guide";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/_app/conectar-meta")({
   head: () => ({
@@ -24,6 +42,14 @@ export const Route = createFileRoute("/_app/conectar-meta")({
   }),
   component: ConectarMeta,
 });
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12.04 2C6.58 2 2.15 6.4 2.15 11.83c0 1.74.46 3.44 1.34 4.94L2 22l5.39-1.41a10.1 10.1 0 0 0 4.65 1.12h.01c5.46 0 9.89-4.4 9.89-9.83C21.94 6.4 17.5 2 12.04 2zm5.76 14.15c-.24.68-1.4 1.3-1.94 1.38-.5.08-1.12.11-1.81-.11-.42-.14-.95-.31-1.64-.6-2.88-1.24-4.76-4.14-4.9-4.33-.14-.19-1.16-1.54-1.16-2.94 0-1.4.73-2.09 1-2.37.24-.26.64-.38.96-.38.12 0 .22 0 .32.01.28.01.42-.04.66.5.24.56.82 1.94.89 2.08.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.16-.29.37-.42.49-.14.14-.28.28-.12.55.16.26.7 1.15 1.5 1.86 1.03.92 1.9 1.2 2.17 1.34.26.14.42.12.58-.07.16-.19.66-.77.84-1.03.17-.26.35-.22.58-.13.24.09 1.5.71 1.76.84.26.12.43.19.5.29.06.1.06.6-.18 1.28z" />
+    </svg>
+  );
+}
 
 function ChannelForm({
   line,
@@ -59,52 +85,133 @@ function ChannelForm({
       toast.success(`Canal ${label} salvo`);
       setToken("");
       qc.invalidateQueries({ queryKey: ["org-context"] });
+      qc.invalidateQueries({ queryKey: ["whatsapp-embedded"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   return (
-    <Card className="rounded-2xl">
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">{label}</CardTitle>
+    <div className="space-y-3 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-medium text-foreground">{label}</p>
         <Badge variant="outline">{initial.has_token ? "Token salvo" : "Usando configuração do servidor"}</Badge>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <div className="space-y-1">
-          <Label>WhatsApp Business Account ID</Label>
-          <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
-        </div>
-        <div className="space-y-1">
-          <Label>Phone Number ID</Label>
-          <Input value={phoneId} onChange={(e) => setPhoneId(e.target.value)} placeholder="ID do número na Meta" />
-        </div>
-        <div className="space-y-1">
-          <Label>Access Token {initial.has_token ? "(deixe vazio para manter)" : ""}</Label>
-          <Input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="Token permanente"
-            autoComplete="off"
-          />
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Ao salvar, o Guatá passa a receber e responder as mensagens por este número.
-        </p>
-        <Button disabled={mut.isPending} onClick={() => mut.mutate()}>
-          Salvar canal
-        </Button>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="space-y-1">
+        <Label>WhatsApp Business Account ID</Label>
+        <Input value={wabaId} onChange={(e) => setWabaId(e.target.value)} placeholder="WABA ID" />
+      </div>
+      <div className="space-y-1">
+        <Label>Phone Number ID</Label>
+        <Input value={phoneId} onChange={(e) => setPhoneId(e.target.value)} placeholder="ID do número na Meta" />
+      </div>
+      <div className="space-y-1">
+        <Label>Access Token {initial.has_token ? "(deixe vazio para manter)" : ""}</Label>
+        <Input
+          type="password"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="Token permanente"
+          autoComplete="off"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Ao salvar, o Guatá passa a receber e responder as mensagens por este número.
+      </p>
+      <Button disabled={mut.isPending} onClick={() => mut.mutate()}>
+        Salvar canal
+      </Button>
+    </div>
   );
 }
 
 function ConectarMeta() {
+  const qc = useQueryClient();
   const fetchOrg = useServerFn(fetchOrganizationContext);
+  const fetchEmbedded = useServerFn(fetchWhatsAppEmbeddedState);
+  const completeSignup = useServerFn(completeWhatsAppEmbeddedSignup);
+  const sessionRef = useRef<EmbeddedSignupSession | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [sdkReady, setSdkReady] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ["org-context"],
     queryFn: () => fetchOrg(),
   });
+  const embedded = useQuery({
+    queryKey: ["whatsapp-embedded"],
+    queryFn: () => fetchEmbedded(),
+  });
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const session = rememberEmbeddedSignupMessage(event.origin, event.data);
+      if (session) sessionRef.current = session;
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    const appId = embedded.data?.appId;
+    if (!embedded.data?.ready || !appId) return;
+    let cancelled = false;
+    loadFacebookSdk(appId)
+      .then(() => {
+        if (!cancelled) setSdkReady(true);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "Não foi possível carregar o Facebook.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [embedded.data?.appId, embedded.data?.ready]);
+
+  const connect = async () => {
+    const state = embedded.data;
+    if (!state?.ready || !state.appId) {
+      toast.error("A conexão oficial aguarda a configuração do aplicativo Meta.");
+      return;
+    }
+    if (!sdkReady) {
+      toast.error("O Facebook ainda está carregando. Aguarde um instante e tente de novo.");
+      return;
+    }
+    setConnecting(true);
+    sessionRef.current = null;
+    try {
+      const response = await loginWithEmbeddedSignup(state.configId);
+      const code = response.authResponse?.code;
+      if (!code) {
+        const session = await waitForEmbeddedSession(() => sessionRef.current);
+        const message = embeddedSignupToast(session, true);
+        if (session?.event === "CANCEL") toast.info(message ?? "Conexão cancelada na janela da Meta.");
+        else toast.error(message ?? "A janela da Meta foi fechada antes de concluir a conexão.");
+        return;
+      }
+      const session = await waitForEmbeddedSession(() => sessionRef.current);
+      const result = await completeSignup({
+        data: {
+          code,
+          ...(session?.wabaId ? { wabaId: session.wabaId } : {}),
+          ...(session?.phoneNumberId ? { phoneNumberId: session.phoneNumberId } : {}),
+        },
+      });
+      await qc.invalidateQueries({ queryKey: ["org-context"] });
+      await qc.invalidateQueries({ queryKey: ["whatsapp-embedded"] });
+      toast.success(
+        result.displayPhone ? `WhatsApp ${result.displayPhone} conectado` : "WhatsApp oficial conectado",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível conectar o WhatsApp.");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const connection = embedded.data?.connection;
+  const official = data?.channels.filter((ch) => ch.line === "descubra").slice(0, 1) ?? [];
 
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
@@ -124,78 +231,103 @@ function ConectarMeta() {
         </p>
       </div>
 
-      <Card className="rounded-2xl">
+      <Card className="rounded-2xl border-primary/30">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Celular e painel no mesmo número</CardTitle>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Conectar WhatsApp Oficial (com Coexistência)</CardTitle>
+              <CardDescription>
+                Mantenha o WhatsApp Business funcionando no seu celular e conecte simultaneamente ao Guatá Channel sem perder conversas.
+              </CardDescription>
+            </div>
+            {connection?.connected && <Badge>Coexistência Ativa</Badge>}
+          </div>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            A coexistência oficial deixa a conversa no WhatsApp Business do celular e nesta central.
-            Status, etiqueta do aplicativo e catálogo continuam só no celular. Guias, quadro e
-            follow-up ficam aqui.
+        <CardContent className="space-y-3 text-sm">
+          {connection?.connected && (
+            <p className="text-foreground">
+              {connection.displayPhone
+                ? `Número conectado: ${connection.displayPhone}`
+                : "Número oficial salvo nesta organização."}
+              {connection.verifiedName ? ` · ${connection.verifiedName}` : ""}
+            </p>
+          )}
+          <p className="text-muted-foreground">
+            Status, etiqueta do aplicativo e catálogo continuam no celular. Guias, quadro e follow-up ficam neste painel.
           </p>
-          <p>
-            A Meta só libera esse espelhamento depois de homologar o Guatá Labs como provedor. Até
-            lá, o número conectado abaixo já recebe e envia pelo painel. Quando a homologação
-            existir, a agência confirma a sincronização na tela da Meta em até 24 horas. Mensagens
-            escritas no celular passam a aparecer nesta caixa.
-          </p>
+          <Button
+            className="rounded-xl"
+            disabled={connecting || embedded.isLoading || (Boolean(embedded.data?.ready) && !sdkReady)}
+            onClick={() => void connect()}
+          >
+            {connecting ? <Loader2 className="animate-spin" /> : <WhatsAppIcon />}
+            Conectar WhatsApp via Meta
+          </Button>
+          {embedded.isError && (
+            <p className="text-xs text-destructive">
+              {embedded.error instanceof Error ? embedded.error.message : "Não foi possível carregar a conexão."}
+            </p>
+          )}
+          {!embedded.isLoading && embedded.data && !embedded.data.ready && (
+            <p className="text-xs text-muted-foreground">
+              A conexão oficial aguarda a configuração do aplicativo Meta no servidor.
+            </p>
+          )}
+          {embedded.data?.ready && !sdkReady && !connecting && (
+            <p className="text-xs text-muted-foreground">Carregando o Facebook para abrir a janela da Meta.</p>
+          )}
         </CardContent>
       </Card>
 
-      {isLoading || !data ? (
-        <Skeleton className="h-48 rounded-2xl" />
-      ) : (
-        // Um único número oficial por organização (sem linhas duplicadas).
-        data.channels
-          .filter((ch) => ch.line === "descubra")
-          .slice(0, 1)
-          .map((ch) => (
-          <ChannelForm
-            key={ch.id}
-            line={ch.line}
-            label="Guatá — WhatsApp Oficial"
-            initial={{
-              waba_id: ch.waba_id,
-              phone_number_id: ch.phone_number_id,
-              has_token: ch.has_token,
-            }}
-          />
-        ))
-      )}
-
-      {META_WHATSAPP_SETUP.map((step) => (
-        <Card key={step.title} className="rounded-2xl">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{step.title}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground space-y-2">
-            <p>{step.body}</p>
-            {step.links.length > 0 && (
-              <ul className="list-disc pl-5 space-y-1">
-                {step.links.map((l) => (
-                  <li key={l.href}>
-                    {"internal" in l && l.internal ? (
-                      <Link to={l.href} className="text-primary underline">
-                        {l.label}
-                      </Link>
-                    ) : (
-                      <a
-                        href={l.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary underline"
-                      >
-                        {l.label}
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
+      <Accordion type="single" collapsible className="rounded-2xl border bg-card px-6">
+        <AccordionItem value="manual" className="border-b-0">
+          <AccordionTrigger>Configuração Manual Avançada</AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Use estes campos só se o cadastro pela Meta não estiver disponível. O token continua gravado apenas no servidor.
+            </p>
+            {isLoading || !data ? (
+              <Skeleton className="h-48 rounded-2xl" />
+            ) : (
+              official.map((ch) => (
+                <ChannelForm
+                  key={ch.id}
+                  line={ch.line}
+                  label="Guatá — WhatsApp Oficial"
+                  initial={{
+                    waba_id: ch.waba_id,
+                    phone_number_id: ch.phone_number_id,
+                    has_token: ch.has_token,
+                  }}
+                />
+              ))
             )}
-          </CardContent>
-        </Card>
-      ))}
+            {META_WHATSAPP_SETUP.map((step) => (
+              <div key={step.title} className="space-y-2 border-t pt-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">{step.title}</p>
+                <p>{step.body}</p>
+                {step.links.length > 0 && (
+                  <ul className="list-disc pl-5 space-y-1">
+                    {step.links.map((l) => (
+                      <li key={l.href}>
+                        {"internal" in l && l.internal ? (
+                          <Link to={l.href} className="text-primary underline">
+                            {l.label}
+                          </Link>
+                        ) : (
+                          <a href={l.href} target="_blank" rel="noreferrer" className="text-primary underline">
+                            {l.label}
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
