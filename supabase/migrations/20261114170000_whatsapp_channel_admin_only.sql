@@ -8,8 +8,16 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT public.is_platform_admin(_uid)
-    OR EXISTS (
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.user_roles ur
+    JOIN public.organization_members om ON om.user_id = ur.user_id
+    JOIN public.organizations o ON o.id = om.organization_id
+    WHERE ur.user_id = _uid
+      AND ur.role = 'admin'::public.app_role
+      AND o.is_guata = true
+  )
+  OR EXISTS (
       SELECT 1 FROM public.organization_members om
       WHERE om.user_id = _uid
         AND om.organization_id = _org_id
