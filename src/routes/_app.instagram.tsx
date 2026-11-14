@@ -205,6 +205,8 @@ function InstagramPage() {
             <Label>Selecione o Instagram da agência</Label>
             {accounts.map(account => <Button key={account.id} variant="outline" className="w-full justify-start h-auto whitespace-normal text-left py-3" disabled={disabled} onClick={() => selectAccount(account.id)}>{account.name}</Button>)}
           </div>}
+          {data.canEdit && (
+          <>
           <details className="space-y-3">
             <summary className="cursor-pointer text-sm text-muted-foreground">Conexão manual (avançado)</summary>
           <div className="space-y-1.5 mt-3">
@@ -224,8 +226,10 @@ function InstagramPage() {
           </details>
           <div className="space-y-1.5">
             <Label>WhatsApp de destino (com DDI)</Label>
-            <Input value={form.whatsappNumber} onChange={(e) => set("whatsappNumber", e.target.value)} disabled={disabled} placeholder="5567999999999" />
+            <Input value={form.whatsappNumber} onChange={(e) => set("whatsappNumber", e.target.value)} disabled={disabled} placeholder="DDI e número, só dígitos" />
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 

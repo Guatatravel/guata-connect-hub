@@ -10,6 +10,7 @@ export const fetchInstagramSettings = createServerFn({ method: "GET" })
     const { loadIgSettings } = await import("@/lib/instagram.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const orgId = await requireActiveOrganization(context.userId);
+    const canEdit = await userCanManageOrgWhatsApp(context.userId, orgId);
     const s = await loadIgSettings(orgId);
     const { data: events } = await supabaseAdmin
       .from("instagram_events")
@@ -19,10 +20,10 @@ export const fetchInstagramSettings = createServerFn({ method: "GET" })
       .limit(20);
     return {
       enabled: s?.enabled ?? false,
-      igAccountId: s?.ig_account_id ?? "",
+      igAccountId: canEdit ? (s?.ig_account_id ?? "") : "",
       hasToken: Boolean(s?.access_token),
       facebookReady: Boolean(process.env['META_APP_ID'] && process.env['META_APP_SECRET'] && process.env['INSTAGRAM_OAUTH_SESSION_SECRET']),
-      whatsappNumber: s?.whatsapp_number ?? "",
+      whatsappNumber: canEdit ? (s?.whatsapp_number ?? "") : "",
       keywords: s?.keywords ?? ["quero", "eu quero", "valor", "roteiro", "pacote", "preço"],
       replyAnyQuestion: s?.reply_any_question ?? false,
       commentReplies: s?.comment_replies ?? [
@@ -31,8 +32,10 @@ export const fetchInstagramSettings = createServerFn({ method: "GET" })
         "Oi @{nome}! Dá uma olhadinha no seu Direct 💚",
       ],
       dmExtra: s?.dm_extra ?? "",
-      events: events ?? [],
-      canEdit: await userCanManageOrgWhatsApp(context.userId, orgId),
+      events: canEdit
+        ? (events ?? [])
+        : (events ?? []).map((event) => ({ ...event, username: "" })),
+      canEdit,
     };
   });
 

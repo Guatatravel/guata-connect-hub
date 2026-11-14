@@ -57,6 +57,13 @@
       "when": 1794154521429,
       "tag": "0007_instagram_facebook_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0008_whatsapp_channel_admin_only",
+      "breakpoints": true
     }
   ]
 }

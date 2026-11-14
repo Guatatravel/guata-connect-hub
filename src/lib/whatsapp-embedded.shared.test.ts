@@ -62,10 +62,10 @@ describe("WhatsApp embedded signup", () => {
 
   test("selects the only phone or the one chosen in the popup", () => {
     const phones = [
-      { id: "444455556666", display_phone_number: "+55 67 99999-0000", verified_name: "Agência" },
-      { id: "777788889999", display_phone_number: "+55 67 98888-0000" },
+      { id: "444455556666", display_phone_number: "line-a", verified_name: "desk" },
+      { id: "777788889999", display_phone_number: "line-b" },
     ];
-    expect(pickPhoneNumber("777788889999", phones).display_phone_number).toBe("+55 67 98888-0000");
+    expect(pickPhoneNumber("777788889999", phones).display_phone_number).toBe("line-b");
     expect(pickPhoneNumber(undefined, [phones[0]!]).id).toBe("444455556666");
     expect(() => pickPhoneNumber(undefined, phones)).toThrow(/mais de um número/);
   });
@@ -82,13 +82,13 @@ describe("WhatsApp embedded signup", () => {
         accessToken: "business-token",
         phoneNumberId: "444455556666",
         wabaId: "111122223333",
-        displayPhone: "+55 67 99999-0000",
+        displayPhone: "line-a",
       }),
     ).toEqual({
       connected: true,
       phoneNumberId: "444455556666",
       wabaId: "111122223333",
-      displayPhone: "+55 67 99999-0000",
+      displayPhone: "line-a",
       verifiedName: null,
     });
     expect(metaConnectionError(403, { error: { message: "permission denied" } })).toMatch(/permiss/);
@@ -98,8 +98,8 @@ describe("WhatsApp embedded signup", () => {
     const full = publicWhatsAppConnection({
       phoneNumberId: "444455556666",
       wabaId: "111122223333",
-      displayPhone: "+55 67 99999-0000",
-      verifiedName: "Agência",
+      displayPhone: "line-a",
+      verifiedName: "desk",
     });
     expect(connectionForViewer(full, false)).toEqual({
       connected: true,

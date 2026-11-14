@@ -10,6 +10,7 @@ export const fetchPasshubSettings = createServerFn({ method: "GET" })
     const { userCanManageOrgWhatsApp } = await import("@/lib/organizations.server");
     const { loadPasshubSettings } = await import("@/lib/passhub.server");
     const orgId = await requireActiveOrganization(context.userId);
+    const canEdit = await userCanManageOrgWhatsApp(context.userId, orgId);
     const s = await loadPasshubSettings(orgId);
     const products = Object.fromEntries(
       PASSHUB_PRODUCTS.map((p) => {
@@ -23,9 +24,9 @@ export const fetchPasshubSettings = createServerFn({ method: "GET" })
       autoSearch: s.auto_search,
       autoPayment: s.auto_payment,
       quoteValidityMinutes: s.quote_validity_minutes,
-      agencyContactEmail: s.agency_contact_email ?? "",
-      agencyContactPhone: s.agency_contact_phone ?? "",
-      canEdit: await userCanManageOrgWhatsApp(context.userId, orgId),
+      agencyContactEmail: canEdit ? (s.agency_contact_email ?? "") : "",
+      agencyContactPhone: canEdit ? (s.agency_contact_phone ?? "") : "",
+      canEdit,
     };
   });
 

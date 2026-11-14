@@ -218,6 +218,7 @@ function PasshubPage() {
         })}
       </div>
 
+      {data.canEdit && (
       <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-lg">Contatos da agência nas reservas</CardTitle>
@@ -233,10 +234,11 @@ function PasshubPage() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ag-phone" className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Telefone da agência</Label>
-            <Input id="ag-phone" placeholder="(67) 99999-9999" value={form.agencyContactPhone} onChange={(e) => set("agencyContactPhone", e.target.value)} disabled={disabled} />
+            <Input id="ag-phone" placeholder="DDD e número" value={form.agencyContactPhone} onChange={(e) => set("agencyContactPhone", e.target.value)} disabled={disabled} />
           </div>
         </CardContent>
       </Card>
+      )}
 
       <Card className="rounded-2xl">
         <CardHeader>
