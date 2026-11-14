@@ -38,6 +38,7 @@ const UNSUPPORTED_REPLY =
 export async function normalizeWhatsAppInbound(
   line: Line,
   msg: Record<string, unknown>,
+  organizationId?: string,
 ): Promise<NormalizedInbound | null> {
   const type = String(msg.type ?? "");
   const phone = String(msg.from ?? "");
@@ -58,7 +59,7 @@ export async function normalizeWhatsAppInbound(
         inboundKind: "image",
       };
     }
-    const media = await downloadWhatsAppMedia(line, mediaId);
+    const media = await downloadWhatsAppMedia(line, mediaId, organizationId);
     if (!media) {
       const cap = image?.caption?.trim();
       return {
@@ -99,7 +100,7 @@ export async function normalizeWhatsAppInbound(
         inboundKind: "audio",
       };
     }
-    const media = await downloadWhatsAppMedia(line, mediaId);
+    const media = await downloadWhatsAppMedia(line, mediaId, organizationId);
     if (!media) {
       return {
         text: "(Cliente enviou um áudio — não foi possível baixar o arquivo.)",
@@ -133,7 +134,7 @@ export async function normalizeWhatsAppInbound(
     if (!mediaId) {
       return { text: cap || "(Cliente enviou um documento.)", inboundKind: "unsupported" };
     }
-    const media = await downloadWhatsAppMedia(line, mediaId);
+    const media = await downloadWhatsAppMedia(line, mediaId, organizationId);
     if (!media) {
       return {
         text: cap || "(Cliente enviou um documento — não foi possível abrir.)",
@@ -212,7 +213,7 @@ export async function normalizeWhatsAppInbound(
         inboundKind: "unsupported",
       };
     }
-    const media = await downloadWhatsAppMedia(line, mediaId);
+    const media = await downloadWhatsAppMedia(line, mediaId, organizationId);
     if (!media) {
       return {
         text: cap || "(Cliente enviou um vídeo — não foi possível baixar o arquivo.)",

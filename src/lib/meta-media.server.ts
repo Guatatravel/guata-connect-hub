@@ -3,6 +3,7 @@
  */
 import type { Line } from "@/lib/meta-send.server";
 import { metaAccessTokenForLine } from "@/lib/meta-env.server";
+import { resolveWhatsAppCredentials } from "@/lib/organizations.server";
 
 /** Vídeo do WhatsApp chega a 16 MB. Abaixo disso o painel guarda o arquivo. */
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -19,8 +20,11 @@ export interface DownloadedMedia {
 export async function downloadWhatsAppMedia(
   line: Line,
   mediaId: string,
+  organizationId?: string,
 ): Promise<DownloadedMedia | null> {
-  const token = lineEnv(line);
+  const token = organizationId
+    ? (await resolveWhatsAppCredentials(organizationId, line)).token
+    : lineEnv(line);
   if (!token || !mediaId) return null;
 
   const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {

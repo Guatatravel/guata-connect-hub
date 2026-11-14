@@ -97,7 +97,7 @@ export async function processWhatsAppWebhookDelivery(input: {
 
     let normalized;
     try {
-      normalized = await normalizeWhatsAppInbound(line, msg);
+      normalized = await normalizeWhatsAppInbound(line, msg, organizationId);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
       errors.push(`mídia: ${m}`);

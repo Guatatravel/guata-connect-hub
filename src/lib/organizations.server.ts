@@ -349,17 +349,13 @@ export async function resolveWhatsAppCredentials(
 
   const dbToken = (data?.access_token as string | undefined)?.trim();
   const dbPhone = (data?.phone_number_id as string | undefined)?.trim();
+  if (dbToken && dbPhone) return { token: dbToken, phoneId: dbPhone };
 
   const guataId = await getGuataOrganizationId();
-  if (organizationId !== guataId) {
-    if (dbToken && dbPhone) return { token: dbToken, phoneId: dbPhone };
-    return {};
-  }
+  if (organizationId !== guataId) return {};
 
   const envToken = metaAccessTokenForLine(line);
   const envPhone = metaPhoneNumberIdForLine(line);
-  if (envToken && envPhone) return { token: envToken, phoneId: envPhone };
-  if (dbToken && dbPhone) return { token: dbToken, phoneId: dbPhone };
   return {
     token: envToken || dbToken,
     phoneId: envPhone || dbPhone,
