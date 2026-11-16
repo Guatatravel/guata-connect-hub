@@ -3,6 +3,7 @@
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { metaAccessTokenForLine, metaPhoneNumberIdForLine } from "@/lib/meta-env.server";
+import { digitId } from "@/lib/whatsapp-embedded.shared";
 
 let cachedGuataOrgId: string | null = null;
 
@@ -295,7 +296,7 @@ export interface ResolvedWhatsAppChannel {
 export async function resolveChannelByPhoneNumberId(
   phoneNumberId: string,
 ): Promise<ResolvedWhatsAppChannel | null> {
-  const id = phoneNumberId.trim();
+  const id = digitId(phoneNumberId) ?? phoneNumberId.trim();
   if (!id) return null;
   const { data } = await supabaseAdmin
     .from("whatsapp_channels")
@@ -314,7 +315,7 @@ export async function resolveChannelByPhoneNumberId(
 export async function resolveWhatsAppInboundMeta(
   phoneNumberId: string,
 ): Promise<ResolvedWhatsAppChannel | null> {
-  const id = phoneNumberId.trim();
+  const id = digitId(phoneNumberId) ?? phoneNumberId.trim();
   if (!id) return null;
   const fromDb = await resolveChannelByPhoneNumberId(id);
   if (fromDb) return fromDb;

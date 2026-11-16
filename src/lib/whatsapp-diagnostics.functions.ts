@@ -12,6 +12,20 @@ export const getWhatsAppDiagnostics = createServerFn({ method: "POST" })
     return runWhatsAppDiagnostics();
   });
 
+export const resubscribeWhatsAppCoexistenceWebhooks = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { resolveOrganizationForUser } = await import("@/lib/organizations.server");
+    const { resubscribeCoexistenceWebhooksForOrg } = await import(
+      "@/lib/whatsapp-embedded.server"
+    );
+    await requireStaffUser(context.userId);
+    const orgId = await resolveOrganizationForUser(context.userId);
+    await resubscribeCoexistenceWebhooksForOrg(orgId);
+    return { ok: true as const };
+  });
+
 export const sendWhatsAppTestMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { to: string; text?: string; line?: string }) => ({

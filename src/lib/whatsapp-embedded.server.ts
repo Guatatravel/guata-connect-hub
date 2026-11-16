@@ -16,6 +16,7 @@ import {
   type GraphPhoneNumber,
   type WhatsAppConnectionView,
 } from "@/lib/whatsapp-embedded.shared";
+import { META_WHATSAPP_WEBHOOK_FIELDS } from "@/lib/whatsapp-webhook.shared";
 
 const OFFICIAL_LINE = "descubra" as const;
 
@@ -169,10 +170,17 @@ async function fetchPhone(phoneNumberId: string, accessToken: string): Promise<G
   return { ...json, id: digitId(json.id) ?? phoneNumberId };
 }
 
-async function subscribeApp(wabaId: string, accessToken: string): Promise<void> {
+export async function subscribeWhatsAppWebhookFields(
+  wabaId: string,
+  accessToken: string,
+): Promise<void> {
   const response = await fetch(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ subscribed_fields: [...META_WHATSAPP_WEBHOOK_FIELDS] }),
     signal: AbortSignal.timeout(20000),
   });
   if (response.ok) return;
@@ -183,6 +191,10 @@ async function subscribeApp(wabaId: string, accessToken: string): Promise<void> 
     parsed = null;
   }
   throw new Error(metaConnectionError(response.status, parsed));
+}
+
+async function subscribeApp(wabaId: string, accessToken: string): Promise<void> {
+  await subscribeWhatsAppWebhookFields(wabaId, accessToken);
 }
 
 async function assertPhoneAvailable(organizationId: string, phoneNumberId: string): Promise<void> {
@@ -252,4 +264,24 @@ function assertGraphUrl(value: string): URL {
     throw new Error("A Meta devolveu um endereço inesperado.");
   }
   return url;
+}
+
+/** Reinscreve messages + ecoo na WABA (útil após conectar coexistência antes deste ajuste). */
+export async function resubscribeCoexistenceWebhooksForOrg(
+  organizationId: string,
+): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_channels")
+    .select("waba_id, access_token")
+    .eq("organization_id", organizationId)
+    .eq("line", OFFICIAL_LINE)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const wabaId = digitId(data?.waba_id);
+  const token = data?.access_token?.trim();
+  if (!wabaId || !token) {
+    throw new Error("WhatsApp oficial desta agência ainda não tem WABA e token salvos.");
+  }
+  await subscribeWhatsAppWebhookFields(wabaId, token);
 }

@@ -10,7 +10,7 @@ import {
   metaAccessTokenForLine,
   metaPhoneNumberIdForLine,
 } from "@/lib/meta-env.server";
-import { META_WHATSAPP_WEBHOOK_FIELDS, webhookPreview } from "@/lib/whatsapp-webhook.shared";
+import { META_WHATSAPP_WEBHOOK_FIELDS, mergedWebhookPreview } from "@/lib/whatsapp-webhook.shared";
 
 export interface DeliveryRow {
   id: string;
@@ -131,10 +131,9 @@ async function checkToken(line: Line = "viagens"): Promise<WhatsAppDiagnostics["
   }
 }
 
-function previewOf(payload: any): string {
+function previewOf(payload: unknown): string {
   try {
-    const value = payload?.entry?.[0]?.changes?.[0]?.value ?? {};
-    const line = webhookPreview(value);
+    const line = mergedWebhookPreview(payload);
     if (line) return line;
     return JSON.stringify(payload).slice(0, 140);
   } catch {

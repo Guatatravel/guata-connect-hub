@@ -1,20 +1,36 @@
 /**
  * Processamento assíncrono do webhook Meta — após gravar a entrega e responder 200.
  */
-export async function processWhatsAppWebhookDelivery(input: {
-  deliveryId: string | null;
-  payload: unknown;
-  phoneNumberId: string;
-  inboundMeta: { organizationId: string; line: "descubra" | "viagens" } | null;
-}): Promise<void> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const value =
-    (input.payload as { entry?: { changes?: { value?: Record<string, unknown> }[] }[] })
-      ?.entry?.[0]?.changes?.[0]?.value ?? {};
-  const messages: unknown[] = Array.isArray(value.messages) ? value.messages : [];
-  const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
+import {
+  echoCustomerPhone,
+  echoTextFromRecord,
+  iterateWebhookChanges,
+  phoneEchoesFromValue,
+  phoneNumberIdFromValue,
+} from "@/lib/whatsapp-webhook.shared";
 
-  const errors: string[] = [];
+type InboundMeta = { organizationId: string; line: "descubra" | "viagens" };
+
+async function resolveMetaForValue(
+  value: Record<string, unknown>,
+  fallback: InboundMeta | null,
+): Promise<InboundMeta | null> {
+  const fromValue = phoneNumberIdFromValue(value);
+  if (fromValue) {
+    const { resolveWhatsAppInboundMeta } = await import("@/lib/organizations.server");
+    const resolved = await resolveWhatsAppInboundMeta(fromValue);
+    if (resolved) return resolved;
+  }
+  return fallback;
+}
+
+async function processInboundMessages(
+  value: Record<string, unknown>,
+  meta: InboundMeta | null,
+  errors: string[],
+): Promise<void> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const messages: unknown[] = Array.isArray(value.messages) ? value.messages : [];
   const { processMessage } = await import("@/lib/message-pipeline.server");
   const { normalizeWhatsAppInbound } = await import("@/lib/whatsapp-inbound.server");
 
@@ -92,8 +108,8 @@ export async function processWhatsAppWebhookDelivery(input: {
     const contactName = contacts?.[0]?.profile?.name;
     if (!phone) continue;
 
-    if (!input.inboundMeta) continue;
-    const { organizationId, line } = input.inboundMeta;
+    if (!meta) continue;
+    const { organizationId, line } = meta;
 
     let normalized;
     try {
@@ -129,46 +145,102 @@ export async function processWhatsAppWebhookDelivery(input: {
       console.error("[whatsapp-webhook] pipeline:", err);
     }
   }
+}
 
-  const { applyWhatsAppDeliveryStatus } = await import("@/lib/whatsapp-status.server");
-  const { phoneEchoesFromValue, echoTextFromRecord, echoCustomerPhone } = await import(
-    "@/lib/whatsapp-webhook.shared"
-  );
-  const echoes = phoneEchoesFromValue(value);
-  if (echoes.length) {
-    let meta = input.inboundMeta;
-    if (!meta && input.phoneNumberId) {
-      const { resolveWhatsAppInboundMeta } = await import("@/lib/organizations.server");
-      meta = await resolveWhatsAppInboundMeta(input.phoneNumberId);
-    }
-    if (!meta) {
-      errors.push(
-        `eco do celular: phone_number_id ${input.phoneNumberId || "?"} não vinculado a nenhuma agência`,
+async function processEchoRecord(
+  echo: Record<string, unknown>,
+  meta: InboundMeta,
+  errors: string[],
+): Promise<void> {
+  const echoType = String(echo?.type ?? "");
+
+  if (echoType === "revoke" && (echo.revoke as { original_message_id?: string })?.original_message_id) {
+    try {
+      const { applyWhatsAppMessageRevoke } = await import("@/lib/message-revisions.server");
+      await applyWhatsAppMessageRevoke(
+        String((echo.revoke as { original_message_id: string }).original_message_id),
       );
-    } else {
-      const { persistPhoneEcho } = await import("@/lib/crm.server");
-      for (const echo of echoes as Record<string, unknown>[]) {
-        const customer = echoCustomerPhone(echo);
-        if (!customer) {
-          errors.push("eco do celular sem destinatário (to)");
-          continue;
-        }
-        try {
-          const result = await persistPhoneEcho({
-            organizationId: meta.organizationId,
-            line: meta.line,
-            customerPhone: customer,
-            text: echoTextFromRecord(echo),
-            waMessageId: echo?.id ? String(echo.id) : undefined,
-          });
-          if (!result.ok) errors.push(`eco: ${result.reason ?? "falha ao gravar"}`);
-        } catch (err) {
-          console.error("[whatsapp-webhook] eco do celular:", err);
-          errors.push(err instanceof Error ? err.message : "eco do celular");
-        }
+    } catch (err) {
+      console.error("[whatsapp-webhook] eco revoke:", err);
+    }
+    return;
+  }
+
+  if (echoType === "edit" && (echo.edit as { original_message_id?: string })?.original_message_id) {
+    const inner = (echo.edit as { message?: Record<string, unknown> }).message ?? echo;
+    const newText = echoTextFromRecord(inner as Record<string, unknown>);
+    if (newText) {
+      try {
+        const { applyWhatsAppMessageEdit } = await import("@/lib/message-revisions.server");
+        await applyWhatsAppMessageEdit(
+          String((echo.edit as { original_message_id: string }).original_message_id),
+          newText,
+        );
+      } catch (err) {
+        console.error("[whatsapp-webhook] eco edit:", err);
       }
     }
+    return;
   }
+
+  const customer = echoCustomerPhone(echo);
+  if (!customer) {
+    errors.push("eco do celular sem destinatário (to)");
+    return;
+  }
+
+  const { persistPhoneEcho } = await import("@/lib/crm.server");
+  const text = echoTextFromRecord(echo);
+  if (!text && echoType !== "text") {
+    return;
+  }
+  try {
+    const result = await persistPhoneEcho({
+      organizationId: meta.organizationId,
+      line: meta.line,
+      customerPhone: customer,
+      text: text || "(mensagem pelo celular)",
+      waMessageId: echo?.id ? String(echo.id) : undefined,
+    });
+    if (!result.ok) errors.push(`eco: ${result.reason ?? "falha ao gravar"}`);
+  } catch (err) {
+    console.error("[whatsapp-webhook] eco do celular:", err);
+    errors.push(err instanceof Error ? err.message : "eco do celular");
+  }
+}
+
+async function processPhoneEchoes(
+  value: Record<string, unknown>,
+  fallbackMeta: InboundMeta | null,
+  phoneNumberIdHint: string,
+  errors: string[],
+): Promise<void> {
+  const echoes = phoneEchoesFromValue(value);
+  if (!echoes.length) return;
+
+  let meta = await resolveMetaForValue(value, fallbackMeta);
+  if (!meta && phoneNumberIdHint) {
+    const { resolveWhatsAppInboundMeta } = await import("@/lib/organizations.server");
+    meta = await resolveWhatsAppInboundMeta(phoneNumberIdHint);
+  }
+  if (!meta) {
+    errors.push(
+      `eco do celular: phone_number_id ${phoneNumberIdFromValue(value) || phoneNumberIdHint || "?"} não vinculado a nenhuma agência`,
+    );
+    return;
+  }
+
+  for (const echo of echoes as Record<string, unknown>[]) {
+    await processEchoRecord(echo, meta, errors);
+  }
+}
+
+async function processStatuses(
+  value: Record<string, unknown>,
+  errors: string[],
+): Promise<void> {
+  const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
+  const { applyWhatsAppDeliveryStatus } = await import("@/lib/whatsapp-status.server");
 
   for (const rawSt of statuses) {
     const st = rawSt as Record<string, unknown>;
@@ -184,6 +256,42 @@ export async function processWhatsAppWebhookDelivery(input: {
       await applyWhatsAppDeliveryStatus(waId, status, detail);
     } catch (err) {
       console.error("[whatsapp-webhook] status:", err);
+    }
+  }
+}
+
+async function processWebhookValue(
+  value: Record<string, unknown>,
+  fallbackMeta: InboundMeta | null,
+  phoneNumberIdHint: string,
+  errors: string[],
+): Promise<void> {
+  const meta = await resolveMetaForValue(value, fallbackMeta);
+  await processInboundMessages(value, meta, errors);
+  await processPhoneEchoes(value, fallbackMeta, phoneNumberIdHint, errors);
+  await processStatuses(value, errors);
+}
+
+export async function processWhatsAppWebhookDelivery(input: {
+  deliveryId: string | null;
+  payload: unknown;
+  phoneNumberId: string;
+  inboundMeta: InboundMeta | null;
+}): Promise<void> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const errors: string[] = [];
+  const slices = iterateWebhookChanges(input.payload);
+
+  if (slices.length === 0) {
+    const legacy =
+      (input.payload as { entry?: { changes?: { value?: Record<string, unknown> }[] }[] })
+        ?.entry?.[0]?.changes?.[0]?.value ?? null;
+    if (legacy) {
+      await processWebhookValue(legacy, input.inboundMeta, input.phoneNumberId, errors);
+    }
+  } else {
+    for (const { value } of slices) {
+      await processWebhookValue(value, input.inboundMeta, input.phoneNumberId, errors);
     }
   }
 

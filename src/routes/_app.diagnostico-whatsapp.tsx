@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   getWhatsAppDiagnostics,
+  resubscribeWhatsAppCoexistenceWebhooks,
   sendWhatsAppTestMessage,
 } from "@/lib/whatsapp-diagnostics.functions";
 
@@ -78,6 +79,7 @@ function Row({
 function DiagnosticoWhatsApp() {
   const run = useServerFn(getWhatsAppDiagnostics);
   const sendTest = useServerFn(sendWhatsAppTestMessage);
+  const resubscribe = useServerFn(resubscribeWhatsAppCoexistenceWebhooks);
   const [to, setTo] = useState("");
 
   const q = useQuery({
@@ -91,6 +93,18 @@ function DiagnosticoWhatsApp() {
     onSuccess: (r) => (r.ok ? toast.success(r.message) : toast.error(r.message)),
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Falha ao enviar"),
+  });
+
+  const resubscribeMutation = useMutation({
+    mutationFn: () => resubscribe(),
+    onSuccess: () => {
+      toast.success(
+        "Meta reinscrita: messages, message_echoes e smb_message_echoes. Mande um teste pelo celular.",
+      );
+      void q.refetch();
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Não foi possível reinscrever o webhook."),
   });
 
   const copy = async (s: string) => {
@@ -234,6 +248,20 @@ function DiagnosticoWhatsApp() {
                     : "Nenhum eco nos últimos 7 dias — a Meta não está avisando mensagens do celular. No app Meta, marque smb_message_echoes e message_echoes no webhook."
                 }
               />
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={resubscribeMutation.isPending}
+                  onClick={() => resubscribeMutation.mutate()}
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 mr-2 ${resubscribeMutation.isPending ? "animate-spin" : ""}`}
+                  />
+                  Reinscrever ecoo na Meta (coexistência)
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

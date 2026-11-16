@@ -43,16 +43,26 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
           payload = { _raw: body.slice(0, 2000) };
         }
 
-        const value =
-          (payload as { entry?: { changes?: { value?: Record<string, unknown> }[] }[] })?.entry?.[0]
-            ?.changes?.[0]?.value ?? {};
-        const phoneNumberId: string = String(
-          (value?.metadata as { phone_number_id?: string } | undefined)?.phone_number_id ?? "",
-        );
-        const { webhookEventKind } = await import("@/lib/whatsapp-webhook.shared");
-        const messages: unknown[] = Array.isArray(value.messages) ? value.messages : [];
-        const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
-        const eventKind = webhookEventKind(value);
+        const {
+          firstPhoneNumberIdFromPayload,
+          iterateWebhookChanges,
+          webhookEventKindFromPayload,
+        } = await import("@/lib/whatsapp-webhook.shared");
+        const phoneNumberId = firstPhoneNumberIdFromPayload(payload);
+        const eventKind = webhookEventKindFromPayload(payload);
+        const messageIds: string[] = [];
+        for (const { value } of iterateWebhookChanges(payload)) {
+          const messages = Array.isArray(value.messages) ? value.messages : [];
+          const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+          for (const m of messages) {
+            const id = String((m as { id?: string })?.id ?? "");
+            if (id) messageIds.push(id);
+          }
+          for (const s of statuses) {
+            const id = String((s as { id?: string })?.id ?? "");
+            if (id) messageIds.push(id);
+          }
+        }
 
         const { resolveWhatsAppInboundMeta } = await import("@/lib/organizations.server");
         const inboundMeta = phoneNumberId ? await resolveWhatsAppInboundMeta(phoneNumberId) : null;
@@ -70,10 +80,7 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
               phone_number_id: phoneNumberId || null,
               line: inboundMeta?.line ?? null,
               event_kind: eventKind,
-              message_ids: [
-                ...messages.map((m) => String((m as { id?: string })?.id ?? "")),
-                ...statuses.map((s) => String((s as { id?: string })?.id ?? "")),
-              ].filter(Boolean),
+              message_ids: messageIds,
               payload: payload as never,
               error: signatureOk ? null : "assinatura inválida",
             })
