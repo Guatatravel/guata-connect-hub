@@ -7,6 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { fetchAiQuota, saveAiQuota } from "@/lib/ai-quota.functions";
 
 export function AiQuotaSettings() {
@@ -18,8 +25,10 @@ export function AiQuotaSettings() {
   const [apiKey, setApiKey] = useState("");
   const [clearKey, setClearKey] = useState(false);
   const [capText, setCapText] = useState<string | null>(null);
+  const [aiProvider, setAiProvider] = useState<"auto" | "gemini" | "lovable" | null>(null);
 
   const own = useOwnKey ?? data?.useOwnKey ?? false;
+  const provider = aiProvider ?? (data?.aiProvider as "auto" | "gemini" | "lovable") ?? "auto";
   const cap = capText ?? (data?.replyCap === null || data?.replyCap === undefined ? "" : String(data.replyCap));
 
   const mut = useMutation({
@@ -30,6 +39,7 @@ export function AiQuotaSettings() {
           apiKey: apiKey.trim() || undefined,
           clearKey,
           replyCap: data?.canSetCap ? (cap.trim() === "" ? null : Number(cap)) : undefined,
+          aiProvider: provider,
         },
       }),
     onSuccess: () => {
@@ -52,10 +62,17 @@ export function AiQuotaSettings() {
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <p className="text-muted-foreground">
-          A Lovable inclui {data.includedCredits} créditos de IA por mês para o app inteiro, somando todas as
-          agências que usam a chave da Guatá. Depois disso ela usa os créditos gerais do plano, até recusar. Não há
-          um número de respostas publicado.
+          Com <strong>GEMINI_API_KEY</strong> no servidor, o Guatá prioriza o Google Gemini (cota gratuita do AI
+          Studio). Sem ela, usa a Lovable ({data.includedCredits} créditos de IA/mês no app). Chaves próprias da
+          agência: chaves <code className="text-xs">AIza…</code> vão para o Gemini; demais, para a Lovable.
         </p>
+        {(data.serverHasGemini || data.serverHasLovable) && (
+          <p className="text-xs text-muted-foreground">
+            Servidor: {data.serverHasGemini ? "Gemini configurado" : "Gemini ausente"}
+            {" · "}
+            {data.serverHasLovable ? "Lovable configurada" : "Lovable ausente"}
+          </p>
+        )}
         <p>
           Respostas neste período: <strong>{data.calls}</strong>. O contador zera em {data.resetsOn}.
         </p>
@@ -80,7 +97,23 @@ export function AiQuotaSettings() {
               />
             </div>
             <div className="space-y-1">
-              <Label>Chave da Lovable</Label>
+              <Label>Motor de IA</Label>
+              <Select
+                value={provider}
+                onValueChange={(v) => setAiProvider(v as typeof provider)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automático (Gemini se houver AIza ou GEMINI no servidor)</SelectItem>
+                  <SelectItem value="gemini">Sempre Gemini</SelectItem>
+                  <SelectItem value="lovable">Sempre Lovable</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Chave da agência (Lovable ou Gemini AI Studio)</Label>
               <Input
                 type="password"
                 value={apiKey}

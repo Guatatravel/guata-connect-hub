@@ -19,6 +19,7 @@ const saveSchema = z.object({
   apiKey: z.string().max(500).optional().nullable(),
   clearKey: z.boolean().optional(),
   replyCap: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  aiProvider: z.enum(["auto", "gemini", "lovable"]).optional(),
 });
 
 export const saveAiQuota = createServerFn({ method: "POST" })

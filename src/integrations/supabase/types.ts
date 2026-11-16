@@ -423,6 +423,7 @@ export type Database = {
         Row: {
           accounts: Json
           created_at: string
+          error_message: string | null
           expires_at: string
           id: string
           organization_id: string
@@ -432,6 +433,7 @@ export type Database = {
         Insert: {
           accounts?: Json
           created_at?: string
+          error_message?: string | null
           expires_at: string
           id: string
           organization_id: string
@@ -440,6 +442,7 @@ export type Database = {
         }
         Update: {
           accounts?: Json
+          error_message?: string | null
           created_at?: string
           expires_at?: string
           id?: string
@@ -786,6 +789,7 @@ export type Database = {
       }
       organization_ai_settings: {
         Row: {
+          ai_provider: string
           api_key: string | null
           credits_blocked_period: string | null
           organization_id: string
@@ -793,6 +797,7 @@ export type Database = {
           use_own_key: boolean
         }
         Insert: {
+          ai_provider?: string
           api_key?: string | null
           credits_blocked_period?: string | null
           organization_id: string
@@ -800,6 +805,7 @@ export type Database = {
           use_own_key?: boolean
         }
         Update: {
+          ai_provider?: string
           api_key?: string | null
           credits_blocked_period?: string | null
           organization_id?: string
@@ -1064,6 +1070,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      whatsapp_templates: {
+        Row: {
+          body_text: string
+          category: string
+          components: Json
+          created_at: string
+          id: string
+          language: string
+          meta_template_id: string | null
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          body_text?: string
+          category?: string
+          components?: Json
+          created_at?: string
+          id?: string
+          language?: string
+          meta_template_id?: string | null
+          name: string
+          organization_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          body_text?: string
+          category?: string
+          components?: Json
+          created_at?: string
+          id?: string
+          language?: string
+          meta_template_id?: string | null
+          name?: string
+          organization_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       whatsapp_channels: {
         Row: {

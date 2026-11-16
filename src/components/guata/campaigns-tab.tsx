@@ -26,6 +26,8 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
+import { WhatsappTemplatesPanel } from "@/components/guata/whatsapp-templates-panel";
+import { listWhatsappTemplatesFn } from "@/lib/whatsapp-templates.functions";
 import {
   campaignMetaStatusFn,
   createAndLaunchCampaignFn,
@@ -154,6 +156,15 @@ export function CampaignsTab() {
     queryKey: ["campaign-audience", line, audience],
     queryFn: () => previewFn({ data: { line, audience } }),
   });
+
+  const templatesFn = useServerFn(listWhatsappTemplatesFn);
+  const { data: waTemplates } = useQuery({
+    queryKey: ["whatsapp-templates"],
+    queryFn: () => templatesFn(),
+    enabled: sendMode === "template",
+  });
+
+  const approvedTemplates = (waTemplates ?? []).filter((t) => t.status === "APPROVED");
 
   const lineReady =
     line === "both"
@@ -297,6 +308,8 @@ export function CampaignsTab() {
 
   return (
     <div className="space-y-6">
+      <WhatsappTemplatesPanel />
+
       {!lineReady && meta && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -357,6 +370,44 @@ export function CampaignsTab() {
 
           {sendMode === "template" && (
             <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Modelo aprovado</Label>
+                {approvedTemplates.length > 0 ? (
+                  <Select
+                    value={
+                      approvedTemplates.some(
+                        (t) => t.name === templateName && t.language === templateLanguage,
+                      )
+                        ? `${templateName}::${templateLanguage}`
+                        : ""
+                    }
+                    onValueChange={(v) => {
+                      const [name, lang] = v.split("::");
+                      if (name) setTemplateName(name);
+                      if (lang) setTemplateLanguage(lang);
+                      const picked = approvedTemplates.find(
+                        (t) => t.name === name && t.language === lang,
+                      );
+                      if (picked?.body_text.includes("{{1}}")) setTemplateUsesName(true);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Escolha um modelo ou preencha abaixo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {approvedTemplates.map((t) => (
+                        <SelectItem key={t.id} value={`${t.name}::${t.language}`}>
+                          {t.name} · {t.language} ({t.status})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum modelo aprovado no painel. Sincronize na seção de modelos acima ou digite o nome manualmente.
+                  </p>
+                )}
+              </div>
               <div className="space-y-2">
                 <Label>Nome do template na Meta</Label>
                 <Input

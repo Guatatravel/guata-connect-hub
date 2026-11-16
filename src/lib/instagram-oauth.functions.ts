@@ -42,7 +42,11 @@ export const fetchInstagramOAuthResult = createServerFn({ method: "POST" })
     const { data: attempt } = await supabaseAdmin.from("instagram_oauth_attempts").select("*").eq("id", data.id).eq("user_id", context.userId).maybeSingle();
     if (!attempt || !validOAuthAttempt(attempt, context.userId, orgId)) throw new Error("A conexão expirou. Clique em conectar novamente.");
     const accounts = attempt.accounts as unknown as Array<{ id: string; pageId: string; name: string }>;
-    return { status: attempt.status, accounts: publicInstagramAccounts(accounts) };
+    return {
+      status: attempt.status,
+      accounts: publicInstagramAccounts(accounts),
+      errorMessage: attempt.error_message ?? null,
+    };
   });
 
 export const finishInstagramOAuth = createServerFn({ method: "POST" })

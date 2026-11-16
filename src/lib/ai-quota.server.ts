@@ -3,7 +3,7 @@
  * A Guatá não entra no teto de respostas. O crédito incluso da Lovable é da workspace.
  */
 import type { ChatMessage } from "@/lib/ai-gateway.server";
-import { chatCompletion } from "@/lib/ai-gateway.server";
+import { chatWithProvider, resolveAiProvider } from "@/lib/chat-provider.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getGuataOrganizationId } from "@/lib/organizations.server";
 import { aiPeriodKey, aiPeriodResetsOn, LOVABLE_INCLUDED_AI_CREDITS } from "@/lib/ai-quota.shared";
@@ -21,6 +21,9 @@ export interface AiQuotaNotice {
   isGuata: boolean;
   canEdit: boolean;
   canSetCap: boolean;
+  aiProvider: string;
+  serverHasGemini: boolean;
+  serverHasLovable: boolean;
 }
 
 async function policyRow() {
@@ -35,7 +38,7 @@ async function policyRow() {
 async function settingsRow(organizationId: string) {
   const { data } = await supabaseAdmin
     .from("organization_ai_settings")
-    .select("use_own_key, api_key, credits_blocked_period")
+    .select("use_own_key, api_key, credits_blocked_period, ai_provider")
     .eq("organization_id", organizationId)
     .maybeSingle();
   return data;
@@ -82,6 +85,9 @@ export async function loadAiQuotaNotice(
     isGuata,
     canEdit,
     canSetCap: isGuata && canEdit,
+    aiProvider: settings?.ai_provider ?? "auto",
+    serverHasGemini: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    serverHasLovable: Boolean(process.env.LOVABLE_API_KEY?.trim()),
   };
 }
 
@@ -135,15 +141,17 @@ export async function chatForOrganization(
 
   const settings = await settingsRow(organizationId);
   const ownKey = settings?.use_own_key ? settings.api_key?.trim() : "";
-  if (settings?.use_own_key && !ownKey) throw new Error("LOVABLE_API_KEY não configurada");
+  if (settings?.use_own_key && !ownKey) throw new Error("Chave de IA da agência não configurada");
+
+  const { provider, apiKey } = await resolveAiProvider(organizationId, settings);
 
   try {
-    const answer = await chatCompletion(messages, { ...opts, apiKey: ownKey || undefined });
+    const answer = await chatWithProvider(provider, apiKey, messages, opts);
     await clearBlocked(organizationId, Boolean(ownKey));
     await recordCall(organizationId, notice.periodKey);
     return answer;
   } catch (error) {
-    if (error instanceof Error && error.message === "credits_exhausted") {
+    if (error instanceof Error && (error.message === "credits_exhausted" || error.message === "rate_limit")) {
       await markBlocked(organizationId, Boolean(ownKey), notice.periodKey);
     }
     throw error;
@@ -152,7 +160,13 @@ export async function chatForOrganization(
 
 export async function saveAiQuotaSettings(
   organizationId: string,
-  input: { useOwnKey: boolean; apiKey?: string | null; clearKey?: boolean; replyCap?: number | null },
+  input: {
+    useOwnKey: boolean;
+    apiKey?: string | null;
+    clearKey?: boolean;
+    replyCap?: number | null;
+    aiProvider?: "auto" | "gemini" | "lovable";
+  },
   canSetCap: boolean,
 ): Promise<void> {
   const current = await settingsRow(organizationId);
@@ -160,11 +174,13 @@ export async function saveAiQuotaSettings(
   if (input.clearKey) apiKey = null;
   else if (input.apiKey?.trim()) apiKey = input.apiKey.trim();
   const useOwnKey = input.useOwnKey && Boolean(apiKey);
+  const aiProvider = input.aiProvider ?? current?.ai_provider ?? "auto";
   await supabaseAdmin.from("organization_ai_settings").upsert(
     {
       organization_id: organizationId,
       use_own_key: useOwnKey,
       api_key: apiKey,
+      ai_provider: aiProvider,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "organization_id" },

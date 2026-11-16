@@ -42,6 +42,9 @@ type Form = {
 
 const STATUS: Record<string, string> = { respondido: "Respondido", ignorado: "Ignorado", erro: "Erro", recebido: "Recebido" };
 
+const STABLE_PUBLIC_URL =
+  "https://project--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app";
+
 function InstagramPage() {
   const qc = useQueryClient();
   const fetchFn = useServerFn(fetchInstagramSettings);
@@ -70,7 +73,10 @@ function InstagramPage() {
           setConnecting(false);
           cancelled = true;
         } else if (result.status === "error") {
-          toast.error("O Facebook não concluiu a autorização. Confira as permissões e se o Instagram está ligado à Página.");
+          toast.error(
+            result.errorMessage ??
+              "O Facebook não concluiu a autorização. Confira as permissões e se o Instagram está ligado à Página.",
+          );
           setAttemptId(null);
           setConnecting(false);
         }
@@ -201,6 +207,12 @@ function InstagramPage() {
             {connecting && <Button variant="ghost" onClick={() => { setAttemptId(null); setConnecting(false); }}>Cancelar</Button>}
           </div>
           {!data.facebookReady && <p className="text-sm text-muted-foreground">A conexão pelo Facebook aguarda a configuração do aplicativo Meta.</p>}
+          {data.canEdit && (
+            <p className="text-xs text-muted-foreground break-all">
+              Webhook do app Meta (campo <strong>feed</strong> na Página):{" "}
+              <code>{`${STABLE_PUBLIC_URL}/api/public/webhooks/instagram`}</code>
+            </p>
+          )}
           {accounts.length > 0 && <div className="space-y-2">
             <Label>Selecione o Instagram da agência</Label>
             {accounts.map(account => <Button key={account.id} variant="outline" className="w-full justify-start h-auto whitespace-normal text-left py-3" disabled={disabled} onClick={() => selectAccount(account.id)}>{account.name}</Button>)}
