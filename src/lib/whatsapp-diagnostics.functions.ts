@@ -22,8 +22,8 @@ export const resubscribeWhatsAppCoexistenceWebhooks = createServerFn({ method: "
     );
     await requireStaffUser(context.userId);
     const orgId = await resolveOrganizationForUser(context.userId);
-    await resubscribeCoexistenceWebhooksForOrg(orgId);
-    return { ok: true as const };
+    const { callbackUrl } = await resubscribeCoexistenceWebhooksForOrg(orgId);
+    return { ok: true as const, callbackUrl };
   });
 
 export const sendWhatsAppTestMessage = createServerFn({ method: "POST" })

@@ -42,8 +42,9 @@ type Form = {
 
 const STATUS: Record<string, string> = { respondido: "Respondido", ignorado: "Ignorado", erro: "Erro", recebido: "Recebido" };
 
-const STABLE_PUBLIC_URL =
-  "https://project--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app";
+import { DEFAULT_PUBLIC_APP_ORIGIN } from "@/lib/public-app-url.shared";
+
+const STABLE_PUBLIC_URL = DEFAULT_PUBLIC_APP_ORIGIN;
 
 function InstagramPage() {
   const qc = useQueryClient();

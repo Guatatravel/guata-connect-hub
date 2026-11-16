@@ -16,6 +16,7 @@ import {
   type GraphPhoneNumber,
   type WhatsAppConnectionView,
 } from "@/lib/whatsapp-embedded.shared";
+import { serverWhatsAppWebhookUrl } from "@/lib/public-app-url.server";
 import { META_WHATSAPP_WEBHOOK_FIELDS } from "@/lib/whatsapp-webhook.shared";
 
 const OFFICIAL_LINE = "descubra" as const;
@@ -174,13 +175,40 @@ export async function subscribeWhatsAppWebhookFields(
   wabaId: string,
   accessToken: string,
 ): Promise<void> {
+  const verifyToken = process.env.META_VERIFY_TOKEN?.trim();
+  if (!verifyToken) {
+    throw new Error("META_VERIFY_TOKEN não configurado no servidor — necessário para ecoo na coexistência.");
+  }
+  const callbackUrl = serverWhatsAppWebhookUrl();
+
+  // 1) Garante que o app está inscrito na WABA.
+  const base = await fetch(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!base.ok) {
+    let parsed: unknown = null;
+    try {
+      parsed = await base.json();
+    } catch {
+      parsed = null;
+    }
+    throw new Error(metaConnectionError(base.status, parsed));
+  }
+
+  // 2) Override + campos (ecoo do celular vai direto para o painel).
   const response = await fetch(`${GRAPH}/${encodeURIComponent(wabaId)}/subscribed_apps`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ subscribed_fields: [...META_WHATSAPP_WEBHOOK_FIELDS] }),
+    body: JSON.stringify({
+      override_callback_uri: callbackUrl,
+      verify_token: verifyToken,
+      subscribed_fields: [...META_WHATSAPP_WEBHOOK_FIELDS],
+    }),
     signal: AbortSignal.timeout(20000),
   });
   if (response.ok) return;
@@ -269,7 +297,7 @@ function assertGraphUrl(value: string): URL {
 /** Reinscreve messages + ecoo na WABA (útil após conectar coexistência antes deste ajuste). */
 export async function resubscribeCoexistenceWebhooksForOrg(
   organizationId: string,
-): Promise<void> {
+): Promise<{ callbackUrl: string }> {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_channels")
     .select("waba_id, access_token")
@@ -284,4 +312,5 @@ export async function resubscribeCoexistenceWebhooksForOrg(
     throw new Error("WhatsApp oficial desta agência ainda não tem WABA e token salvos.");
   }
   await subscribeWhatsAppWebhookFields(wabaId, token);
+  return { callbackUrl: serverWhatsAppWebhookUrl() };
 }

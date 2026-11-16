@@ -29,8 +29,9 @@ import { AiQuotaSettings } from "@/components/guata/ai-quota-settings";
 import { AccountDangerZone } from "@/components/guata/account-danger-zone";
 
 // URL pública estável (não muda ao renomear o projeto).
-const STABLE_PUBLIC_URL =
-  "https://project--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app";
+import { DEFAULT_PUBLIC_APP_ORIGIN, whatsappWebhookUrl } from "@/lib/public-app-url.shared";
+
+const STABLE_PUBLIC_URL = DEFAULT_PUBLIC_APP_ORIGIN;
 
 export const Route = createFileRoute("/_app/configuracoes")({
   component: ConfigPage,
@@ -89,7 +90,7 @@ function ConfigPage() {
 
   // Sempre a URL publicada estável — não usar window.location.origin
   // (senão no preview aparece uma URL inválida para colar nos webhooks externos).
-  const whatsappWebhook = `${STABLE_PUBLIC_URL}/api/public/webhooks/whatsapp`;
+  const whatsappWebhook = whatsappWebhookUrl(STABLE_PUBLIC_URL);
   const descubraWebhook = `${STABLE_PUBLIC_URL}/api/public/webhooks/descubra-ms`;
 
   const copy = async (s: string) => {

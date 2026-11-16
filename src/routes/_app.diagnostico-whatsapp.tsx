@@ -23,8 +23,10 @@ import {
   sendWhatsAppTestMessage,
 } from "@/lib/whatsapp-diagnostics.functions";
 
-const STABLE_PUBLIC_URL =
-  "https://project--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app";
+import { DEFAULT_PUBLIC_APP_ORIGIN, whatsappWebhookUrl } from "@/lib/public-app-url.shared";
+
+const STABLE_PUBLIC_URL = DEFAULT_PUBLIC_APP_ORIGIN;
+const WHATSAPP_WEBHOOK_URL = whatsappWebhookUrl(STABLE_PUBLIC_URL);
 
 export const Route = createFileRoute("/_app/diagnostico-whatsapp")({
   component: DiagnosticoWhatsApp,
@@ -97,9 +99,11 @@ function DiagnosticoWhatsApp() {
 
   const resubscribeMutation = useMutation({
     mutationFn: () => resubscribe(),
-    onSuccess: () => {
+    onSuccess: (r) => {
       toast.success(
-        "Meta reinscrita: messages, message_echoes e smb_message_echoes. Mande um teste pelo celular.",
+        r?.callbackUrl
+          ? `Meta apontada para ${r.callbackUrl}. Mande um teste só pelo celular.`
+          : "Meta reinscrita. Mande um teste só pelo celular.",
       );
       void q.refetch();
     },
@@ -342,13 +346,13 @@ function DiagnosticoWhatsApp() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex gap-2 items-center">
                 <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-xs">
-                  {`${STABLE_PUBLIC_URL}/api/public/webhooks/whatsapp`}
+                  {WHATSAPP_WEBHOOK_URL}
                 </code>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    copy(`${STABLE_PUBLIC_URL}/api/public/webhooks/whatsapp`)
+                    copy(WHATSAPP_WEBHOOK_URL)
                   }
                 >
                   <Copy className="h-4 w-4" />

@@ -207,8 +207,7 @@ export async function runDiagnostics(): Promise<DiagnosticCheck[]> {
   return checks;
 }
 
-const STABLE_PUBLIC_URL =
-  "https://project--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app";
+import { serverPublicAppOrigin } from "@/lib/public-app-url.server";
 
 export async function sendTestEvent(): Promise<{
   ok: boolean;
@@ -235,7 +234,7 @@ export async function sendTestEvent(): Promise<{
   };
   try {
     const res = await fetch(
-      `${STABLE_PUBLIC_URL}/api/public/webhooks/descubra-ms`,
+      `${serverPublicAppOrigin()}/api/public/webhooks/descubra-ms`,
       {
         method: "POST",
         headers: {
