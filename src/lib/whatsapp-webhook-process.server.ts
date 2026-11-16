@@ -131,10 +131,8 @@ export async function processWhatsAppWebhookDelivery(input: {
   }
 
   const { applyWhatsAppDeliveryStatus } = await import("@/lib/whatsapp-status.server");
-  const echoes = [
-    ...(Array.isArray(value.message_echoes) ? value.message_echoes : []),
-    ...(Array.isArray(value.smb_message_echoes) ? value.smb_message_echoes : []),
-  ];
+  const { phoneEchoesFromValue } = await import("@/lib/whatsapp-webhook.shared");
+  const echoes = phoneEchoesFromValue(value);
   if (echoes.length && input.inboundMeta) {
     const { persistPhoneEcho } = await import("@/lib/crm.server");
     for (const echo of echoes as Record<string, unknown>[]) {

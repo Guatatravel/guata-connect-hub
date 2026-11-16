@@ -225,6 +225,15 @@ function DiagnosticoWhatsApp() {
                 label="Movimento no painel"
                 detail={`${d.conversas.sessions} conversa(s), ${d.conversas.mensagens} mensagem(ns), ${d.conversas.triagens} triagem(ns).`}
               />
+              <Row
+                state={d.coexistencia.ecosem7dias > 0 ? "ok" : "warn"}
+                label="Mensagens espelhadas do celular"
+                detail={
+                  d.coexistencia.ecosem7dias > 0
+                    ? `${d.coexistencia.ecosem7dias} eco(s) nos últimos 7 dias — o painel pausou o Guatá ao responder pelo app.`
+                    : "Nenhum eco nos últimos 7 dias. Confira no app Meta os campos smb_message_echoes e message_echoes."
+                }
+              />
             </CardContent>
           </Card>
 
@@ -327,8 +336,9 @@ function DiagnosticoWhatsApp() {
                   (META_VERIFY_TOKEN).
                 </li>
                 <li>
-                  Em “Campos do webhook”, a linha <strong>messages</strong>{" "}
-                  precisa estar inscrita.
+                  Em “Campos do webhook”, inscreva <strong>messages</strong>,{" "}
+                  <strong>message_echoes</strong> e <strong>smb_message_echoes</strong> para o celular
+                  espelhar no painel e pausar o Guatá.
                 </li>
                 <li>
                   O segredo do app (App Secret) precisa ser do mesmo app que

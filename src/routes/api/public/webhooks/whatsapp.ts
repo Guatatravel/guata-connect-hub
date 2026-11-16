@@ -61,13 +61,10 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const phoneNumberId: string = String(
           (value?.metadata as { phone_number_id?: string } | undefined)?.phone_number_id ?? "",
         );
+        const { webhookEventKind } = await import("@/lib/whatsapp-webhook.shared");
         const messages: unknown[] = Array.isArray(value.messages) ? value.messages : [];
         const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
-        const eventKind = messages.length
-          ? "message"
-          : statuses.length
-            ? "status"
-            : "other";
+        const eventKind = webhookEventKind(value);
 
         const inboundMeta = phoneNumberId
           ? await resolveInboundChannel(phoneNumberId)

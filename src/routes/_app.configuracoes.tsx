@@ -167,7 +167,10 @@ function ConfigPage() {
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Verify Token: use o valor que você definiu como secret <code className="text-[10px]">META_VERIFY_TOKEN</code>.
-              Subscreva o campo <code className="text-[10px]">messages</code>.
+              Inscreva os campos <code className="text-[10px]">messages</code>,{" "}
+              <code className="text-[10px]">message_echoes</code> e{" "}
+              <code className="text-[10px]">smb_message_echoes</code> (coexistência / mensagens do
+              celular).
             </p>
             <p className="text-xs mt-2">
               Credenciais de envio:{" "}

@@ -239,7 +239,7 @@ export async function persistPhoneEcho(input: {
   if (!phone || !input.text.trim()) return;
   const { data: existing } = await supabaseAdmin
     .from("sessions")
-    .select("id")
+    .select("id, intake_data")
     .eq("organization_id", input.organizationId)
     .eq("phone", phone)
     .order("last_message_at", { ascending: false })
@@ -282,8 +282,16 @@ export async function persistPhoneEcho(input: {
         : {}),
     } as never,
   });
+  const intake = { ...((existing?.intake_data ?? {}) as Record<string, unknown>) };
+  delete intake["owner_alert_at"];
+  intake["staff_phone_at"] = new Date().toISOString();
   await supabaseAdmin
     .from("sessions")
-    .update({ last_message_at: new Date().toISOString() })
+    .update({
+      mode: "humano",
+      intake_state: null,
+      last_message_at: new Date().toISOString(),
+      intake_data: intake as never,
+    })
     .eq("id", sessionId);
 }

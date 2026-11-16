@@ -10,6 +10,7 @@ import {
   metaAccessTokenForLine,
   metaPhoneNumberIdForLine,
 } from "@/lib/meta-env.server";
+import { META_WHATSAPP_WEBHOOK_FIELDS, webhookPreview } from "@/lib/whatsapp-webhook.shared";
 
 export interface DeliveryRow {
   id: string;
@@ -53,6 +54,10 @@ export interface WhatsAppDiagnostics {
     error?: string;
   };
   conversas: { sessions: number; mensagens: number; triagens: number };
+  coexistencia: {
+    ecosem7dias: number;
+    camposWebhook: readonly string[];
+  };
   ultimasEntregas: DeliveryRow[];
 }
 
@@ -129,10 +134,8 @@ async function checkToken(line: Line = "viagens"): Promise<WhatsAppDiagnostics["
 function previewOf(payload: any): string {
   try {
     const value = payload?.entry?.[0]?.changes?.[0]?.value ?? {};
-    const msg = value.messages?.[0];
-    if (msg) return `Mensagem de ${msg.from}: ${msg.text?.body ?? msg.type}`;
-    const st = value.statuses?.[0];
-    if (st) return `Status "${st.status}" para ${st.recipient_id}`;
+    const line = webhookPreview(value);
+    if (line) return line;
     return JSON.stringify(payload).slice(0, 140);
   } catch {
     return "";
@@ -162,6 +165,13 @@ export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { count: echoCount } = await supabaseAdmin
+    .from("whatsapp_deliveries")
+    .select("*", { count: "exact", head: true })
+    .eq("event_kind", "phone_echo")
+    .gte("created_at", since7d);
+
   const { data: rows } = await supabaseAdmin
     .from("whatsapp_deliveries")
     .select(
@@ -201,6 +211,10 @@ export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
       sessions: sessions.count ?? 0,
       mensagens: mensagens.count ?? 0,
       triagens: triagens.count ?? 0,
+    },
+    coexistencia: {
+      ecosem7dias: echoCount ?? 0,
+      camposWebhook: META_WHATSAPP_WEBHOOK_FIELDS,
     },
     ultimasEntregas: (rows ?? []).map((r: any) => ({
       id: r.id,
