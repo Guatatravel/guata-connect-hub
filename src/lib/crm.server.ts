@@ -234,18 +234,37 @@ export async function persistPhoneEcho(input: {
   customerPhone: string;
   text: string;
   waMessageId?: string;
-}) {
-  const phone = input.customerPhone.replace(/\D/g, "");
-  if (!phone || !input.text.trim()) return;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const { canonicalWaPhone } = await import("@/lib/whatsapp-phone.server");
+  const phone = canonicalWaPhone(input.customerPhone);
+  const text = input.text.trim() || "(mensagem pelo celular)";
+  if (!phone) return { ok: false, reason: "telefone vazio" };
+
   const { data: existing } = await supabaseAdmin
     .from("sessions")
     .select("id, intake_data")
     .eq("organization_id", input.organizationId)
+    .eq("line", input.line)
     .eq("phone", phone)
-    .order("last_message_at", { ascending: false })
-    .limit(1)
     .maybeSingle();
+
   let sessionId = existing?.id as string | undefined;
+  let fallbackIntake = existing?.intake_data;
+  if (!sessionId) {
+    const { data: fallback } = await supabaseAdmin
+      .from("sessions")
+      .select("id, intake_data")
+      .eq("organization_id", input.organizationId)
+      .eq("phone", phone)
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    sessionId = fallback?.id as string | undefined;
+    fallbackIntake = fallback?.intake_data ?? fallbackIntake;
+  }
+
+  const intakeBase = fallbackIntake as Record<string, unknown> | undefined;
+
   if (!sessionId) {
     const { data: created, error } = await supabaseAdmin
       .from("sessions")
@@ -257,7 +276,10 @@ export async function persistPhoneEcho(input: {
       })
       .select("id")
       .single();
-    if (error) return;
+    if (error) {
+      console.error("[persistPhoneEcho] criar sessão:", error.message);
+      return { ok: false, reason: error.message };
+    }
     sessionId = created.id as string;
   }
   if (input.waMessageId) {
@@ -268,13 +290,13 @@ export async function persistPhoneEcho(input: {
       .filter("metadata->>wa_message_id", "eq", input.waMessageId)
       .limit(1)
       .maybeSingle();
-    if (dup) return;
+    if (dup) return { ok: true };
   }
-  await supabaseAdmin.from("messages").insert({
+  const { error: msgErr } = await supabaseAdmin.from("messages").insert({
     session_id: sessionId,
     direction: "out",
     author: "agent",
-    text: input.text.slice(0, 4000),
+    text: text.slice(0, 4000),
     metadata: {
       from_phone_app: true,
       ...(input.waMessageId
@@ -282,10 +304,14 @@ export async function persistPhoneEcho(input: {
         : {}),
     } as never,
   });
-  const intake = { ...((existing?.intake_data ?? {}) as Record<string, unknown>) };
+  if (msgErr) {
+    console.error("[persistPhoneEcho] inserir mensagem:", msgErr.message);
+    return { ok: false, reason: msgErr.message };
+  }
+  const intake = { ...((intakeBase ?? {}) as Record<string, unknown>) };
   delete intake["owner_alert_at"];
   intake["staff_phone_at"] = new Date().toISOString();
-  await supabaseAdmin
+  const { error: sessErr } = await supabaseAdmin
     .from("sessions")
     .update({
       mode: "humano",
@@ -294,4 +320,9 @@ export async function persistPhoneEcho(input: {
       intake_data: intake as never,
     })
     .eq("id", sessionId);
+  if (sessErr) {
+    console.error("[persistPhoneEcho] atualizar sessão:", sessErr.message);
+    return { ok: false, reason: sessErr.message };
+  }
+  return { ok: true };
 }

@@ -62,31 +62,23 @@ export function AiQuotaSettings() {
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <p className="text-muted-foreground">
-          Com <strong>GEMINI_API_KEY</strong> no servidor, o Guatá prioriza o Google Gemini (cota gratuita do AI
-          Studio). Sem ela, usa a Lovable ({data.includedCredits} créditos de IA/mês no app). Chaves próprias da
-          agência: chaves <code className="text-xs">AIza…</code> vão para o Gemini; demais, para a Lovable.
+          O Guatá responde com inteligência artificial. Por padrão usa a conta compartilhada da Guatá. Se a sua
+          agência tiver chave própria, você pode colar aqui.
         </p>
-        {(data.serverHasGemini || data.serverHasLovable) && (
-          <p className="text-xs text-muted-foreground">
-            Servidor: {data.serverHasGemini ? "Gemini configurado" : "Gemini ausente"}
-            {" · "}
-            {data.serverHasLovable ? "Lovable configurada" : "Lovable ausente"}
-          </p>
-        )}
         <p>
-          Respostas neste período: <strong>{data.calls}</strong>. O contador zera em {data.resetsOn}.
+          Respostas neste mês: <strong>{data.calls}</strong> (zera todo dia <strong>10</strong>).
         </p>
         {data.blocked && (
           <p className="text-destructive">
             {data.blockedReason === "quota"
-              ? "O teto de respostas desta agência acabou. Volta no dia 10."
-              : "Os créditos de IA desta conta acabaram. Volta no dia 10, ou quando a Lovable liberar de novo."}
+              ? "O limite de respostas desta agência acabou. Volta no dia 10."
+              : "As respostas automáticas pausaram por limite da conta. Volta no dia 10 ou quando a conta liberar de novo."}
           </p>
         )}
         {data.canEdit ? (
           <>
             <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="ai-own-key">Usar a chave de IA desta agência</Label>
+              <Label htmlFor="ai-own-key">Usar chave da minha agência</Label>
               <Switch
                 id="ai-own-key"
                 checked={own}
@@ -96,62 +88,68 @@ export function AiQuotaSettings() {
                 }}
               />
             </div>
-            <div className="space-y-1">
-              <Label>Motor de IA</Label>
-              <Select
-                value={provider}
-                onValueChange={(v) => setAiProvider(v as typeof provider)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Automático (Gemini se houver AIza ou GEMINI no servidor)</SelectItem>
-                  <SelectItem value="gemini">Sempre Gemini</SelectItem>
-                  <SelectItem value="lovable">Sempre Lovable</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Chave da agência (Lovable ou Gemini AI Studio)</Label>
-              <Input
-                type="password"
-                value={apiKey}
-                autoComplete="off"
-                placeholder={data.hasOwnKey ? "Chave salva. Deixe vazio para manter." : "Cole a chave, se for usar a da agência"}
-                onChange={(event) => setApiKey(event.target.value)}
-              />
-            </div>
-            {data.hasOwnKey && (
-              <Button type="button" variant="outline" onClick={() => setClearKey(true)}>
-                {clearKey ? "A chave será apagada ao salvar" : "Apagar chave salva"}
-              </Button>
+            {own && (
+              <div className="space-y-1">
+                <Label>Chave (opcional)</Label>
+                <Input
+                  type="password"
+                  value={apiKey}
+                  autoComplete="off"
+                  placeholder={data.hasOwnKey ? "Chave salva — deixe vazio para manter" : "Cole a chave da agência"}
+                  onChange={(event) => setApiKey(event.target.value)}
+                />
+                {data.hasOwnKey && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setClearKey(true)}>
+                    {clearKey ? "Será apagada ao salvar" : "Apagar chave salva"}
+                  </Button>
+                )}
+              </div>
             )}
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer">Ajustes avançados (suporte)</summary>
+              <div className="space-y-2 mt-2 pl-1">
+                <Label className="text-xs">Motor</Label>
+                <Select value={provider} onValueChange={(v) => setAiProvider(v as typeof provider)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automático</SelectItem>
+                    <SelectItem value="gemini">Gemini</SelectItem>
+                    <SelectItem value="lovable">Lovable</SelectItem>
+                  </SelectContent>
+                </Select>
+                {(data.serverHasGemini || data.serverHasLovable) && (
+                  <p>
+                    Servidor: {data.serverHasGemini ? "Gemini ok" : "sem Gemini"} ·{" "}
+                    {data.serverHasLovable ? "Lovable ok" : "sem Lovable"}
+                  </p>
+                )}
+              </div>
+            </details>
             {data.canSetCap && (
               <div className="space-y-1">
-                <Label>Teto de respostas das outras agências na nossa chave</Label>
+                <Label>Limite de respostas (outras agências na nossa conta)</Label>
                 <Input
                   inputMode="numeric"
                   value={cap}
-                  placeholder="Em branco: sem teto de respostas"
+                  placeholder="Vazio = sem limite"
                   onChange={(event) => setCapText(event.target.value.replace(/\D/g, ""))}
                 />
-                <p className="text-xs text-muted-foreground">
-                  A Guatá não entra nesse teto. Em branco, as agências usam a conta até a Lovable recusar.
-                </p>
+                <p className="text-xs text-muted-foreground">A Guatá não entra nesse limite.</p>
               </div>
             )}
             {!data.canSetCap && data.replyCap !== null && !own && (
               <p className="text-xs text-muted-foreground">
-                Teto desta agência na chave da Guatá: {data.replyCap} respostas por período.
+                Limite desta agência na conta da Guatá: {data.replyCap} respostas por mês.
               </p>
             )}
             <Button disabled={mut.isPending} onClick={() => mut.mutate()}>
-              {mut.isPending ? "Salvando…" : "Salvar inteligência"}
+              {mut.isPending ? "Salvando…" : "Salvar"}
             </Button>
           </>
         ) : (
-          <p className="text-muted-foreground">Somente o dono ou administrador altera esta conta de IA.</p>
+          <p className="text-muted-foreground">Somente o dono ou administrador altera a inteligência.</p>
         )}
       </CardContent>
     </Card>
@@ -164,8 +162,8 @@ export function AiQuotaBanner() {
   if (!data?.blocked) return null;
   const text =
     data.blockedReason === "quota"
-      ? `O teto de respostas desta agência acabou. Volta em ${data.resetsOn}.`
-      : `Os créditos de IA acabaram. A Lovable inclui ${data.includedCredits} créditos por mês para o app inteiro. O aviso some em ${data.resetsOn}, ou quando a conta voltar a responder.`;
+      ? `Limite de respostas desta agência. Volta em ${data.resetsOn}.`
+      : `Respostas automáticas pausadas. Volta em ${data.resetsOn}.`;
   return (
     <div className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
       {text}

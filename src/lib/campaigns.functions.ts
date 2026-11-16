@@ -8,6 +8,7 @@ const audienceSchema = z.enum([
   "active_7d",
   "active_30d",
   "all_sessions",
+  "phone_list",
 ]);
 const lineSchema = z.enum(["descubra", "viagens", "both"]);
 
@@ -38,14 +39,20 @@ export const listCampaignsFn = createServerFn({ method: "POST" })
 export const previewCampaignAudienceFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) =>
-    z.object({ line: lineSchema, audience: audienceSchema }).parse(i),
+    z
+      .object({
+        line: lineSchema,
+        audience: audienceSchema,
+        extraPhones: z.string().max(4000).optional(),
+      })
+      .parse(i),
   )
   .handler(async ({ data, context }) => {
     const { requireStaffUser } = await import("@/lib/diagnostics.server");
     const { previewAudienceCount } = await import("@/lib/campaigns.server");
     await requireStaffUser(context.userId);
     const orgId = await requireActiveOrganization(context.userId);
-    return previewAudienceCount(orgId, data.line, data.audience);
+    return previewAudienceCount(orgId, data.line, data.audience, data.extraPhones);
   });
 
 export const campaignMetaStatusFn = createServerFn({ method: "POST" })
@@ -66,7 +73,13 @@ export const createAndLaunchCampaignFn = createServerFn({ method: "POST" })
     await requireStaffUser(context.userId);
     const orgId = await requireActiveOrganization(context.userId);
     if (data.sendMode === "template" && !data.templateName?.trim()) {
-      throw new Error("Informe o nome do template aprovado na Meta (WhatsApp Manager).");
+      throw new Error("Escolha um modelo aprovado na Meta.");
+    }
+    if (data.audience === "phone_list") {
+      const { parsePhoneList } = await import("@/lib/campaigns.server");
+      if (parsePhoneList(data.extraPhones).length === 0) {
+        throw new Error("No modo “só lista”, cole os números (um por linha).");
+      }
     }
     if (data.sendMode !== "template" && !data.body.trim() && !data.imageBase64) {
       throw new Error("Informe o texto ou anexe um cartaz.");

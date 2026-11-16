@@ -310,6 +310,25 @@ export async function resolveChannelByPhoneNumberId(
   };
 }
 
+/** Quem atende este phone_number_id do webhook (banco ou env Guatá). */
+export async function resolveWhatsAppInboundMeta(
+  phoneNumberId: string,
+): Promise<ResolvedWhatsAppChannel | null> {
+  const id = phoneNumberId.trim();
+  if (!id) return null;
+  const fromDb = await resolveChannelByPhoneNumberId(id);
+  if (fromDb) return fromDb;
+  const viagensEnv = metaPhoneNumberIdForLine("viagens")?.trim();
+  const descubraEnv = metaPhoneNumberIdForLine("descubra")?.trim();
+  if ((viagensEnv && id === viagensEnv) || (descubraEnv && id === descubraEnv)) {
+    return {
+      organizationId: await getGuataOrganizationId(),
+      line: legacyLineFromEnvPhoneId(id),
+    };
+  }
+  return null;
+}
+
 /** Fallback legado: env Guatá quando o número não está no banco. */
 export function legacyLineFromEnvPhoneId(phoneId: string): "descubra" | "viagens" {
   const viagens = process.env.META_PHONE_NUMBER_ID_VIAGENS;

@@ -53,8 +53,7 @@ export function AccountDangerZone() {
           <ShieldAlert className="h-5 w-5 text-destructive" /> Conta e privacidade
         </CardTitle>
         <CardDescription>
-          Seu número e sua conta na Meta continuam seus. Aqui você só tira o acesso do Guatá Channel. Para apagar a conta
-          na Meta, faça isso no Gerenciador de Negócios da Meta.
+          Na Meta, seu WhatsApp continua seu. Aqui você só controla o Guatá Channel.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -62,7 +61,8 @@ export function AccountDangerZone() {
           <div className="flex-1 text-sm">
             <div className="font-medium">Desconectar WhatsApp</div>
             <div className="text-muted-foreground">
-              O Guatá para de receber e responder. Apagamos o token e os dados de conexão da Meta e as chaves do Passhub.
+              O Guatá para de atender este número. As conversas no painel ficam. Você pode conectar de novo quando
+              quiser.
             </div>
           </div>
           <AlertDialog>
@@ -90,8 +90,8 @@ export function AccountDangerZone() {
           <div className="flex-1 text-sm">
             <div className="font-medium text-destructive">Excluir minha conta</div>
             <div className="text-muted-foreground">
-              Apaga seu acesso. Se você for o único dono da agência, a agência e tudo dela (conversas, base, conexão
-              com a Meta) também são apagados. Não dá para desfazer.
+              Você some do painel. Se for o único dono, apagamos a agência inteira aqui (conversas, base, conexões).
+              Não apaga sua conta na Meta. Não dá para desfazer.
             </div>
           </div>
           <AlertDialog onOpenChange={() => setConfirm("")}>

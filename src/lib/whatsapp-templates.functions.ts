@@ -29,12 +29,24 @@ export const syncWhatsappTemplatesFn = createServerFn({ method: "POST" })
     return { count };
   });
 
+const buttonSchema = z.object({
+  type: z.enum(["QUICK_REPLY", "URL", "PHONE_NUMBER"]),
+  text: z.string().trim().min(1).max(25),
+  url: z.string().trim().max(2000).optional(),
+  phoneNumber: z.string().trim().max(30).optional(),
+});
+
 const createSchema = z.object({
   name: z.string().trim().min(1).max(512),
   language: z.string().trim().min(2).max(12).default("pt_BR"),
   category: z.enum(["MARKETING", "UTILITY", "AUTHENTICATION"]),
   bodyText: z.string().trim().min(1).max(1024),
+  headerMode: z.enum(["none", "text", "image"]).optional(),
   headerText: z.string().trim().max(60).optional(),
+  headerImageBase64: z.string().max(8_000_000).optional(),
+  headerImageContentType: z.string().max(80).optional(),
+  footerText: z.string().trim().max(60).optional(),
+  buttons: z.array(buttonSchema).max(3).optional(),
 });
 
 export const createWhatsappTemplateFn = createServerFn({ method: "POST" })

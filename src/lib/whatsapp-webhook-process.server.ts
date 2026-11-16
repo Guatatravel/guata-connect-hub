@@ -131,28 +131,41 @@ export async function processWhatsAppWebhookDelivery(input: {
   }
 
   const { applyWhatsAppDeliveryStatus } = await import("@/lib/whatsapp-status.server");
-  const { phoneEchoesFromValue } = await import("@/lib/whatsapp-webhook.shared");
+  const { phoneEchoesFromValue, echoTextFromRecord, echoCustomerPhone } = await import(
+    "@/lib/whatsapp-webhook.shared"
+  );
   const echoes = phoneEchoesFromValue(value);
-  if (echoes.length && input.inboundMeta) {
-    const { persistPhoneEcho } = await import("@/lib/crm.server");
-    for (const echo of echoes as Record<string, unknown>[]) {
-      const text =
-        (echo?.text as { body?: string })?.body ??
-        (echo?.image as { caption?: string })?.caption ??
-        (echo?.button as { text?: string })?.text ??
-        (echo?.type ? `[${echo.type} pelo celular]` : "");
-      const customer = String(echo?.to ?? "");
-      if (!customer) continue;
-      try {
-        await persistPhoneEcho({
-          organizationId: input.inboundMeta.organizationId,
-          line: input.inboundMeta.line,
-          customerPhone: customer,
-          text: String(text),
-          waMessageId: echo?.id ? String(echo.id) : undefined,
-        });
-      } catch (err) {
-        console.error("[whatsapp-webhook] eco do celular:", err);
+  if (echoes.length) {
+    let meta = input.inboundMeta;
+    if (!meta && input.phoneNumberId) {
+      const { resolveWhatsAppInboundMeta } = await import("@/lib/organizations.server");
+      meta = await resolveWhatsAppInboundMeta(input.phoneNumberId);
+    }
+    if (!meta) {
+      errors.push(
+        `eco do celular: phone_number_id ${input.phoneNumberId || "?"} não vinculado a nenhuma agência`,
+      );
+    } else {
+      const { persistPhoneEcho } = await import("@/lib/crm.server");
+      for (const echo of echoes as Record<string, unknown>[]) {
+        const customer = echoCustomerPhone(echo);
+        if (!customer) {
+          errors.push("eco do celular sem destinatário (to)");
+          continue;
+        }
+        try {
+          const result = await persistPhoneEcho({
+            organizationId: meta.organizationId,
+            line: meta.line,
+            customerPhone: customer,
+            text: echoTextFromRecord(echo),
+            waMessageId: echo?.id ? String(echo.id) : undefined,
+          });
+          if (!result.ok) errors.push(`eco: ${result.reason ?? "falha ao gravar"}`);
+        } catch (err) {
+          console.error("[whatsapp-webhook] eco do celular:", err);
+          errors.push(err instanceof Error ? err.message : "eco do celular");
+        }
       }
     }
   }

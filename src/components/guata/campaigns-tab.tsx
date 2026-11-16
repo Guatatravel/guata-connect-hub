@@ -26,8 +26,7 @@ import {
   Send,
   Trash2,
 } from "lucide-react";
-import { WhatsappTemplatesPanel } from "@/components/guata/whatsapp-templates-panel";
-import { listWhatsappTemplatesFn } from "@/lib/whatsapp-templates.functions";
+import { WhatsappTemplateCampaignFields } from "@/components/guata/whatsapp-template-campaign-fields";
 import {
   campaignMetaStatusFn,
   createAndLaunchCampaignFn,
@@ -51,6 +50,7 @@ const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
   active_7d: "Falaram nos últimos 7 dias",
   active_30d: "Falaram nos últimos 30 dias",
   all_sessions: "Todas as conversas da linha",
+  phone_list: "Só lista de telefones (quem nunca falou no Guatá)",
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -153,18 +153,9 @@ export function CampaignsTab() {
   });
 
   const { data: preview } = useQuery({
-    queryKey: ["campaign-audience", line, audience],
-    queryFn: () => previewFn({ data: { line, audience } }),
+    queryKey: ["campaign-audience", line, audience, extraPhones],
+    queryFn: () => previewFn({ data: { line, audience, extraPhones } }),
   });
-
-  const templatesFn = useServerFn(listWhatsappTemplatesFn);
-  const { data: waTemplates } = useQuery({
-    queryKey: ["whatsapp-templates"],
-    queryFn: () => templatesFn(),
-    enabled: sendMode === "template",
-  });
-
-  const approvedTemplates = (waTemplates ?? []).filter((t) => t.status === "APPROVED");
 
   const lineReady =
     line === "both"
@@ -308,8 +299,6 @@ export function CampaignsTab() {
 
   return (
     <div className="space-y-6">
-      <WhatsappTemplatesPanel />
-
       {!lineReady && meta && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -369,79 +358,36 @@ export function CampaignsTab() {
           </div>
 
           {sendMode === "template" && (
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Modelo aprovado</Label>
-                {approvedTemplates.length > 0 ? (
-                  <Select
-                    value={
-                      approvedTemplates.some(
-                        (t) => t.name === templateName && t.language === templateLanguage,
-                      )
-                        ? `${templateName}::${templateLanguage}`
-                        : ""
-                    }
-                    onValueChange={(v) => {
-                      const [name, lang] = v.split("::");
-                      if (name) setTemplateName(name);
-                      if (lang) setTemplateLanguage(lang);
-                      const picked = approvedTemplates.find(
-                        (t) => t.name === name && t.language === lang,
-                      );
-                      if (picked?.body_text.includes("{{1}}")) setTemplateUsesName(true);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Escolha um modelo ou preencha abaixo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {approvedTemplates.map((t) => (
-                        <SelectItem key={t.id} value={`${t.name}::${t.language}`}>
-                          {t.name} · {t.language} ({t.status})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Nenhum modelo aprovado no painel. Sincronize na seção de modelos acima ou digite o nome manualmente.
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>Nome do template na Meta</Label>
-                <Input
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  placeholder="ex.: convite_evento"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Idioma</Label>
-                <Input
-                  value={templateLanguage}
-                  onChange={(e) => setTemplateLanguage(e.target.value)}
-                  placeholder="pt_BR"
-                />
-              </div>
-              <label className="sm:col-span-2 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={templateUsesName}
-                  onChange={(e) => setTemplateUsesName(e.target.checked)}
-                />
-                O template tem uma variável de nome ({`{{1}}`})
-              </label>
-            </div>
+            <WhatsappTemplateCampaignFields
+              templateName={templateName}
+              templateLanguage={templateLanguage}
+              templateUsesName={templateUsesName}
+              onSelect={(name, lang, usesName) => {
+                setTemplateName(name);
+                setTemplateLanguage(lang);
+                setTemplateUsesName(usesName);
+              }}
+              onUsesNameChange={setTemplateUsesName}
+            />
           )}
 
           <div className="space-y-2">
-            <Label>Telefones avulsos (opcional)</Label>
+            <Label>
+              {audience === "phone_list"
+                ? "Lista de telefones (obrigatório)"
+                : sendMode === "template"
+                  ? "Telefones extras (opcional — somam ao público)"
+                  : "Telefones avulsos (opcional)"}
+            </Label>
             <Textarea
               rows={3}
               value={extraPhones}
               onChange={(e) => setExtraPhones(e.target.value)}
-              placeholder={"Um número por linha, com DDD.\nSe preencher, só estes números recebem — inclusive quem nunca chamou o Guatá."}
+              placeholder={
+                audience === "phone_list"
+                  ? "Um número por linha, com DDD (55…).\nQuem nunca falou no Guatá também recebe, se a Meta aceitar."
+                  : "Um número por linha.\nNo modo template, somam ao público escolhido abaixo."
+              }
             />
           </div>
 
@@ -455,7 +401,9 @@ export function CampaignsTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(AUDIENCE_LABEL) as CampaignAudience[]).map((k) => (
+                {(Object.keys(AUDIENCE_LABEL) as CampaignAudience[])
+                  .filter((k) => sendMode === "template" || k !== "phone_list")
+                  .map((k) => (
                   <SelectItem key={k} value={k}>
                     {AUDIENCE_LABEL[k]}
                   </SelectItem>
@@ -463,11 +411,15 @@ export function CampaignsTab() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              {extraPhones.trim()
-                ? "A lista de telefones substitui o público. Máx. 80 números."
-                : sendMode === "template"
-                  ? `~${preview?.filterCount ?? "…"} conversas podem receber o template, mesmo fora das 24h. Máx. 80 por clique.`
-                  : `~${preview?.filterCount ?? "…"} no filtro · ${preview?.eligible24h ?? "…"} podem receber agora (falaram nas últimas 24h). Máx. 80 por linha por clique.`}
+              {audience === "phone_list"
+                ? `~${preview?.extraCount ?? preview?.filterCount ?? "…"} número(s) na lista. Máx. 80 por clique.`
+                : extraPhones.trim()
+                  ? sendMode === "template"
+                    ? `~${preview?.filterCount ?? "…"} destinos (público + lista). Máx. 80 por clique.`
+                    : "Lista soma ao público. Máx. 80 por clique."
+                  : sendMode === "template"
+                    ? `~${preview?.filterCount ?? "…"} podem receber o template (sem regra das 24h). Máx. 80 por clique.`
+                    : `~${preview?.filterCount ?? "…"} no filtro · ${preview?.eligible24h ?? "…"} podem receber agora (24h). Máx. 80 por clique.`}
             </p>
           </div>
 

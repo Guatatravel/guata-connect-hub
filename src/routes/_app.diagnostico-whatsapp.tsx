@@ -231,7 +231,7 @@ function DiagnosticoWhatsApp() {
                 detail={
                   d.coexistencia.ecosem7dias > 0
                     ? `${d.coexistencia.ecosem7dias} eco(s) nos últimos 7 dias — o painel pausou o Guatá ao responder pelo app.`
-                    : "Nenhum eco nos últimos 7 dias. Confira no app Meta os campos smb_message_echoes e message_echoes."
+                    : "Nenhum eco nos últimos 7 dias — a Meta não está avisando mensagens do celular. No app Meta, marque smb_message_echoes e message_echoes no webhook."
                 }
               />
             </CardContent>

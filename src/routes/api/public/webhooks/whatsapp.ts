@@ -14,18 +14,6 @@ function verifySig(body: string, header: string | null): boolean {
   }
 }
 
-async function resolveInboundChannel(phoneId: string): Promise<{
-  organizationId: string;
-  line: "descubra" | "viagens";
-}> {
-  const { resolveChannelByPhoneNumberId, legacyLineFromEnvPhoneId, getGuataOrganizationId } =
-    await import("@/lib/organizations.server");
-  const fromDb = await resolveChannelByPhoneNumberId(phoneId);
-  if (fromDb) return fromDb;
-  const line = legacyLineFromEnvPhoneId(phoneId);
-  return { organizationId: await getGuataOrganizationId(), line };
-}
-
 export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
   server: {
     handlers: {
@@ -66,9 +54,8 @@ export const Route = createFileRoute("/api/public/webhooks/whatsapp")({
         const statuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
         const eventKind = webhookEventKind(value);
 
-        const inboundMeta = phoneNumberId
-          ? await resolveInboundChannel(phoneNumberId)
-          : null;
+        const { resolveWhatsAppInboundMeta } = await import("@/lib/organizations.server");
+        const inboundMeta = phoneNumberId ? await resolveWhatsAppInboundMeta(phoneNumberId) : null;
 
         const { supabaseAdmin } = await import(
           "@/integrations/supabase/client.server"

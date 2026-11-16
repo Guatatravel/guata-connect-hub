@@ -29,6 +29,7 @@ const AUDIENCE_MS: Record<CampaignAudience, number | null> = {
   active_7d: 7 * 24 * 60 * 60 * 1000,
   active_30d: 30 * 24 * 60 * 60 * 1000,
   all_sessions: null,
+  phone_list: null,
 };
 
 /** URL que a Meta consegue baixar (assinada; não depende de bucket público). */
@@ -331,18 +332,28 @@ export async function previewAudienceCount(
   organizationId: string,
   line: CampaignLine | "both",
   audience: CampaignAudience,
-): Promise<{ filterCount: number; eligible24h: number }> {
+  extraPhones?: string | null,
+): Promise<{ filterCount: number; eligible24h: number; extraCount: number }> {
   let filterCount = 0;
   let eligible24h = 0;
+  const extras = parsePhoneList(extraPhones);
   for (const l of linesForSelect(line)) {
-    const targets = await resolveAudience(organizationId, l, audience);
-    filterCount += targets.length;
-    for (const t of targets) {
+    const fromAudience =
+      audience === "phone_list" ? [] : await resolveAudience(organizationId, l, audience);
+    const seen = new Set(fromAudience.map((t) => t.phone));
+    filterCount += fromAudience.length;
+    for (const phone of extras) {
+      if (!seen.has(phone)) {
+        filterCount += 1;
+        seen.add(phone);
+      }
+    }
+    for (const t of fromAudience) {
       const lastIn = await lastUserMessageAt(t.session_id);
       if (withinMetaSessionWindow(lastIn)) eligible24h += 1;
     }
   }
-  return { filterCount, eligible24h };
+  return { filterCount, eligible24h, extraCount: extras.length };
 }
 
 async function resolveAudience(
@@ -475,11 +486,20 @@ async function targetsForLaunch(
   audience: CampaignAudience,
   extraPhones: string | null,
 ): Promise<Array<{ phone: string; session_id: string }>> {
-  const phones = parsePhoneList(extraPhones);
-  if (phones.length === 0) return resolveAudience(orgId, line, audience);
+  const extras = parsePhoneList(extraPhones);
+  const fromAudience =
+    audience === "phone_list" ? [] : await resolveAudience(orgId, line, audience);
+  const seen = new Set<string>();
   const out: Array<{ phone: string; session_id: string }> = [];
-  for (const phone of phones) {
+  for (const t of fromAudience) {
+    if (seen.has(t.phone)) continue;
+    seen.add(t.phone);
+    out.push(t);
+  }
+  for (const phone of extras) {
+    if (seen.has(phone)) continue;
     const session_id = await ensureSessionForPhone(orgId, line, phone);
+    seen.add(phone);
     out.push({ phone, session_id });
   }
   return out;
@@ -515,7 +535,9 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     const targets = await targetsForLaunch(orgId, line, audience, campaign.extra_phones as string | null);
     if (targets.length === 0) {
       throw new Error(
-        "Nenhum contato no público selecionado. Escolha “Todas as conversas da linha” ou garanta que clientes já falaram com esse número (sessões no painel Conversas).",
+        audience === "phone_list"
+          ? "Cole pelo menos um número na lista (DDD + celular, um por linha)."
+          : "Nenhum contato no público. Escolha conversas no painel, “Todas as conversas” ou cole números extras (até 80).",
       );
     }
     await supabaseAdmin

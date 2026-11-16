@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { phoneEchoesFromValue, webhookEventKind, webhookPreview } from "./whatsapp-webhook.shared";
+import {
+  echoTextFromRecord,
+  phoneEchoesFromValue,
+  webhookEventKind,
+  webhookPreview,
+} from "./whatsapp-webhook.shared";
 
 describe("webhook coexistência", () => {
   test("reconhece eco do WhatsApp Business", () => {

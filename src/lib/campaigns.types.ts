@@ -2,7 +2,9 @@ export type CampaignAudience =
   | "active_24h"
   | "active_7d"
   | "active_30d"
-  | "all_sessions";
+  | "all_sessions"
+  /** Só números colados abaixo (inclusive quem nunca falou no Guatá). */
+  | "phone_list";
 
 /** sessao = texto livre na janela de 24h. template = modelo aprovado, mesmo sem conversa aberta. */
 export type CampaignSendMode = "sessao" | "template";

@@ -20,6 +20,29 @@ export function phoneEchoesFromValue(value: Record<string, unknown>): unknown[] 
   ];
 }
 
+/** Texto legível de um eco (mensagem enviada pelo app no celular). */
+export function echoTextFromRecord(echo: Record<string, unknown>): string {
+  const type = String(echo?.type ?? "mensagem");
+  const text =
+    (echo?.text as { body?: string } | undefined)?.body?.trim() ??
+    (echo?.image as { caption?: string } | undefined)?.caption?.trim() ??
+    (echo?.video as { caption?: string } | undefined)?.caption?.trim() ??
+    (echo?.document as { caption?: string; filename?: string } | undefined)?.caption?.trim() ??
+    (echo?.button as { text?: string } | undefined)?.text?.trim() ??
+    (echo?.interactive as { body?: { text?: string } })?.body?.text?.trim();
+  if (text) return text;
+  const docName = (echo?.document as { filename?: string } | undefined)?.filename;
+  if (docName) return `[documento: ${docName}]`;
+  if (type && type !== "mensagem") return `[${type} enviado pelo celular]`;
+  return "";
+}
+
+export function echoCustomerPhone(echo: Record<string, unknown>): string {
+  const to = String(echo?.to ?? "").trim();
+  if (to) return to;
+  return String(echo?.recipient_id ?? "").trim();
+}
+
 export function webhookPreview(value: Record<string, unknown>): string {
   const msg = (value.messages as Record<string, unknown>[] | undefined)?.[0];
   if (msg) {
