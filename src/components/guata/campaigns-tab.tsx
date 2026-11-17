@@ -1,13 +1,11 @@
 import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
@@ -17,23 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import {
-  AlertCircle,
-  Copy,
-  ImageIcon,
-  Megaphone,
-  Pencil,
-  Send,
-  Trash2,
-} from "lucide-react";
+import { AlertCircle, ImageIcon, Megaphone, Send } from "lucide-react";
 import { WhatsappTemplateCampaignFields } from "@/components/guata/whatsapp-template-campaign-fields";
 import {
   campaignMetaStatusFn,
   createAndLaunchCampaignFn,
-  deleteCampaignFn,
-  duplicateAndLaunchCampaignFn,
   launchCampaignFn,
-  listCampaignsFn,
   previewCampaignAudienceFn,
   saveCampaignDraftFn,
 } from "@/lib/campaigns.functions";
@@ -51,12 +38,6 @@ const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
   active_30d: "Falaram nos últimos 30 dias",
   all_sessions: "Todas as conversas da linha",
   phone_list: "Só lista de telefones (quem nunca falou no Guatá)",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  rascunho: "Rascunho",
-  enviando: "Enviando…",
-  concluida: "Concluída",
 };
 
 function fileToBase64(file: File): Promise<{ base64: string; type: string }> {
@@ -86,15 +67,11 @@ function sumStats(rows: { sent_ok: number; sent_fail: number; sent_skip: number 
 }
 
 export function CampaignsTab() {
-  const qc = useQueryClient();
-  const listFn = useServerFn(listCampaignsFn);
   const previewFn = useServerFn(previewCampaignAudienceFn);
   const metaFn = useServerFn(campaignMetaStatusFn);
   const createLaunchFn = useServerFn(createAndLaunchCampaignFn);
   const launchFn = useServerFn(launchCampaignFn);
   const saveDraftFn = useServerFn(saveCampaignDraftFn);
-  const deleteFn = useServerFn(deleteCampaignFn);
-  const duplicateFn = useServerFn(duplicateAndLaunchCampaignFn);
   const imageRef = useRef<HTMLInputElement>(null);
 
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
@@ -126,27 +103,6 @@ export function CampaignsTab() {
     setExtraPhones("");
   };
 
-  const loadCampaignIntoForm = (c: CampaignRow) => {
-    setEditingDraftId(c.status === "rascunho" ? c.id : null);
-    setSavedImagePath(c.image_path);
-    setTitle(c.title.replace(/\s*·\s*(Descubra|Viagens)\s*$/i, "").trim());
-    setLine("descubra");
-    setAudience(c.audience as CampaignAudience);
-    setBody(c.body ?? "");
-    setSendMode(c.send_mode === "template" ? "template" : "sessao");
-    setTemplateName(c.template_name ?? "");
-    setTemplateLanguage(c.template_language ?? "pt_BR");
-    setTemplateUsesName(c.template_uses_name !== false);
-    setExtraPhones(c.extra_phones ?? "");
-    setImageFile(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const { data: campaigns, isLoading } = useQuery({
-    queryKey: ["campaigns"],
-    queryFn: () => listFn(),
-  });
-
   const { data: meta } = useQuery({
     queryKey: ["campaign-meta-status"],
     queryFn: () => metaFn(),
@@ -163,10 +119,6 @@ export function CampaignsTab() {
       : line === "descubra"
         ? Boolean(meta?.descubra)
         : Boolean(meta?.viagens);
-
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["campaigns"] });
-  };
 
   const imagePayload = async () => {
     if (!imageFile) return {};
@@ -215,19 +167,6 @@ export function CampaignsTab() {
         );
       }
       resetForm();
-      invalidate();
-    },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Não foi possível enviar"),
-  });
-
-  const launchDraftMut = useMutation({
-    mutationFn: (id: string) => launchFn({ data: { id } }),
-    onSuccess: (row) => {
-      toast.success(
-        `Envio: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} fora da janela 24h`,
-      );
-      invalidate();
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Não foi possível enviar"),
@@ -257,44 +196,9 @@ export function CampaignsTab() {
       setSavedImagePath(row.image_path);
       setImageFile(null);
       toast.success("Rascunho salvo.");
-      invalidate();
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar"),
-  });
-
-  const duplicateMut = useMutation({
-    mutationFn: (id: string) => duplicateFn({ data: { id } }),
-    onSuccess: (row) => {
-      toast.success(
-        `Reenvio: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} fora da janela 24h`,
-      );
-      invalidate();
-    },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Não foi possível reenviar"),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteFn({ data: { id } }),
-    onSuccess: () => {
-      toast.success("Campanha excluída.");
-      invalidate();
-    },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Não foi possível excluir"),
-  });
-
-  const continueMut = useMutation({
-    mutationFn: (id: string) => launchFn({ data: { id } }),
-    onSuccess: (row) => {
-      toast.success(
-        `Lote: ${row.sent_ok} ok, ${row.sent_fail} falha, ${row.sent_skip} ignorados`,
-      );
-      invalidate();
-    },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Falha ao continuar envio"),
   });
 
   return (
@@ -491,104 +395,6 @@ export function CampaignsTab() {
               Salvar rascunho
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-base">Campanhas recentes</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {isLoading && <Skeleton className="h-20 w-full" />}
-          {!isLoading && (campaigns?.length ?? 0) === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhuma campanha ainda.</p>
-          )}
-          {campaigns?.map((c) => (
-            <div key={c.id} className="rounded-lg border p-3 flex flex-wrap gap-3 justify-between">
-              <div className="space-y-1 min-w-0">
-                <p className="font-medium truncate">{c.title}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{c.body || "—"}</p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Badge variant="outline">{STATUS_LABEL[c.status] ?? c.status}</Badge>
-                  <Badge variant="outline">{c.send_mode === "template" ? "Template" : "Sessão 24h"}</Badge>
-                  <Badge variant="secondary">
-                    {AUDIENCE_LABEL[c.audience as CampaignAudience]}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    ✓ {c.sent_ok} · ✗ {c.sent_fail} · ⊘ {c.sent_skip}
-                  </span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 items-start">
-                {c.status === "rascunho" && (
-                  <>
-                    <Button
-                      size="sm"
-                      onClick={() => launchDraftMut.mutate(c.id)}
-                      disabled={launchDraftMut.isPending}
-                    >
-                      <Send className="h-3.5 w-3.5 mr-1" />
-                      Enviar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => loadCampaignIntoForm(c)}
-                    >
-                      <Pencil className="h-3.5 w-3.5 mr-1" />
-                      Editar
-                    </Button>
-                  </>
-                )}
-                {c.status === "enviando" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => continueMut.mutate(c.id)}
-                    disabled={continueMut.isPending}
-                  >
-                    Continuar envio
-                  </Button>
-                )}
-                {c.status === "concluida" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => duplicateMut.mutate(c.id)}
-                    disabled={duplicateMut.isPending}
-                  >
-                    <Copy className="h-3.5 w-3.5 mr-1" />
-                    Enviar de novo
-                  </Button>
-                )}
-                {c.status !== "rascunho" && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => loadCampaignIntoForm(c)}
-                  >
-                    <Copy className="h-3.5 w-3.5 mr-1" />
-                    Usar no formulário
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => {
-                    if (window.confirm(`Excluir a campanha "${c.title}"?`)) {
-                      deleteMut.mutate(c.id);
-                      if (editingDraftId === c.id) resetForm();
-                    }
-                  }}
-                  disabled={deleteMut.isPending}
-                >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  Excluir
-                </Button>
-              </div>
-            </div>
-          ))}
         </CardContent>
       </Card>
     </div>

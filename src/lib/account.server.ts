@@ -21,14 +21,6 @@ export type DisconnectResult = { channels: number; metaUnsubscribed: number };
 
 /** Para de receber/enviar pela Meta e apaga tokens e identificadores salvos. */
 export async function disconnectOrganizationWhatsApp(organizationId: string): Promise<DisconnectResult> {
-  const { data: org } = await supabaseAdmin
-    .from("organizations")
-    .select("is_guata")
-    .eq("id", organizationId)
-    .maybeSingle();
-  if (org?.is_guata) {
-    throw new Error("A linha oficial do Guatá é gerida pela plataforma e não pode ser desconectada por aqui.");
-  }
   const { data: channels, error } = await supabaseAdmin
     .from("whatsapp_channels")
     .select("id, waba_id, access_token")

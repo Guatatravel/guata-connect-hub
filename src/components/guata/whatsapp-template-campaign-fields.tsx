@@ -90,10 +90,12 @@ export function WhatsappTemplateCampaignFields({
   ]);
 
   const approved = (data ?? []).filter((t) => t.status === "APPROVED");
+  const pending = (data ?? []).filter((t) => t.status !== "APPROVED");
+  const selectedApproved = approved.find(
+    (t) => t.name === templateName && t.language === templateLanguage,
+  );
   const selectValue =
-    approved.some((t) => t.name === templateName && t.language === templateLanguage)
-      ? `${templateName}::${templateLanguage}`
-      : "";
+    selectedApproved ? `${templateName}::${templateLanguage}` : "";
 
   const syncMut = useMutation({
     mutationFn: () => syncFn(),
@@ -152,76 +154,92 @@ export function WhatsappTemplateCampaignFields({
   };
 
   return (
-    <div className="rounded-lg border bg-muted/15 p-4 space-y-4 text-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label className="text-base font-medium">Modelo aprovado na Meta</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={syncMut.isPending}
-          onClick={() => syncMut.mutate()}
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncMut.isPending ? "animate-spin" : ""}`} />
-          Atualizar da Meta
-        </Button>
+    <div className="space-y-4 text-sm">
+      <div className="rounded-lg border bg-muted/15 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label className="text-base font-medium">Modelo aprovado para envio</Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={syncMut.isPending}
+            onClick={() => syncMut.mutate()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncMut.isPending ? "animate-spin" : ""}`} />
+            Atualizar da Meta
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">Carregando modelos…</p>
+        ) : approved.length > 0 ? (
+          <Select
+            value={selectValue}
+            onValueChange={(v) => {
+              const [n, lang] = v.split("::");
+              const picked = approved.find((t) => t.name === n && t.language === lang);
+              onSelect(n, lang, Boolean(picked?.body_text.includes("{{1}}")));
+            }}
+          >
+            <SelectTrigger className="bg-background">
+              <SelectValue placeholder="Escolha um modelo aprovado" />
+            </SelectTrigger>
+            <SelectContent>
+              {approved.map((t) => (
+                <SelectItem key={t.id} value={`${t.name}::${t.language}`}>
+                  {t.name} · {t.language}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Nenhum modelo aprovado. Cadastre abaixo; quando a Meta aprovar, toque em Atualizar da Meta.
+          </p>
+        )}
+
+        {selectedApproved && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="bg-primary/90">Aprovado — pronto para disparar</Badge>
+            <span className="text-xs text-muted-foreground">{selectedApproved.name}</span>
+          </div>
+        )}
+
+        {templateName && selectedApproved && (
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={templateUsesName}
+              onChange={(e) => onUsesNameChange(e.target.checked)}
+            />
+            O modelo usa nome na variável {"{{1}}"}
+          </label>
+        )}
       </div>
 
-      {isLoading ? (
-        <p className="text-xs text-muted-foreground">Carregando modelos…</p>
-      ) : approved.length > 0 ? (
-        <Select
-          value={selectValue}
-          onValueChange={(v) => {
-            const [n, lang] = v.split("::");
-            const picked = approved.find((t) => t.name === n && t.language === lang);
-            onSelect(n, lang, Boolean(picked?.body_text.includes("{{1}}")));
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Escolha o modelo para enviar" />
-          </SelectTrigger>
-          <SelectContent>
-            {approved.map((t) => (
-              <SelectItem key={t.id} value={`${t.name}::${t.language}`}>
-                {t.name} · {t.language}
-              </SelectItem>
+      {!isLoading && pending.length > 0 && (
+        <div className="rounded-lg border border-dashed p-3 space-y-2 bg-muted/5">
+          <p className="text-xs font-medium text-muted-foreground">Na Meta (ainda não aprovados para envio)</p>
+          <ul className="space-y-1 text-xs text-muted-foreground">
+            {pending.map((t) => (
+              <li key={t.id} className="flex items-center gap-2">
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {STATUS_LABEL[t.status] ?? t.status}
+                </Badge>
+                <span>
+                  {t.name} · {t.language}
+                </span>
+              </li>
             ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Nenhum modelo aprovado ainda. Cadastre abaixo e, após a Meta aprovar, atualize a lista.
-        </p>
-      )}
-
-      {!isLoading && (data ?? []).some((t) => t.status !== "APPROVED") && (
-        <div className="flex flex-wrap gap-1.5">
-          {(data ?? [])
-            .filter((t) => t.status !== "APPROVED")
-            .map((t) => (
-              <Badge key={t.id} variant="outline" className="text-[10px]">
-                {t.name} · {STATUS_LABEL[t.status] ?? t.status}
-              </Badge>
-            ))}
+          </ul>
         </div>
       )}
 
-      {templateName && (
-        <label className="flex items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            checked={templateUsesName}
-            onChange={(e) => onUsesNameChange(e.target.checked)}
-          />
-          O modelo usa nome na variável {"{{1}}"}
-        </label>
-      )}
-
-      <details className="text-xs border-t pt-3" open>
-        <summary className="cursor-pointer text-muted-foreground hover:text-foreground mb-3">
-          Cadastrar modelo (como na Meta: cabeçalho, corpo, rodapé e botões)
+      <details className="rounded-lg border bg-muted/10 p-4 text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground font-medium">
+          Cadastrar novo modelo na Meta
         </summary>
+        <div className="mt-3 space-y-3">
         <div className="grid sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Nome (snake_case)</Label>
@@ -406,6 +424,7 @@ export function WhatsappTemplateCampaignFields({
           >
             {createMut.isPending ? "Enviando…" : "Enviar para análise da Meta"}
           </Button>
+        </div>
         </div>
       </details>
     </div>

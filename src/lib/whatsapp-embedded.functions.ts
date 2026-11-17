@@ -48,3 +48,12 @@ export const completeWhatsAppEmbeddedSignup = createServerFn({ method: "POST" })
     const orgId = await authorizedOrganization(context.userId);
     return completeEmbeddedSignup(orgId, data);
   });
+
+/** Só reinscreve webhook (ecoo do celular) na WABA já conectada. */
+export const resubscribeWhatsAppCoexistenceForOrg = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { resubscribeCoexistenceWebhooksForOrg } = await import("./whatsapp-embedded.server");
+    const orgId = await authorizedOrganization(context.userId);
+    return resubscribeCoexistenceWebhooksForOrg(orgId);
+  });

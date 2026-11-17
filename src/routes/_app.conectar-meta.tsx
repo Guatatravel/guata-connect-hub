@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw, Unplug } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,20 @@ import {
 import {
   completeWhatsAppEmbeddedSignup,
   fetchWhatsAppEmbeddedState,
+  resubscribeWhatsAppCoexistenceForOrg,
 } from "@/lib/whatsapp-embedded.functions";
+import { disconnectWhatsApp } from "@/lib/account.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   loadFacebookSdk,
   loginWithEmbeddedSignup,
@@ -129,6 +142,8 @@ function ConectarMeta() {
   const fetchOrg = useServerFn(fetchOrganizationContext);
   const fetchEmbedded = useServerFn(fetchWhatsAppEmbeddedState);
   const completeSignup = useServerFn(completeWhatsAppEmbeddedSignup);
+  const disconnectFn = useServerFn(disconnectWhatsApp);
+  const resubscribeFn = useServerFn(resubscribeWhatsAppCoexistenceForOrg);
   const sessionRef = useRef<EmbeddedSignupSession | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
@@ -210,6 +225,32 @@ function ConectarMeta() {
     }
   };
 
+  const disconnectMut = useMutation({
+    mutationFn: () => disconnectFn(),
+    onSuccess: (r) => {
+      toast.success(
+        r.channels > 0
+          ? "WhatsApp desvinculado do Guatá. Abra a Meta para conectar de novo."
+          : "Não havia vínculo salvo nesta agência.",
+      );
+      void qc.invalidateQueries({ queryKey: ["org-context"] });
+      void qc.invalidateQueries({ queryKey: ["whatsapp-embedded"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Não foi possível desvincular"),
+  });
+
+  const resubscribeMut = useMutation({
+    mutationFn: () => resubscribeFn(),
+    onSuccess: (r) => {
+      toast.success(
+        r?.callbackUrl
+          ? `Webhook da Meta apontado para ${r.callbackUrl}. Mande um teste só pelo celular.`
+          : "Webhooks reinscritos. Mande um teste só pelo celular.",
+      );
+    },
+    onError: (e: Error) => toast.error(e.message || "Não foi possível reinscrever o webhook."),
+  });
+
   const connection = embedded.data?.connection;
   const canManage = embedded.data?.canManage ?? data?.canManageWhatsApp;
   const official = data?.channels.filter((ch) => ch.line === "descubra").slice(0, 1) ?? [];
@@ -218,17 +259,9 @@ function ConectarMeta() {
     <div className="space-y-4 max-w-3xl mx-auto">
       <div>
         <h1 className="font-display text-2xl font-semibold text-primary">Conectar WhatsApp</h1>
-        <p className="text-sm text-muted-foreground">
-          Organização:{" "}
+        <p className="text-sm text-muted-foreground mt-1">
           {isLoading ? "…" : data?.organization.name ?? "—"}
-          {data?.organization.isGuata && (
-            <span className="ml-2 text-primary">(base Descubra MS conectada)</span>
-          )}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          A mensalidade é o uso do Guatá Labs. As mensagens de modelo (utilidade ou marketing) são
-          cobradas pela Meta no cartão cadastrado no Gerenciador de Negócios da agência. São
-          pagamentos separados.
+          {data?.organization.isGuata ? " · Descubra MS" : ""}
         </p>
       </div>
 
@@ -236,43 +269,95 @@ function ConectarMeta() {
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <CardTitle className="text-base">Conectar WhatsApp Oficial (com Coexistência)</CardTitle>
+              <CardTitle className="text-base">WhatsApp com coexistência</CardTitle>
               <CardDescription>
-                Mantenha o WhatsApp Business funcionando no seu celular e conecte simultaneamente ao Guatá Channel sem perder conversas.
+                Celular e painel no mesmo número. As conversas do Guatá ficam aqui; etiquetas e catálogo continuam no app.
               </CardDescription>
             </div>
-            {connection?.connected && <Badge>Coexistência Ativa</Badge>}
+            {connection?.connected && <Badge>Conectado</Badge>}
           </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           {connection?.connected && canManage !== false && (
-            <p className="text-foreground">
+            <p className="text-foreground font-medium">
               {connection.displayPhone
-                ? `Número conectado: ${connection.displayPhone}`
-                : "Número oficial salvo nesta organização."}
+                ? connection.displayPhone
+                : "Número salvo nesta organização"}
               {connection.verifiedName ? ` · ${connection.verifiedName}` : ""}
             </p>
           )}
           {connection?.connected && canManage === false && (
-            <p className="text-foreground">A linha oficial desta agência está conectada.</p>
+            <p className="text-foreground">Linha conectada nesta agência.</p>
           )}
-          <p className="text-muted-foreground">
-            Status, etiqueta do aplicativo e catálogo continuam no celular. Guias, quadro e follow-up ficam neste painel.
-          </p>
           {canManage === false ? (
             <p className="text-xs text-muted-foreground">
-              Somente o dono ou administrador da agência vê o número e pode conectar o WhatsApp.
+              Somente o dono ou administrador da agência pode conectar ou desvincular.
             </p>
           ) : (
-            <Button
-              className="rounded-xl"
-              disabled={connecting || embedded.isLoading || (Boolean(embedded.data?.ready) && !sdkReady)}
-              onClick={() => void connect()}
-            >
-              {connecting ? <Loader2 className="animate-spin" /> : <WhatsAppIcon />}
-              Conectar WhatsApp via Meta
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                className="rounded-xl"
+                disabled={connecting || embedded.isLoading || (Boolean(embedded.data?.ready) && !sdkReady)}
+                onClick={() => void connect()}
+              >
+                {connecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <WhatsAppIcon />
+                )}
+                {connection?.connected ? "Reautorizar via Meta" : "Conectar via Meta"}
+              </Button>
+              {connection?.connected && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    disabled={resubscribeMut.isPending}
+                    onClick={() => resubscribeMut.mutate()}
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 mr-2 ${resubscribeMut.isPending ? "animate-spin" : ""}`}
+                    />
+                    Reinscrever eco
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        disabled={disconnectMut.isPending}
+                      >
+                        <Unplug className="h-4 w-4 mr-2" />
+                        Desvincular
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Desvincular o WhatsApp do Guatá?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O painel deixa de enviar e receber pela Meta até você conectar de novo. O número continua
+                          no celular e no Gerenciador de Negócios. As conversas já gravadas permanecem aqui.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => disconnectMut.mutate()}>Desvincular</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
+            </div>
           )}
+          <p className="text-xs text-muted-foreground">
+            Eco do celular:{" "}
+            <Link to="/diagnostico-whatsapp" className="text-primary underline">
+              Diagnóstico WhatsApp
+            </Link>
+            . Modelos de mensagem são cobrados pela Meta no cartão do seu Business Manager.
+          </p>
           {embedded.isError && (
             <p className="text-xs text-destructive">
               {embedded.error instanceof Error ? embedded.error.message : "Não foi possível carregar a conexão."}
