@@ -879,7 +879,17 @@ export async function processMessage(
     recentTemplate &&
     isTemplateButtonDecline(msg.text)
   ) {
-    replies.push(templateDeclineReply(firstName));
+    replies.push(templateDeclineReply(recentTemplate.templateName, firstName));
+    await supabaseAdmin
+      .from("sessions")
+      .update({
+        intake_data: {
+          ...(session.intake_data ?? {}),
+          template_declined_at: new Date().toISOString(),
+          template_declined_name: recentTemplate.templateName,
+        } as never,
+      })
+      .eq("id", session.id);
   } else if (session.mode === "humano") {
     // Não responde — consultor responde no painel
   } else if (session.mode === "triagem" && session.intake_state && INTAKE_STEPS.includes(session.intake_state as IntakeStep)) {

@@ -76,14 +76,27 @@ export function panelMessagePreview(text: string, metadata?: Record<string, unkn
   return text;
 }
 
+export function normalizeTemplateButtonText(text: string): string {
+  return text
+    .normalize("NFC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
 export function isTemplateButtonDecline(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  return /^(n(ã|a)o|no|n)\b[!?.…\s]*$/i.test(t);
+  const t = normalizeTemplateButtonText(text);
+  return (
+    /^(n(ã|a)o|no|n)([!?.…\s]*)$/.test(t) ||
+    t === "nao" ||
+    t === "não" ||
+    /^no\b/.test(t)
+  );
 }
 
 export function isTemplateButtonAccept(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  return /^(sim|s|yes|ok|claro)\b[!?.…\s]*$/i.test(t);
+  const t = normalizeTemplateButtonText(text);
+  return /^(sim|s|yes|ok|claro)([!?.…\s]*)$/.test(t);
 }
 
 export interface RecentTemplateContext {
@@ -108,29 +121,59 @@ export async function findRecentTemplateForSession(sessionId: string): Promise<R
     if (kind !== "campaign_template" && !templateName) continue;
     const sentAt = String(row.created_at ?? "");
     if (sentAt && new Date(sentAt).getTime() < cutoff) continue;
-    const bodyText =
+    if (!templateName) continue;
+    let bodyText =
       String(meta.template_body ?? "").trim() ||
       (typeof row.text === "string" && row.text.includes("[Template oficial")
         ? row.text
         : "");
-    if (!templateName || !bodyText) continue;
+    if (!bodyText) {
+      const { data: sess } = await supabaseAdmin
+        .from("sessions")
+        .select("organization_id")
+        .eq("id", sessionId)
+        .maybeSingle();
+      const lang = String(meta.template_language ?? "pt_BR");
+      if (sess?.organization_id) {
+        bodyText =
+          (await lookupWhatsappTemplateBody(
+            sess.organization_id as string,
+            templateName,
+            lang,
+          )) ?? "";
+      }
+    }
+    if (!bodyText) {
+      bodyText = `Convite modelo "${templateName}" (cartão com botões SIM/NÃO na Meta).`;
+    }
     return { templateName, bodyText: bodyText.slice(0, 4000), sentAt };
   }
   return null;
 }
 
 export function templateAcceptPromptSection(ctx: RecentTemplateContext): string {
+  const convite = /convite/i.test(ctx.templateName);
+  const conviteExtra = convite
+    ? "- O cliente aceitou fazer parte da Família Guatá / salvar o contato: dê boas-vindas curtas e pergunte se prefere começar por dicas turísticas ou já tem uma viagem em mente.\n"
+    : "";
   return (
     `\n\n## RESPOSTA AO TEMPLATE "${ctx.templateName}"\n` +
     `O cliente acabou de tocar em SIM (ou equivalente) no modelo enviado. Contexto do modelo:\n${ctx.bodyText}\n` +
     "- Continue o assunto **deste convite** (não mude para outro tema genérico sem necessidade).\n" +
     "- Não repita a apresentação longa do cartão; vá direto ao próximo passo natural (pergunta, roteiro, convite suave).\n" +
-    "- Não cumprimente de novo como se fosse a primeira mensagem.\n"
+    "- Não cumprimente de novo como se fosse a primeira mensagem.\n" +
+    conviteExtra
   );
 }
 
-export function templateDeclineReply(firstName?: string): string {
+export function templateDeclineReply(templateName: string, firstName?: string): string {
   const n = firstName?.trim();
+  const convite = /convite/i.test(templateName);
+  if (convite) {
+    return n
+      ? `Tudo bem, ${n}! Sem problema — não vou insistir em salvar o contato agora. Quando quiser falar de viagem ou turismo, é só mandar um oi.`
+      : "Tudo bem! Sem problema — não vou insistir em salvar o contato agora. Quando quiser falar de viagem ou turismo, é só mandar um oi.";
+  }
   return n
     ? `Sem problema, ${n}! Fico por aqui quando quiser falar de viagem ou turismo. É só mandar um oi.`
     : "Sem problema! Fico por aqui quando quiser falar de viagem ou turismo. É só mandar um oi.";

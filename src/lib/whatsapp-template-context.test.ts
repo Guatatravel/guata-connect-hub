@@ -4,6 +4,7 @@ import {
   isTemplateButtonAccept,
   isTemplateButtonDecline,
   renderTemplateBodyPlaceholders,
+  templateDeclineReply,
   templateHistoryText,
 } from "@/lib/whatsapp-template-context.server";
 
@@ -16,6 +17,7 @@ describe("whatsapp-template-context", () => {
     expect(isTemplateButtonAccept("SIM")).toBe(true);
     expect(isTemplateButtonAccept("sim!")).toBe(true);
     expect(isTemplateButtonDecline("NÃO")).toBe(true);
+    expect(isTemplateButtonDecline("Não")).toBe(true);
     expect(isTemplateButtonDecline("quero viajar")).toBe(false);
   });
 
@@ -27,6 +29,12 @@ describe("whatsapp-template-context", () => {
     });
     expect(text).toContain("convite");
     expect(text).toContain("Olá! Quer conhecer o Guatá?");
+  });
+
+  test("convite NÃO não empurra destino", () => {
+    const msg = templateDeclineReply("convite", "Ana");
+    expect(msg).toContain("não vou insistir");
+    expect(msg.toLowerCase()).not.toContain("destino");
   });
 
   test("templateHistoryText inclui nota da campanha", () => {
