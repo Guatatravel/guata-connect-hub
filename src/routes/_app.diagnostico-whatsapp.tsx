@@ -252,6 +252,15 @@ function DiagnosticoWhatsApp() {
                     : "Nenhum eco nos últimos 7 dias — a Meta não está avisando mensagens do celular. No app Meta, marque smb_message_echoes e message_echoes no webhook."
                 }
               />
+              <Row
+                state={d.coexistencia.historicoImportado7dias > 0 ? "ok" : "warn"}
+                label="Histórico importado do app (coexistência)"
+                detail={
+                  d.coexistencia.historicoImportado7dias > 0
+                    ? `${d.coexistencia.historicoImportado7dias} mensagem(ns) do app gravadas nos últimos 7 dias (webhook history).`
+                    : "Nenhum histórico importado ainda. No app Meta, assine o campo history, reinscreva os webhooks e confirme o compartilhamento de histórico no WhatsApp Business ao conectar."
+                }
+              />
               <div className="pt-2">
                 <Button
                   type="button"
@@ -263,7 +272,7 @@ function DiagnosticoWhatsApp() {
                   <RefreshCw
                     className={`h-4 w-4 mr-2 ${resubscribeMutation.isPending ? "animate-spin" : ""}`}
                   />
-                  Reinscrever ecoo na Meta (coexistência)
+                  Reinscrever webhooks na Meta (eco + histórico)
                 </Button>
               </div>
             </CardContent>

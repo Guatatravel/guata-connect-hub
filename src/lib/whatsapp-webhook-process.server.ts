@@ -307,7 +307,20 @@ export async function processWhatsAppWebhookDelivery(input: {
       await processWebhookValue(legacy, input.inboundMeta, input.phoneNumberId, errors);
     }
   } else {
-    for (const { value } of slices) {
+    const { historyBlocksFromValue } = await import("@/lib/whatsapp-webhook.shared");
+    for (const { field, value } of slices) {
+      if (field === "history" || historyBlocksFromValue(value).length > 0) {
+        const meta = await resolveMetaForValue(value, input.inboundMeta);
+        const { processCoexistenceHistoryWebhook } = await import(
+          "@/lib/whatsapp-history.server"
+        );
+        await processCoexistenceHistoryWebhook(
+          value,
+          meta ? { organizationId: meta.organizationId, line: meta.line } : null,
+          errors,
+        );
+        continue;
+      }
       await processWebhookValue(value, input.inboundMeta, input.phoneNumberId, errors);
     }
   }

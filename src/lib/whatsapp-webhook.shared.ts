@@ -3,6 +3,7 @@ export const META_WHATSAPP_WEBHOOK_FIELDS = [
   "messages",
   "message_echoes",
   "smb_message_echoes",
+  "history",
 ] as const;
 
 export type WebhookChangeSlice = {
@@ -42,9 +43,14 @@ export function firstPhoneNumberIdFromPayload(payload: unknown): string {
   return "";
 }
 
+export function historyBlocksFromValue(value: Record<string, unknown>): unknown[] {
+  return Array.isArray(value.history) ? value.history : [];
+}
+
 export function webhookEventKindFromPayload(payload: unknown): string {
   let fallback: string = "other";
-  for (const { value } of iterateWebhookChanges(payload)) {
+  for (const { field, value } of iterateWebhookChanges(payload)) {
+    if (field === "history" || historyBlocksFromValue(value).length > 0) return "history";
     const kind = webhookEventKind(value);
     if (kind === "message") return "message";
     if (kind === "phone_echo") fallback = "phone_echo";
@@ -62,6 +68,7 @@ export function mergedWebhookPreview(payload: unknown): string {
 }
 
 export function webhookEventKind(value: Record<string, unknown>): string {
+  if (historyBlocksFromValue(value).length > 0) return "history";
   if (Array.isArray(value.messages) && value.messages.length > 0) return "message";
   if (Array.isArray(value.statuses) && value.statuses.length > 0) return "status";
   const echoes = phoneEchoesFromValue(value);
@@ -115,6 +122,15 @@ export function webhookPreview(value: Record<string, unknown>): string {
       (echo.image as { caption?: string })?.caption ??
       echo.type;
     return `Eco do celular para ${echo.to}: ${body}`;
+  }
+  const hist = historyBlocksFromValue(value)[0] as
+    | { metadata?: { progress?: number }; threads?: unknown[]; errors?: unknown[] }
+    | undefined;
+  if (hist?.errors?.length) return "Histórico do app: compartilhamento desligado ou recusado";
+  const threads = hist?.threads?.length ?? 0;
+  const progress = hist?.metadata?.progress;
+  if (threads > 0) {
+    return `Histórico coexistência: ${threads} conversa(s)${progress != null ? ` · ${progress}%` : ""}`;
   }
   return "";
 }

@@ -271,7 +271,8 @@ function ConectarMeta() {
             <div className="space-y-1">
               <CardTitle className="text-base">WhatsApp com coexistência</CardTitle>
               <CardDescription>
-                Celular e painel no mesmo número. As conversas do Guatá ficam aqui; etiquetas e catálogo continuam no app.
+                Celular e painel no mesmo número. Novas mensagens e ecoo do app entram ao vivo; conversas antigas do celular
+                aparecem se a Meta enviar o webhook history (com compartilhamento ligado no app).
               </CardDescription>
             </div>
             {connection?.connected && <Badge>Conectado</Badge>}
@@ -319,7 +320,7 @@ function ConectarMeta() {
                     <RefreshCw
                       className={`h-4 w-4 mr-2 ${resubscribeMut.isPending ? "animate-spin" : ""}`}
                     />
-                    Reinscrever eco
+                    Reinscrever webhooks (eco + histórico)
                   </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>

@@ -55,4 +55,44 @@ describe("webhook coexistência", () => {
     expect(webhookEventKindFromPayload(payload)).toBe("phone_echo");
     expect(phoneEchoesFromValue(payload.entry[0].changes[1].value)).toHaveLength(1);
   });
+
+  test("reconhece history de coexistência", () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              field: "history",
+              value: {
+                messaging_product: "whatsapp",
+                metadata: { phone_number_id: "106540352242922" },
+                history: [
+                  {
+                    metadata: { phase: 0, chunk_order: 1, progress: 10 },
+                    threads: [
+                      {
+                        id: "5567111111111",
+                        messages: [
+                          {
+                            from: "5567111111111",
+                            from_user_id: "US.x",
+                            id: "wamid.hist1",
+                            timestamp: "1739230970",
+                            type: "text",
+                            text: { body: "Oi antigo" },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(webhookEventKindFromPayload(payload)).toBe("history");
+    expect(webhookPreview(payload.entry[0].changes[0].value)).toContain("Histórico coexistência");
+  });
 });

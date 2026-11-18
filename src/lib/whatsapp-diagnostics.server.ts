@@ -56,6 +56,7 @@ export interface WhatsAppDiagnostics {
   conversas: { sessions: number; mensagens: number; triagens: number };
   coexistencia: {
     ecosem7dias: number;
+    historicoImportado7dias: number;
     camposWebhook: readonly string[];
   };
   ultimasEntregas: DeliveryRow[];
@@ -170,6 +171,11 @@ export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
     .select("*", { count: "exact", head: true })
     .eq("event_kind", "phone_echo")
     .gte("created_at", since7d);
+  const { count: historicoCount } = await supabaseAdmin
+    .from("messages")
+    .select("*", { count: "exact", head: true })
+    .filter("metadata->>coexistence_history", "eq", "true")
+    .gte("created_at", since7d);
 
   const { data: rows } = await supabaseAdmin
     .from("whatsapp_deliveries")
@@ -213,6 +219,7 @@ export async function runWhatsAppDiagnostics(): Promise<WhatsAppDiagnostics> {
     },
     coexistencia: {
       ecosem7dias: echoCount ?? 0,
+      historicoImportado7dias: historicoCount ?? 0,
       camposWebhook: META_WHATSAPP_WEBHOOK_FIELDS,
     },
     ultimasEntregas: (rows ?? []).map((r: any) => ({

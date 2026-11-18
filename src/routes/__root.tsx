@@ -82,21 +82,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content:
           "Painel operacional do Guatá Channel: WhatsApp do Descubra MS e Guatá.",
       },
-      { name: "author", content: "Lovable" },
+      { name: "author", content: "Guatá" },
       { property: "og:title", content: "Guatá Channel — Painel" },
       {
         property: "og:description",
-        content: "Operação WhatsApp do ecossistema Descubra Mato Grosso do Sul.",
+        content:
+          "Painel operacional do Guatá Channel: WhatsApp do Descubra MS e Guatá.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Guatá Channel — Painel" },
-      { name: "description", content: "Guatá Channel manages WhatsApp Business communications for tourism and travel services." },
-      { property: "og:description", content: "Guatá Channel manages WhatsApp Business communications for tourism and travel services." },
-      { name: "twitter:description", content: "Guatá Channel manages WhatsApp Business communications for tourism and travel services." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d72aab82-f6db-4179-b3c6-fa46acd7ad51/id-preview-ad5a3373--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app-1779057703092.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d72aab82-f6db-4179-b3c6-fa46acd7ad51/id-preview-ad5a3373--16a8412a-83f5-4d18-bc70-414943f20be8.lovable.app-1779057703092.png" },
+      {
+        name: "twitter:description",
+        content:
+          "Painel operacional do Guatá Channel: WhatsApp do Descubra MS e Guatá.",
+      },
     ],
     links: [
       {
