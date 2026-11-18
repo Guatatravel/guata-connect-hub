@@ -251,4 +251,13 @@ export async function processCoexistenceHistoryWebhook(
   if (!hasThreads && Array.isArray(value.messages) && value.messages.length > 0) {
     await importHistoryMediaMessages(value, display, meta, errors);
   }
+
+  try {
+    const { applyHistoryWebhookToCoexistenceMeta } = await import(
+      "@/lib/whatsapp-coexistence-sync.server"
+    );
+    await applyHistoryWebhookToCoexistenceMeta(meta.organizationId, value);
+  } catch (err) {
+    console.error("[coexistence] meta do webhook history:", err);
+  }
 }

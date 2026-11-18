@@ -57,3 +57,34 @@ export const resubscribeWhatsAppCoexistenceForOrg = createServerFn({ method: "PO
     const orgId = await authorizedOrganization(context.userId);
     return resubscribeCoexistenceWebhooksForOrg(orgId);
   });
+
+export const fetchCoexistenceHistoryStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { resolveOrganizationForUser } = await import("./organizations.server");
+    const { getCoexistenceHistoryStatusForOrg } = await import("./whatsapp-coexistence-sync.server");
+    const orgId = await resolveOrganizationForUser(context.userId);
+    return getCoexistenceHistoryStatusForOrg(orgId);
+  });
+
+export const requestCoexistenceHistorySync = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { requestCoexistenceHistorySyncForOrg, getCoexistenceHistoryStatusForOrg } = await import(
+      "./whatsapp-coexistence-sync.server"
+    );
+    const orgId = await authorizedOrganization(context.userId);
+    const prior = await getCoexistenceHistoryStatusForOrg(orgId);
+    if (!prior.canRequestSync) {
+      throw new Error(prior.hint || "Não é possível importar o histórico agora.");
+    }
+    const result = await requestCoexistenceHistorySyncForOrg(orgId);
+    const next = await getCoexistenceHistoryStatusForOrg(orgId);
+    return {
+      ...result,
+      status: next,
+      message: result.alreadyRequested
+        ? "O pedido de histórico já tinha sido enviado. Aguarde os webhooks da Meta."
+        : "Pedido enviado à Meta. Aceite compartilhar o histórico no WhatsApp Business e mantenha o app aberto.",
+    };
+  });

@@ -75,6 +75,22 @@ export async function completeEmbeddedSignup(
     phoneNumberId: phone.id,
     accessToken,
   });
+  const { patchCoexistenceMeta, requestCoexistenceHistorySyncForOrg } = await import(
+    "@/lib/whatsapp-coexistence-sync.server"
+  );
+  await patchCoexistenceMeta(organizationId, {
+    connected_at: new Date().toISOString(),
+    history_status: "none",
+    history_progress: 0,
+    history_error: undefined,
+    history_sync_requested_at: undefined,
+    history_sync_request_id: undefined,
+  });
+  try {
+    await requestCoexistenceHistorySyncForOrg(organizationId);
+  } catch (err) {
+    console.error("[coexistence] sync histórico após conectar:", err);
+  }
   return publicWhatsAppConnection({
     phoneNumberId: phone.id,
     wabaId,

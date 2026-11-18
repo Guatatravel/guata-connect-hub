@@ -1124,6 +1124,7 @@ export type Database = {
       whatsapp_channels: {
         Row: {
           access_token: string | null
+          coexistence_meta: Json
           created_at: string
           id: string
           is_active: boolean
@@ -1136,6 +1137,7 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          coexistence_meta?: Json
           created_at?: string
           id?: string
           is_active?: boolean
@@ -1148,6 +1150,7 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          coexistence_meta?: Json
           created_at?: string
           id?: string
           is_active?: boolean

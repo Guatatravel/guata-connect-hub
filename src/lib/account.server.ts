@@ -41,6 +41,7 @@ export async function disconnectOrganizationWhatsApp(organizationId: string): Pr
         phone_number_id: null,
         waba_id: null,
         is_active: false,
+        coexistence_meta: {} as never,
         updated_at: new Date().toISOString(),
       })
       .eq("organization_id", organizationId);

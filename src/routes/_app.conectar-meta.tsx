@@ -21,9 +21,13 @@ import {
 } from "@/lib/organizations.functions";
 import {
   completeWhatsAppEmbeddedSignup,
+  fetchCoexistenceHistoryStatus,
   fetchWhatsAppEmbeddedState,
+  requestCoexistenceHistorySync,
   resubscribeWhatsAppCoexistenceForOrg,
 } from "@/lib/whatsapp-embedded.functions";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { History } from "lucide-react";
 import { disconnectWhatsApp } from "@/lib/account.functions";
 import {
   AlertDialog,
@@ -215,6 +219,7 @@ function ConectarMeta() {
       });
       await qc.invalidateQueries({ queryKey: ["org-context"] });
       await qc.invalidateQueries({ queryKey: ["whatsapp-embedded"] });
+      await qc.invalidateQueries({ queryKey: ["coexistence-history-status"] });
       toast.success(
         result.displayPhone ? `WhatsApp ${result.displayPhone} conectado` : "WhatsApp oficial conectado",
       );
@@ -235,8 +240,29 @@ function ConectarMeta() {
       );
       void qc.invalidateQueries({ queryKey: ["org-context"] });
       void qc.invalidateQueries({ queryKey: ["whatsapp-embedded"] });
+      void qc.invalidateQueries({ queryKey: ["coexistence-history-status"] });
     },
     onError: (e: Error) => toast.error(e.message || "Não foi possível desvincular"),
+  });
+
+  const historyStatusFn = useServerFn(fetchCoexistenceHistoryStatus);
+  const historySyncFn = useServerFn(requestCoexistenceHistorySync);
+  const historyStatus = useQuery({
+    queryKey: ["coexistence-history-status"],
+    queryFn: () => historyStatusFn(),
+    enabled: Boolean(embedded.data?.connection?.connected),
+    refetchInterval: (q) => {
+      const s = q.state.data?.status;
+      return s === "requested" || s === "syncing" ? 15_000 : false;
+    },
+  });
+  const historySyncMut = useMutation({
+    mutationFn: () => historySyncFn(),
+    onSuccess: (r) => {
+      toast.success(r.message);
+      void qc.invalidateQueries({ queryKey: ["coexistence-history-status"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const resubscribeMut = useMutation({
@@ -348,6 +374,56 @@ function ConectarMeta() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                </>
+              )}
+            </div>
+          )}
+          {connection?.connected && canManage !== false && (
+            <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-center gap-2 font-medium text-foreground">
+                <History className="h-4 w-4" />
+                Histórico do celular
+              </div>
+              {historyStatus.isLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">{historyStatus.data?.hint}</p>
+                  {historyStatus.data?.error && (
+                    <p className="text-xs text-destructive">{historyStatus.data.error}</p>
+                  )}
+                  {(historyStatus.data?.importedMessages ?? 0) > 0 && (
+                    <p className="text-xs text-foreground">
+                      {historyStatus.data?.importedMessages} mensagem(ns) antigas no painel
+                      {historyStatus.data && historyStatus.data.progress > 0
+                        ? ` · progresso Meta ${historyStatus.data.progress}%`
+                        : ""}
+                    </p>
+                  )}
+                  {historyStatus.data?.canRequestSync && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="rounded-lg"
+                      disabled={historySyncMut.isPending}
+                      onClick={() => historySyncMut.mutate()}
+                    >
+                      {historySyncMut.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
+                      Importar conversas antigas
+                    </Button>
+                  )}
+                  {historyStatus.data?.status === "declined" && (
+                    <Alert variant="destructive" className="py-2">
+                      <AlertTitle className="text-sm">Histórico não compartilhado</AlertTitle>
+                      <AlertDescription className="text-xs">
+                        No WhatsApp Business, ative compartilhar histórico com a plataforma. Se já conectou antes,
+                        reconecte via Meta e confirme no celular.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </>
               )}
             </div>
