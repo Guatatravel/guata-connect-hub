@@ -45,6 +45,14 @@ import {
 import { signedChatMediaUrl, storeChatMedia } from "@/lib/chat-media.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
 import {
+  findRecentTemplateForSession,
+  historyContentFromRow,
+  isTemplateButtonAccept,
+  isTemplateButtonDecline,
+  templateAcceptPromptSection,
+  templateDeclineReply,
+} from "@/lib/whatsapp-template-context.server";
+import {
   detectLeadStage,
   leadStagePromptSection,
   mergeLeadStage,
@@ -407,13 +415,16 @@ async function loadHistory(
   if (!sessionId) return [{ role: "user", content: userText }];
   const { data } = await supabaseAdmin
     .from("messages")
-    .select("author, text")
+    .select("author, text, metadata")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: false })
     .limit(12);
   const hist = (data ?? []).reverse().map((m) => ({
     role: (m.author === "user" ? "user" : "assistant") as "user" | "assistant",
-    content: m.text,
+    content: historyContentFromRow(
+      m.text,
+      (m.metadata ?? {}) as Record<string, unknown>,
+    ),
   }));
   const last = hist[hist.length - 1];
   if (!last || last.role !== "user" || last.content !== userText) {
@@ -429,6 +440,7 @@ async function answerTurismo(
   firstName?: string,
   leadStage: LeadStage = "informacional",
   intakeData?: Record<string, unknown>,
+  templatePromptExtra?: string,
 ): Promise<string> {
   const orgId = sessionId ? await sessionOrganizationId(sessionId) : await getGuataOrganizationId();
   const attendant = await loadAttendant(line, orgId);
@@ -525,7 +537,7 @@ async function answerTurismo(
   const { chatForOrganization } = await import("@/lib/ai-quota.server");
   const raw = await chatForOrganization(
     orgId,
-    [{ role: "system", content: persona + context + whatsappRules }, ...history],
+    [{ role: "system", content: persona + context + whatsappRules + (templatePromptExtra ?? "") }, ...history],
     {
       maxTokens: 1400,
       temperature: attendant?.criatividade ?? 0.6,
@@ -793,7 +805,10 @@ export async function processMessage(
 
   const lower = msg.text.trim().toLowerCase();
   const replies: string[] = [];
+  let templatePromptExtra: string | undefined;
   const offered = session.intake_state === "oferta_humano";
+  const recentTemplate =
+    session.mode !== "humano" ? await findRecentTemplateForSession(session.id) : null;
 
   // Destrava sessões antigas e desarquiva quando o cliente volta a falar
   await supabaseAdmin
@@ -848,8 +863,23 @@ export async function processMessage(
       lower,
     );
 
+  if (
+    recentTemplate &&
+    isTemplateButtonAccept(msg.text) &&
+    !offered &&
+    session.mode !== "humano"
+  ) {
+    templatePromptExtra = templateAcceptPromptSection(recentTemplate);
+  }
+
   if (audioPrefCmd.handled && audioPrefCmd.reply) {
     replies.push(audioPrefCmd.reply);
+  } else if (
+    session.mode !== "humano" &&
+    recentTemplate &&
+    isTemplateButtonDecline(msg.text)
+  ) {
+    replies.push(templateDeclineReply(firstName));
   } else if (session.mode === "humano") {
     // Não responde — consultor responde no painel
   } else if (session.mode === "triagem" && session.intake_state && INTAKE_STEPS.includes(session.intake_state as IntakeStep)) {
@@ -880,6 +910,7 @@ export async function processMessage(
         firstName,
         leadStage,
         session.intake_data,
+        templatePromptExtra,
       );
       const offer = raw.includes("[[OFERTA_HUMANO]]");
       const hookUsed =

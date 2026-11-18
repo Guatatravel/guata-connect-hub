@@ -10,6 +10,11 @@ import {
   typingDelayMs,
 } from "@/lib/meta-send.server";
 import { getGuataOrganizationId } from "@/lib/organizations.server";
+import {
+  lookupWhatsappTemplateBody,
+  panelPreviewForTemplate,
+  renderTemplateBodyPlaceholders,
+} from "@/lib/whatsapp-template-context.server";
 
 const BUCKET = "campaigns";
 const MAX_SEND_PER_LAUNCH = 80;
@@ -562,6 +567,13 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     ? await campaignImageUrl(campaign.image_path as string)
     : null;
   const body = String(campaign.body ?? "").trim();
+  const templateLanguage = String(campaign.template_language || "pt_BR");
+  const campaignTemplateName =
+    sendMode === "template" ? String(campaign.template_name ?? "").trim() : "";
+  const campaignTemplateBody =
+    campaignTemplateName && orgId
+      ? await lookupWhatsappTemplateBody(orgId, campaignTemplateName, templateLanguage)
+      : null;
 
   let sentOk = 0;
   let sentFail = 0;
@@ -613,11 +625,22 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
             .eq("id", rec.id);
           continue;
         }
-        const shown = body ? renderName(body, first || "olá") : `Template ${templateName}`;
+        const renderedTemplateBody = campaignTemplateBody
+          ? renderTemplateBodyPlaceholders(campaignTemplateBody, first || undefined)
+          : body
+            ? renderName(body, first || "olá")
+            : "";
+        const shown = campaignTemplateBody
+          ? panelPreviewForTemplate(templateName, campaignTemplateBody, first || undefined)
+          : body
+            ? renderName(body, first || "olá")
+            : `Template ${templateName}`;
         await persistOutbound(sessionId, shown, {
           campaign_id: campaignId,
           kind: "campaign_template",
           template_name: templateName,
+          template_language: templateLanguage,
+          ...(renderedTemplateBody ? { template_body: renderedTemplateBody } : {}),
           wa_message_id: tplRes.messageId,
         });
         sentOk += 1;
