@@ -57,6 +57,25 @@ export function panelPreviewForTemplate(templateName: string, bodyText: string, 
   return `Template ${templateName}: ${snippet}`;
 }
 
+/** Linha de preview na lista de conversas e na timeline do painel. */
+export function panelMessagePreview(text: string, metadata?: Record<string, unknown> | null): string {
+  const meta = metadata ?? {};
+  const kind = String(meta.kind ?? "");
+  const name = String(meta.template_name ?? "").trim();
+  const body = String(meta.template_body ?? "").trim();
+  if (kind === "campaign_template" || body || name) {
+    if (body) {
+      const line = body.split(/\n/).find((l) => l.trim())?.trim() ?? body;
+      const snippet = line.length > 100 ? `${line.slice(0, 97)}…` : line;
+      return name ? `Modelo «${name}»: ${snippet}` : `Modelo Meta: ${snippet}`;
+    }
+    if (name && /^template\s+/i.test(text.trim())) {
+      return `Modelo «${name}» (cartão no WhatsApp do cliente)`;
+    }
+  }
+  return text;
+}
+
 export function isTemplateButtonDecline(text: string): boolean {
   const t = text.trim().toLowerCase();
   return /^(n(ã|a)o|no|n)\b[!?.…\s]*$/i.test(t);

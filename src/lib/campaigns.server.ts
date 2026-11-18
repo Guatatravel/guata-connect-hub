@@ -74,10 +74,22 @@ function withinMetaSessionWindow(lastIn: Date | null): boolean {
   return Date.now() - lastIn.getTime() <= 24 * 60 * 60 * 1000;
 }
 
+/** Um número por linha (DDD+celular, com ou sem espaço/hífen na mesma linha). */
 export function parsePhoneList(raw: string | null | undefined): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
-  for (const part of (raw ?? "").split(/[\s,;]+/)) {
+  const src = raw ?? "";
+  const hasLines = /[\r\n]/.test(src);
+  const tokens = hasLines
+    ? src
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)
+    : src
+        .split(/[,;]+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+  for (const part of tokens) {
     let phone = part.replace(/\D/g, "");
     if (phone.length === 10 || phone.length === 11) phone = "55" + phone;
     if (phone.length < 12 || phone.length > 15 || seen.has(phone)) continue;
@@ -460,6 +472,7 @@ async function ensureSessionForPhone(
   orgId: string,
   line: CampaignLine,
   phone: string,
+  newSessionMode: "bot" | "humano" = "humano",
 ): Promise<string> {
   const { data: existing } = await supabaseAdmin
     .from("sessions")
@@ -477,7 +490,7 @@ async function ensureSessionForPhone(
       phone,
       line,
       organization_id: orgId,
-      mode: "humano",
+      mode: newSessionMode,
     })
     .select("id")
     .single();
@@ -490,10 +503,13 @@ async function targetsForLaunch(
   line: CampaignLine,
   audience: CampaignAudience,
   extraPhones: string | null,
+  sendMode: CampaignSendMode = "sessao",
 ): Promise<Array<{ phone: string; session_id: string }>> {
   const extras = parsePhoneList(extraPhones);
   const fromAudience =
     audience === "phone_list" ? [] : await resolveAudience(orgId, line, audience);
+  const newListSessionMode: "bot" | "humano" =
+    audience === "phone_list" && sendMode === "template" ? "bot" : "humano";
   const seen = new Set<string>();
   const out: Array<{ phone: string; session_id: string }> = [];
   for (const t of fromAudience) {
@@ -503,7 +519,7 @@ async function targetsForLaunch(
   }
   for (const phone of extras) {
     if (seen.has(phone)) continue;
-    const session_id = await ensureSessionForPhone(orgId, line, phone);
+    const session_id = await ensureSessionForPhone(orgId, line, phone, newListSessionMode);
     seen.add(phone);
     out.push({ phone, session_id });
   }
@@ -535,9 +551,16 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
   const orgId = (campaign.organization_id as string) || (await getGuataOrganizationId());
   const wa = { organizationId: orgId, line };
   const audience = campaign.audience as CampaignAudience;
+  const sendMode = campaign.send_mode === "template" ? "template" : "sessao";
 
   if (campaign.status === "rascunho") {
-    const targets = await targetsForLaunch(orgId, line, audience, campaign.extra_phones as string | null);
+    const targets = await targetsForLaunch(
+      orgId,
+      line,
+      audience,
+      campaign.extra_phones as string | null,
+      sendMode,
+    );
     if (targets.length === 0) {
       throw new Error(
         audience === "phone_list"
@@ -562,7 +585,6 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     throw new Error("Campanha não pode ser enviada neste status.");
   }
 
-  const sendMode = campaign.send_mode === "template" ? "template" : "sessao";
   const imageUrl = campaign.image_path
     ? await campaignImageUrl(campaign.image_path as string)
     : null;

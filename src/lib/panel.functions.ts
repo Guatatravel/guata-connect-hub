@@ -23,6 +23,7 @@ import {
   agentWhatsAppCaption,
   agentWhatsAppParts,
 } from "@/lib/whatsapp-messages.server";
+import { panelMessagePreview } from "@/lib/whatsapp-template-context.server";
 import { parseLeadStageFromIntake } from "@/lib/lead-intake.server";
 import { parseCrm } from "@/lib/crm.shared";
 import { markQuoteSent, runDueFollowUps } from "@/lib/crm.server";
@@ -279,7 +280,7 @@ async function mapMessagesForPanel(
           | "bot"
           | "human",
         authorName,
-        text: deleted ? "Mensagem apagada" : m.text,
+        text: deleted ? "Mensagem apagada" : panelMessagePreview(m.text, meta as Record<string, unknown>),
         at: m.created_at,
         mediaKind: deleted ? undefined : mediaKind,
         mediaUrl: deleted ? undefined : mediaUrl ?? undefined,
@@ -309,7 +310,7 @@ export const fetchConversations = createServerFn({ method: "POST" })
     const { data, error } = await supabaseAdmin
       .from("sessions")
       .select(
-        "id, line, mode, phone, contact_name, last_message_at, created_at, archived_at, staff_seen_at, intake_data, messages(text, created_at)",
+        "id, line, mode, phone, contact_name, last_message_at, created_at, archived_at, staff_seen_at, intake_data, messages(text, metadata, created_at)",
       )
       .eq("organization_id", orgId)
       .order("last_message_at", { ascending: false })
@@ -320,10 +321,16 @@ export const fetchConversations = createServerFn({ method: "POST" })
 
     return (data ?? []).map((s) => {
       const intake = (s.intake_data ?? {}) as Record<string, unknown>;
-      const latest = (s as { messages?: { text?: string }[] | { text?: string } | null }).messages;
-      const lastMessage = Array.isArray(latest)
-        ? (latest[0]?.text ?? "")
-        : (latest?.text ?? "");
+      const latest = (s as {
+        messages?: { text?: string; metadata?: unknown }[] | { text?: string; metadata?: unknown } | null;
+      }).messages;
+      const last = Array.isArray(latest) ? latest[0] : latest;
+      const lastMessage = last
+        ? panelMessagePreview(
+            last.text ?? "",
+            (last.metadata ?? {}) as Record<string, unknown>,
+          )
+        : "";
       return {
         id: s.id,
         phone: s.phone,

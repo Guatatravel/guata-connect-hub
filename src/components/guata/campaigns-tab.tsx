@@ -276,26 +276,6 @@ export function CampaignsTab() {
           )}
 
           <div className="space-y-2">
-            <Label>
-              {audience === "phone_list"
-                ? "Lista de telefones (obrigatório)"
-                : sendMode === "template"
-                  ? "Telefones extras (opcional — somam ao público)"
-                  : "Telefones avulsos (opcional)"}
-            </Label>
-            <Textarea
-              rows={3}
-              value={extraPhones}
-              onChange={(e) => setExtraPhones(e.target.value)}
-              placeholder={
-                audience === "phone_list"
-                  ? "Um número por linha, com DDD (55…).\nQuem nunca falou no Guatá também recebe, se a Meta aceitar."
-                  : "Um número por linha.\nNo modo template, somam ao público escolhido abaixo."
-              }
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label>Público (conversas existentes)</Label>
             <Select
               value={audience}
@@ -316,7 +296,7 @@ export function CampaignsTab() {
             </Select>
             <p className="text-xs text-muted-foreground">
               {audience === "phone_list"
-                ? `~${preview?.extraCount ?? preview?.filterCount ?? "…"} número(s) na lista. Máx. 80 por clique.`
+                ? `~${preview?.extraCount ?? preview?.filterCount ?? "…"} número(s) na lista. Máx. 80 por clique. Com template, novas conversas ficam com o Guatá (não entram em fila humana).`
                 : extraPhones.trim()
                   ? sendMode === "template"
                     ? `~${preview?.filterCount ?? "…"} destinos (público + lista). Máx. 80 por clique.`
@@ -328,6 +308,32 @@ export function CampaignsTab() {
           </div>
 
           <div className="space-y-2">
+            <Label>
+              {audience === "phone_list"
+                ? "Lista de telefones (obrigatório)"
+                : sendMode === "template"
+                  ? "Telefones extras (opcional — somam ao público)"
+                  : "Telefones avulsos (opcional)"}
+            </Label>
+            <Textarea
+              rows={4}
+              value={extraPhones}
+              onChange={(e) => setExtraPhones(e.target.value)}
+              placeholder={
+                audience === "phone_list"
+                  ? "Um número por linha (pode usar espaço ou hífen).\nEx.: 67 99248-3469\n     67984061395\n     55679984061395"
+                  : "Um número por linha.\nNo modo template, somam ao público escolhido acima."
+              }
+            />
+            {audience === "phone_list" && (
+              <p className="text-xs text-muted-foreground">
+                Formato: DDD + número na mesma linha. O contador acima deve mostrar quantos números foram
+                reconhecidos antes de enviar.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label>Mensagem</Label>
             <Textarea
               rows={4}
@@ -335,7 +341,7 @@ export function CampaignsTab() {
               onChange={(e) => setBody(e.target.value)}
               placeholder={
                 sendMode === "template"
-                  ? "Texto só para o painel. Use {nome} onde entra o primeiro nome."
+                  ? "Opcional: nota no painel e contexto da IA. O cliente vê o cartão aprovado na Meta; use {nome} se quiser."
                   : "Texto curto da promoção (vira legenda se houver cartaz)."
               }
             />
@@ -345,6 +351,12 @@ export function CampaignsTab() {
             <Label>
               {sendMode === "template" ? "Imagem do cabeçalho (só se o template aprovado tiver imagem)" : "Cartaz (opcional)"}
             </Label>
+            {sendMode === "template" && (
+              <p className="text-xs text-muted-foreground">
+                Se o modelo foi cadastrado com imagem no topo, anexe de novo aqui a cada disparo (a Meta
+                baixa esta imagem no envio). O painel não reproduz o cartão visual — só um resumo do texto.
+              </p>
+            )}
             <input
               ref={imageRef}
               type="file"
