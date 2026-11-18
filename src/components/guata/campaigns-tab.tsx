@@ -296,7 +296,7 @@ export function CampaignsTab() {
             </Select>
             <p className="text-xs text-muted-foreground">
               {audience === "phone_list"
-                ? `~${preview?.extraCount ?? preview?.filterCount ?? "…"} número(s) na lista. Máx. 80 por clique. Com template, novas conversas ficam com o Guatá (não entram em fila humana).`
+                ? `~${preview?.extraCount ?? preview?.filterCount ?? "…"} número(s) na lista. Máx. 80 por clique. Com modelo aprovado, o Guatá atende (sem alerta de humano).`
                 : extraPhones.trim()
                   ? sendMode === "template"
                     ? `~${preview?.filterCount ?? "…"} destinos (público + lista). Máx. 80 por clique.`

@@ -508,8 +508,7 @@ async function targetsForLaunch(
   const extras = parsePhoneList(extraPhones);
   const fromAudience =
     audience === "phone_list" ? [] : await resolveAudience(orgId, line, audience);
-  const newListSessionMode: "bot" | "humano" =
-    audience === "phone_list" && sendMode === "template" ? "bot" : "humano";
+  const newListSessionMode: "bot" | "humano" = sendMode === "template" ? "bot" : "humano";
   const seen = new Set<string>();
   const out: Array<{ phone: string; session_id: string }> = [];
   for (const t of fromAudience) {
@@ -524,6 +523,55 @@ async function targetsForLaunch(
     out.push({ phone, session_id });
   }
   return out;
+}
+
+/** Modelo aprovado = continuidade com o Guatá (não fila humana), salvo atendimento pelo celular. */
+async function setSessionGuataBotAfterTemplate(sessionId: string): Promise<void> {
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("intake_data")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const intake = (data?.intake_data ?? {}) as Record<string, unknown>;
+  if (intake["staff_phone_at"]) return;
+  await supabaseAdmin
+    .from("sessions")
+    .update({ mode: "bot", intake_state: null })
+    .eq("id", sessionId);
+}
+
+/** Corrige conversas em humano só por disparo antigo (sem cliente falando). */
+export async function releaseMistakenTemplateHandoffs(orgId: string): Promise<void> {
+  const { data: sessions } = await supabaseAdmin
+    .from("sessions")
+    .select("id, intake_data")
+    .eq("organization_id", orgId)
+    .eq("mode", "humano")
+    .limit(500);
+  for (const s of sessions ?? []) {
+    const intake = (s.intake_data ?? {}) as Record<string, unknown>;
+    if (intake["staff_phone_at"]) continue;
+    const { count } = await supabaseAdmin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", s.id)
+      .eq("direction", "in");
+    if ((count ?? 0) > 0) continue;
+    const { data: lastOut } = await supabaseAdmin
+      .from("messages")
+      .select("metadata")
+      .eq("session_id", s.id)
+      .eq("direction", "out")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const kind = String((lastOut?.metadata as { kind?: string } | null)?.kind ?? "");
+    if (kind !== "campaign_template") continue;
+    await supabaseAdmin
+      .from("sessions")
+      .update({ mode: "bot", intake_state: null })
+      .eq("id", s.id);
+  }
 }
 
 async function sessionFirstName(sessionId: string): Promise<string> {
@@ -627,6 +675,7 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
           .eq("id", rec.id);
         continue;
       }
+      await setSessionGuataBotAfterTemplate(sessionId);
       try {
         const first = campaign.template_uses_name === false ? "" : await sessionFirstName(sessionId);
         const tplRes = await sendWhatsAppTemplate(wa, phone, {

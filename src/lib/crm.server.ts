@@ -137,6 +137,10 @@ async function windowOpen(sessionId: string): Promise<boolean> {
 
 /** Envia follow-ups vencidos desta agência. Chamado ao abrir o painel e ao receber mensagem. */
 export async function runDueFollowUps(orgId: string) {
+  const { releaseMistakenTemplateHandoffs } = await import("@/lib/campaigns.server");
+  await releaseMistakenTemplateHandoffs(orgId).catch((e) =>
+    console.error("[campaigns] template handoff:", e),
+  );
   const { data } = await supabaseAdmin
     .from("sessions")
     .select("id, phone, line, organization_id, intake_data")
