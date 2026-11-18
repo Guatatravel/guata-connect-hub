@@ -5,6 +5,7 @@ import {
   mentionsPaymentTerms,
   quotePreviewWhenUnresolved,
   shouldStartGroupOfferFlow,
+  templateReplyBlocksGroupOffer,
 } from "@/lib/group-offer-intake.server";
 
 describe("group-offer-intake", () => {
@@ -13,9 +14,20 @@ describe("group-offer-intake", () => {
     expect(looksLikeGroupOfferText("vi no grupo")).toBe(true);
   });
 
-  test("shouldStart com citação ou cartaz", () => {
+  test("citação sozinha (ex. SIM ao convite) não inicia oferta do grupo", () => {
+    expect(shouldStartGroupOfferFlow({ text: "Sim", quotedWaMessageId: "wamid.1" })).toBe(
+      false,
+    );
+    expect(templateReplyBlocksGroupOffer(true, "accept", "Sim")).toBe(true);
+    expect(templateReplyBlocksGroupOffer(true, null, "Sim")).toBe(true);
+  });
+
+  test("shouldStart com cartaz ou pagamento citado", () => {
     expect(
-      shouldStartGroupOfferFlow({ text: "oi", quotedWaMessageId: "wamid.1" }),
+      shouldStartGroupOfferFlow({
+        text: "condições de pagamento?",
+        quotedWaMessageId: "wamid.1",
+      }),
     ).toBe(true);
     expect(
       shouldStartGroupOfferFlow({ text: "Pacote Nordeste", inboundKind: "image" }),

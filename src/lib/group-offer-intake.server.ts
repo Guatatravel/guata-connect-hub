@@ -3,6 +3,7 @@
  * sem inventar condição de pagamento.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { TemplateUserReplyKind } from "@/lib/whatsapp-template-context.server";
 
 export const GROUP_OFFER_INTAKE_STATE = "oferta_grupo";
 
@@ -73,12 +74,50 @@ function mergeSource(
   return "mixed";
 }
 
+const TEMPLATE_QUICK_REPLY =
+  /^(sim|s|n[aã]o|nao|n|quero|não|yes|no)$/i;
+
+/** Resposta a modelo aprovado (convite etc.) — não confundir com oferta do grupo. */
+export function templateReplyBlocksGroupOffer(
+  hasRecentTemplate: boolean,
+  templateReplyKind: TemplateUserReplyKind | null,
+  userText: string,
+): boolean {
+  if (!hasRecentTemplate) return false;
+  if (templateReplyKind === "accept" || templateReplyKind === "decline") return true;
+  return TEMPLATE_QUICK_REPLY.test(userText.trim());
+}
+
+export async function quotedMessageIsCampaignTemplate(
+  sessionId: string,
+  quotedWaMessageId: string,
+): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from("messages")
+    .select("metadata")
+    .eq("session_id", sessionId)
+    .filter("metadata->>wa_message_id", "eq", quotedWaMessageId)
+    .limit(1)
+    .maybeSingle();
+  const meta = (data?.metadata ?? {}) as { kind?: string; template_name?: string };
+  const kind = String(meta.kind ?? "");
+  return kind === "campaign_template" || Boolean(meta.template_name);
+}
+
 /** Sinais de que esta mensagem é sobre oferta do grupo / story (não disparo do painel). */
 export function shouldStartGroupOfferFlow(ingress: GroupOfferIngress): boolean {
-  if (ingress.quotedWaMessageId) return true;
   if (ingress.referral?.source_type || ingress.referral?.headline) return true;
   if (ingress.inboundKind === "image") return true;
   if (looksLikeGroupOfferText(ingress.text)) return true;
+  if (ingress.quotedForwarded) return true;
+  if (
+    ingress.quotedWaMessageId &&
+    (mentionsPaymentTerms(ingress.text) ||
+      looksLikeGroupOfferText(ingress.text) ||
+      ingress.inboundKind === "image")
+  ) {
+    return true;
+  }
   if (
     mentionsPaymentTerms(ingress.text) &&
     ingress.text.length < 280 &&

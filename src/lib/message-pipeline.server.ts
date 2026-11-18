@@ -51,6 +51,7 @@ import {
   templateAcceptPromptSection,
   templateDeclineReply,
   templateFollowUpPromptSection,
+  type TemplateUserReplyKind,
 } from "@/lib/whatsapp-template-context.server";
 import {
   detectLeadStage,
@@ -65,8 +66,10 @@ import {
   handleGroupOfferTurn,
   isActiveGroupOfferFlow,
   quotePreviewWhenUnresolved,
+  quotedMessageIsCampaignTemplate,
   resolveQuotedTextInSession,
   shouldStartGroupOfferFlow,
+  templateReplyBlocksGroupOffer,
 } from "@/lib/group-offer-intake.server";
 import {
   getGuataOrganizationId,
@@ -940,11 +943,37 @@ export async function processMessage(
     referral: msg.referral,
     quotedForwarded: msg.quotedForwarded,
   };
+  const templateBlocksGroup = templateReplyBlocksGroupOffer(
+    Boolean(recentTemplate),
+    templateReplyKind as TemplateUserReplyKind | null,
+    msg.text,
+  );
+  const quotedIsCampaign =
+    msg.quotedWaMessageId && recentTemplate
+      ? await quotedMessageIsCampaignTemplate(session.id, msg.quotedWaMessageId)
+      : false;
+  if (templateBlocksGroup || quotedIsCampaign) {
+    const intakeClear = { ...(session.intake_data ?? {}) };
+    delete intakeClear["group_offer"];
+    if (isActiveGroupOfferFlow(session.intake_state, session.intake_data)) {
+      await supabaseAdmin
+        .from("sessions")
+        .update({
+          intake_state: null,
+          intake_data: intakeClear as never,
+        })
+        .eq("id", session.id);
+      session.intake_state = null;
+      session.intake_data = intakeClear;
+    }
+  }
   const groupOfferActive =
     session.mode === "bot" &&
     !explicitHuman &&
     lower !== "menu" &&
     !wantsStructuredIntake &&
+    !templateBlocksGroup &&
+    !quotedIsCampaign &&
     (isActiveGroupOfferFlow(session.intake_state, session.intake_data) ||
       shouldStartGroupOfferFlow(groupIngress));
   if (audioPrefCmd.handled && audioPrefCmd.reply) {
