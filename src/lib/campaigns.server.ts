@@ -11,6 +11,7 @@ import {
 } from "@/lib/meta-send.server";
 import { getGuataOrganizationId } from "@/lib/organizations.server";
 import {
+  lookupTemplateQuickReplies,
   lookupWhatsappTemplateBody,
   panelPreviewForTemplate,
   renderTemplateBodyPlaceholders,
@@ -644,6 +645,10 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
     campaignTemplateName && orgId
       ? await lookupWhatsappTemplateBody(orgId, campaignTemplateName, templateLanguage)
       : null;
+  const campaignTemplateQuickReplies =
+    campaignTemplateName && orgId
+      ? await lookupTemplateQuickReplies(orgId, campaignTemplateName, templateLanguage)
+      : [];
 
   let sentOk = 0;
   let sentFail = 0;
@@ -712,6 +717,9 @@ export async function launchCampaign(campaignId: string): Promise<CampaignRow> {
           template_name: templateName,
           template_language: templateLanguage,
           ...(renderedTemplateBody ? { template_body: renderedTemplateBody } : {}),
+          ...(campaignTemplateQuickReplies.length > 0
+            ? { template_quick_replies: campaignTemplateQuickReplies }
+            : {}),
           wa_message_id: tplRes.messageId,
         });
         sentOk += 1;

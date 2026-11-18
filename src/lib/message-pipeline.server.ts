@@ -45,12 +45,12 @@ import {
 import { signedChatMediaUrl, storeChatMedia } from "@/lib/chat-media.server";
 import { formatForWhatsApp, splitWhatsAppMessages } from "@/lib/whatsapp-messages.server";
 import {
+  classifyTemplateUserReply,
   findRecentTemplateForSession,
   historyContentFromRow,
-  isTemplateButtonAccept,
-  isTemplateButtonDecline,
   templateAcceptPromptSection,
   templateDeclineReply,
+  templateFollowUpPromptSection,
 } from "@/lib/whatsapp-template-context.server";
 import {
   detectLeadStage,
@@ -863,30 +863,28 @@ export async function processMessage(
       lower,
     );
 
-  if (
-    recentTemplate &&
-    isTemplateButtonAccept(msg.text) &&
-    !offered &&
-    session.mode !== "humano"
-  ) {
+  const templateReplyKind =
+    recentTemplate && session.mode !== "humano" && !offered
+      ? classifyTemplateUserReply(msg.text, recentTemplate)
+      : null;
+
+  if (templateReplyKind === "accept" && recentTemplate) {
     templatePromptExtra = templateAcceptPromptSection(recentTemplate);
+  } else if (templateReplyKind === "follow_up" && recentTemplate) {
+    templatePromptExtra = templateFollowUpPromptSection(recentTemplate, msg.text);
   }
 
   if (audioPrefCmd.handled && audioPrefCmd.reply) {
     replies.push(audioPrefCmd.reply);
-  } else if (
-    session.mode !== "humano" &&
-    recentTemplate &&
-    isTemplateButtonDecline(msg.text)
-  ) {
-    replies.push(templateDeclineReply(recentTemplate.templateName, firstName));
+  } else if (session.mode !== "humano" && templateReplyKind === "decline" && recentTemplate) {
+    replies.push(templateDeclineReply(recentTemplate, firstName));
     await supabaseAdmin
       .from("sessions")
       .update({
         intake_data: {
           ...(session.intake_data ?? {}),
           template_declined_at: new Date().toISOString(),
-          template_declined_name: recentTemplate.templateName,
+          template_declined_name: recentTemplate?.templateName,
         } as never,
       })
       .eq("id", session.id);

@@ -1,24 +1,58 @@
 import { describe, expect, test } from "bun:test";
 import {
+  classifyTemplateUserReply,
   historyContentFromRow,
   isTemplateButtonAccept,
   isTemplateButtonDecline,
+  isTextualDeclineAfterTemplate,
+  quickReplyLabelsFromComponents,
   renderTemplateBodyPlaceholders,
   templateDeclineReply,
   templateHistoryText,
 } from "@/lib/whatsapp-template-context.server";
+
+const conviteCtx = {
+  templateName: "convite",
+  bodyText: "Posso salvar seu contato e te dar boas-vindas à Família Guatá?",
+  sentAt: new Date().toISOString(),
+  quickReplies: ["SIM", "NÃO"],
+};
 
 describe("whatsapp-template-context", () => {
   test("renderTemplateBodyPlaceholders substitui {{1}}", () => {
     expect(renderTemplateBodyPlaceholders("Oi {{1}}, tudo bem?", "Ana")).toBe("Oi Ana, tudo bem?");
   });
 
-  test("botões SIM/NÃO", () => {
+  test("extrai botões dos components Meta", () => {
+    const labels = quickReplyLabelsFromComponents([
+      { type: "BODY", text: "Oi" },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "SIM" },
+          { type: "QUICK_REPLY", text: "NÃO" },
+        ],
+      },
+    ]);
+    expect(labels).toEqual(["SIM", "NÃO"]);
+  });
+
+  test("classifica SIM/NÃO e texto livre", () => {
+    expect(classifyTemplateUserReply("NÃO", conviteCtx)).toBe("decline");
+    expect(classifyTemplateUserReply("SIM", conviteCtx)).toBe("accept");
+    expect(classifyTemplateUserReply("quero roteiro em Bonito", conviteCtx)).toBe("follow_up");
+    expect(isTextualDeclineAfterTemplate("não quero agora")).toBe(true);
+  });
+
+  test("botões SIM/NÃO legado", () => {
     expect(isTemplateButtonAccept("SIM")).toBe(true);
-    expect(isTemplateButtonAccept("sim!")).toBe(true);
-    expect(isTemplateButtonDecline("NÃO")).toBe(true);
     expect(isTemplateButtonDecline("Não")).toBe(true);
-    expect(isTemplateButtonDecline("quero viajar")).toBe(false);
+  });
+
+  test("convite NÃO sem empurrar destino", () => {
+    const msg = templateDeclineReply(conviteCtx, "Ana");
+    expect(msg).toContain("não vou insistir");
+    expect(msg.toLowerCase()).not.toContain("destino");
   });
 
   test("historyContentFromRow usa template_body", () => {
@@ -26,15 +60,10 @@ describe("whatsapp-template-context", () => {
       kind: "campaign_template",
       template_name: "convite",
       template_body: "Olá! Quer conhecer o Guatá?",
+      template_quick_replies: ["SIM", "NÃO"],
     });
     expect(text).toContain("convite");
-    expect(text).toContain("Olá! Quer conhecer o Guatá?");
-  });
-
-  test("convite NÃO não empurra destino", () => {
-    const msg = templateDeclineReply("convite", "Ana");
-    expect(msg).toContain("não vou insistir");
-    expect(msg.toLowerCase()).not.toContain("destino");
+    expect(text).toContain("SIM");
   });
 
   test("templateHistoryText inclui nota da campanha", () => {
