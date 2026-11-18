@@ -17,14 +17,32 @@ export function stripAutoMediaEcho(text: string): string {
     .trim();
 }
 
+/** Entidades que copiloto/HTML colam no rascunho. */
+export function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => {
+      const cp = parseInt(hex, 16);
+      return Number.isFinite(cp) ? String.fromCodePoint(cp) : " ";
+    })
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const cp = parseInt(dec, 10);
+      return Number.isFinite(cp) ? String.fromCharCode(cp) : " ";
+    })
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
 export function formatForWhatsApp(text: string): string {
   return normalizeAgencyNameInText(
     stripAutoMediaEcho(
-      text
+      decodeHtmlEntities(text)
         .replace(/^#{1,6}\s*/gm, "")
         .replace(/^\s*[*-]\s+/gm, "• ")
         .replace(/\*\*(.+?)\*\*/g, "*$1*")
         .replace(/__(.+?)__/g, "_$1_")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1\n$2")
         .replace(/\n{3,}/g, "\n\n")
         .trim(),
     ),
@@ -115,7 +133,18 @@ export function agentWhatsAppParts(staffName: string | null, body: string): stri
   const parts = splitWhatsAppMessages(trimmed);
   if (parts.length === 0) return [];
   const label = agentAttendantLabel(staffName);
-  return parts.map((p, i) => (i === 0 ? `${label}\n${p}` : p));
+  return parts.map((p, i) => (i === 0 ? `${label}\n\n${p}` : p));
+}
+
+/**
+ * Texto para exibir no painel (espelha o que vai ao WhatsApp em mensagens antigas salvas cruas).
+ */
+export function panelDisplayForAgentMessage(text: string, staffName?: string | null): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+  if (/^Atendente\s.+:/m.test(trimmed)) return trimmed;
+  const parts = agentWhatsAppParts(staffName ?? null, trimmed);
+  return parts.length > 0 ? parts.join("\n\n") : formatForWhatsApp(trimmed);
 }
 
 /** Legenda de mídia com assinatura do consultor. */

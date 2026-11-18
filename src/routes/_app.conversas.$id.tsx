@@ -32,6 +32,7 @@ import { HandoffControls } from "@/components/guata/handoff-controls";
 import { ConsultantAiDock } from "@/components/guata/consultant-ai-dock";
 import { CrmPanel } from "@/components/guata/crm-panel";
 import type { ChatMessage } from "@/types/guata";
+import { formatPhone } from "@/lib/format";
 
 function pendingLabel(text: string, file: File | null): string {
   if (file && (file.type.startsWith("audio/") || /\.(webm|mp3|m4a|ogg|aac|amr)$/i.test(file.name))) {
@@ -311,6 +312,7 @@ function ConversaDetail() {
             }}
           >
             <ChatTimeline
+              contactDisplayName={conv.contactName ?? formatPhone(conv.phone)}
               messages={[
                 ...conv.messages,
                 ...outgoing.filter((pending) => {

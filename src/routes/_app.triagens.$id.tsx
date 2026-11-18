@@ -260,7 +260,10 @@ function TriagemDetailPage() {
             <div className="max-h-[420px] overflow-y-auto rounded-xl bg-secondary/30 p-4">
               {conv && <div className="mb-3"><HandoffControls sessionId={conv.id} mode={conv.mode} /></div>}
               {conv ? (
-                <ChatTimeline messages={conv.messages} />
+                <ChatTimeline
+                  contactDisplayName={conv.contactName ?? conv.phone}
+                  messages={conv.messages}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground text-center py-8">
                   Nenhuma conversa associada a este telefone.

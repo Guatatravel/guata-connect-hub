@@ -49,6 +49,33 @@ type DbMode = "bot" | "humano" | "triagem" | "aguardando";
 type UiMode = "informacional" | "triagem" | "humano" | "aguardando";
 const dbToUiMode = (m: DbMode): UiMode => (m === "bot" ? "informacional" : m);
 
+function groupOfferPanelNote(intake: Record<string, unknown>): string | undefined {
+  const raw = intake["group_offer"];
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as {
+    step?: string;
+    source?: string;
+    offer_label?: string;
+    payment_note?: string;
+  };
+  if (!o.step) return undefined;
+  const src =
+    o.source === "story"
+      ? "story"
+      : o.source === "quote"
+        ? "citação"
+        : o.source === "cartaz"
+          ? "cartaz"
+          : o.source === "mixed"
+            ? "citação+cartaz"
+            : undefined;
+  const bits = [src, o.offer_label?.slice(0, 80), o.payment_note ? "pagamento" : undefined].filter(
+    Boolean,
+  );
+  if (bits.length === 0 && o.step === "ask_offer") return "Oferta do grupo (aguardando pacote)";
+  return bits.length ? `Oferta grupo: ${bits.join(" · ")}` : undefined;
+}
+
 function crmFields(intake: Record<string, unknown>) {
   const crm = parseCrm(intake);
   return {
@@ -56,6 +83,7 @@ function crmFields(intake: Record<string, unknown>) {
     crmLabels: crm.labels,
     crmColumn: crm.column,
     followUp: crm.followUp,
+    groupOfferNote: groupOfferPanelNote(intake),
   };
 }
 
@@ -223,6 +251,8 @@ type MessageMeta = {
   quoted_wa_message_id?: string;
   reply_to_wa_message_id?: string;
   reply_preview?: string;
+  quote_unresolved?: boolean;
+  quote_from_group_hint?: boolean;
   outbound_kind?: string;
   delivery_status?: "sent" | "delivered" | "read" | "failed";
   delivery_error?: string;
@@ -235,6 +265,57 @@ function quoteLabel(author: string): string {
   if (author === "bot") return "Guatá";
   if (author === "agent") return "Consultor";
   return "Mensagem";
+}
+
+/** Quando o wamid citado não está no painel, aproxima a bolha citada (ex.: cartaz do Guatá). */
+function inferQuotedReplyTo(
+  author: string,
+  text: string,
+  createdAt: string,
+  meta: MessageMeta,
+  thread: Array<{ author: string; text: string; created_at: string; metadata: unknown }>,
+): { authorLabel: string; text: string } | undefined {
+  if (author !== "user") return undefined;
+  const quotedWaId = meta.quoted_wa_message_id || meta.reply_to_wa_message_id;
+  const paymentFollowUp = /\b(pagamento|parcela|condi[cç][õo]es)\b/i.test(text);
+  const wantsQuote = Boolean(quotedWaId || meta.reply_preview || meta.quote_unresolved);
+  if (!wantsQuote && !paymentFollowUp) return undefined;
+
+  const t = new Date(createdAt).getTime();
+  const prior = thread
+    .filter((row) => row.author !== "user" && new Date(row.created_at).getTime() < t)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  for (const row of prior) {
+    const rowMeta = (row.metadata ?? {}) as MessageMeta;
+    const isCartaz =
+      /\[cartaz\]/i.test(row.text) ||
+      rowMeta.media_kind === "image" ||
+      /imagem enviad[ao] no whatsapp/i.test(row.text);
+    if (isCartaz) {
+      const parts = row.text
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const snippet = (parts.find((p) => !/^\(cliente enviou/i.test(p)) ?? parts[0] ?? "[cartaz]")
+        .slice(0, 200);
+      return { authorLabel: quoteLabel(row.author), text: snippet };
+    }
+  }
+
+  if (meta.reply_preview) {
+    return {
+      authorLabel: meta.quote_from_group_hint ? "Guatá" : "Mensagem citada",
+      text: meta.reply_preview.slice(0, 200),
+    };
+  }
+  if (quotedWaId) {
+    return {
+      authorLabel: "Guatá",
+      text: "Mensagem citada (cartaz ou oferta — detalhe não salvo no painel)",
+    };
+  }
+  return undefined;
 }
 
 async function mapMessagesForPanel(
@@ -267,12 +348,21 @@ async function mapMessagesForPanel(
       }
       const quotedWaId = meta.reply_to_wa_message_id || meta.quoted_wa_message_id;
       const quoted = quotedWaId ? byWaId.get(quotedWaId) : undefined;
-      const replyTo = quoted
-        ? { authorLabel: quoteLabel(quoted.author), text: quoted.text.slice(0, 180) }
-        : meta.reply_preview
-          ? { authorLabel: "Mensagem", text: meta.reply_preview }
-          : undefined;
+      let replyTo = quoted
+        ? { authorLabel: quoteLabel(quoted.author), text: quoted.text.slice(0, 200) }
+        : undefined;
+      if (!replyTo) {
+        replyTo = inferQuotedReplyTo(m.author, m.text, m.created_at, meta, msgs);
+      }
       const deleted = Boolean(meta.deleted_at);
+      const waDelivered = Boolean(
+        (meta as { whatsapp_delivered_text?: boolean }).whatsapp_delivered_text,
+      );
+      let displayText = m.text;
+      if (!deleted && m.author === "agent" && !waDelivered) {
+        const { panelDisplayForAgentMessage } = await import("@/lib/whatsapp-messages.server");
+        displayText = panelDisplayForAgentMessage(m.text, authorName);
+      }
       return {
         id: m.id,
         role: (m.author === "user" ? "user" : m.author === "bot" ? "bot" : "human") as
@@ -280,7 +370,11 @@ async function mapMessagesForPanel(
           | "bot"
           | "human",
         authorName,
-        text: deleted ? "Mensagem apagada" : panelMessagePreview(m.text, meta as Record<string, unknown>),
+        text: deleted
+          ? "Mensagem apagada"
+          : m.author === "bot"
+            ? panelMessagePreview(m.text, meta as Record<string, unknown>)
+            : displayText,
         at: m.created_at,
         mediaKind: deleted ? undefined : mediaKind,
         mediaUrl: deleted ? undefined : mediaUrl ?? undefined,
@@ -638,9 +732,14 @@ export const replyAsAgent = createServerFn({ method: "POST" })
         }
       }
     } else if (caption) {
-      const rowId = await insertAgent(caption, meta);
       const parts = agentWhatsAppParts(staffName, caption);
       for (let i = 0; i < parts.length; i++) {
+        const partMeta: Record<string, unknown> = {
+          ...meta,
+          whatsapp_delivered_text: true,
+          ...(i > 0 ? { sent_by: context.userId, bubble_part: i + 1 } : {}),
+        };
+        const rowId = await insertAgent(parts[i] ?? caption, partMeta);
         const send = await sendWhatsAppText(wa, s.phone, parts[i], {
           replyToWaId: i === 0 ? replyToWaId : undefined,
         });
@@ -650,7 +749,7 @@ export const replyAsAgent = createServerFn({ method: "POST" })
           break;
         }
         sent = true;
-        if (i === 0) await markSent(rowId, send.messageId);
+        await markSent(rowId, send.messageId);
       }
     }
 

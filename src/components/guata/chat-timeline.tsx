@@ -2,6 +2,24 @@ import type { ChatMessage } from "@/types/guata";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
 import { FileText, Forward, Pencil, Reply, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
+
+/** Negrito/itálico estilo WhatsApp (* e _). */
+function whatsAppInlineMarkup(text: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  const re = /\*([^*\n]+)\*|_([^_\n]+)_/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = re.exec(text))) {
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+    if (match[1]) nodes.push(<strong key={key++}>{match[1]}</strong>);
+    else if (match[2]) nodes.push(<em key={key++}>{match[2]}</em>);
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes.length === 1 ? nodes[0] : <>{nodes}</>;
+}
 
 function DeliveryMark({
   status,
@@ -35,12 +53,15 @@ function DeliveryMark({
 
 export function ChatTimeline({
   messages,
+  contactDisplayName,
   onReply,
   onForward,
   onEdit,
   onDelete,
 }: {
   messages: ChatMessage[];
+  /** Nome no balão das mensagens do cliente (WhatsApp). */
+  contactDisplayName?: string;
   onReply?: (message: ChatMessage) => void;
   onForward?: (message: ChatMessage) => void;
   onEdit?: (message: ChatMessage) => void;
@@ -52,7 +73,7 @@ export function ChatTimeline({
         const mine = m.role !== "user";
         const label =
           m.role === "user"
-            ? "Cliente"
+            ? contactDisplayName?.trim() || "Cliente"
             : m.role === "bot"
               ? "Guatá"
               : m.authorName
@@ -193,11 +214,11 @@ export function ChatTimeline({
               {showText && (
                 <div
                   className={cn(
-                    "whitespace-pre-wrap text-[14.2px] leading-[19px]",
+                    "whitespace-pre-wrap text-[14.2px] leading-[19px] [overflow-wrap:anywhere]",
                     m.deleted && "italic text-[#667781]",
                   )}
                 >
-                  {m.text}
+                  {mine ? whatsAppInlineMarkup(m.text) : m.text}
                   {m.edited && !m.deleted ? (
                     <span className="text-[11px] text-[#667781]"> · editada</span>
                   ) : null}

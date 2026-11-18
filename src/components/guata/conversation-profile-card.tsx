@@ -28,6 +28,11 @@ export function ConversationProfileCard({ conv }: { conv: Conversation }) {
               Protocolo triagem: {conv.triagemProtocol}
             </p>
           )}
+          {conv.groupOfferNote && (
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+              {conv.groupOfferNote}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground flex items-center gap-1">
             <User className="h-3.5 w-3.5" />
             Cliente no WhatsApp · {formatPhone(conv.phone)}

@@ -123,8 +123,17 @@ async function processInboundMessages(
     if (!normalized?.text) continue;
 
     try {
-      const ctx = msg.context as { id?: string } | undefined;
+      const ctx = msg.context as { id?: string; forwarded?: boolean } | undefined;
       const quotedWaMessageId = typeof ctx?.id === "string" ? ctx.id : undefined;
+      const quotedForwarded = ctx?.forwarded === true;
+      const ref = msg.referral as
+        | {
+            source_type?: string;
+            headline?: string;
+            body?: string;
+            source_url?: string;
+          }
+        | undefined;
       await processMessage({
         organizationId,
         line,
@@ -133,6 +142,14 @@ async function processInboundMessages(
         text: normalized.text,
         messageId: msgId || undefined,
         quotedWaMessageId,
+        quotedForwarded,
+        referral: ref
+          ? {
+              source_type: ref.source_type,
+              headline: ref.headline,
+              body: ref.body,
+            }
+          : undefined,
         inboundKind: normalized.inboundKind,
         mediaPath: normalized.attachment?.storagePath,
         mediaMime: normalized.attachment?.mimeType,

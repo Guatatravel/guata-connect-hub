@@ -60,6 +60,15 @@ import {
 } from "@/lib/lead-stage.server";
 import { ensureTravelIntakeForSession } from "@/lib/lead-intake.server";
 import {
+  buildOwnerGroupOfferAlert,
+  GROUP_OFFER_INTAKE_STATE,
+  handleGroupOfferTurn,
+  isActiveGroupOfferFlow,
+  quotePreviewWhenUnresolved,
+  resolveQuotedTextInSession,
+  shouldStartGroupOfferFlow,
+} from "@/lib/group-offer-intake.server";
+import {
   getGuataOrganizationId,
   organizationUsesDescubra,
 } from "@/lib/organizations.server";
@@ -83,6 +92,12 @@ export interface IncomingMessage {
   mediaFilename?: string;
   /** wamid da mensagem que o cliente citou, se houver. */
   quotedWaMessageId?: string;
+  quotedForwarded?: boolean;
+  referral?: {
+    source_type?: string;
+    headline?: string;
+    body?: string;
+  };
 }
 
 interface SessionRow {
@@ -752,6 +767,36 @@ async function notifyOwner(msg: IncomingMessage, sessionId: string) {
   if (!res.ok) console.error("[alerta] envio falhou:", res.reason);
 }
 
+async function notifyOwnerGroupOffer(
+  msg: IncomingMessage,
+  sessionId: string,
+  offer: import("@/lib/group-offer-intake.server").GroupOfferData,
+) {
+  const owner = ownerAlertPhone();
+  const text = buildOwnerGroupOfferAlert({
+    contactName: msg.contactName,
+    phone: msg.phone,
+    sessionId,
+    offer,
+    lastUserText: msg.text,
+  });
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("intake_data")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const intake = { ...((data?.intake_data ?? {}) as Record<string, unknown>) };
+  intake["owner_alert_at"] = new Date().toISOString();
+  await supabaseAdmin.from("sessions").update({ intake_data: intake as never }).eq("id", sessionId);
+  const orgId = await sessionOrganizationId(sessionId);
+  const res = await sendWhatsAppText(
+    { organizationId: orgId, line: msg.line },
+    owner,
+    text,
+  );
+  if (!res.ok) console.error("[alerta-oferta] envio falhou:", res.reason);
+}
+
 export async function processMessage(
   msg: IncomingMessage,
 ): Promise<{ replies: string[]; sessionId: string }> {
@@ -785,10 +830,24 @@ export async function processMessage(
   }
   await applyInboundCrm(session.id, msg.text).catch((e) => console.error("[crm]", e));
   void runDueFollowUps(msg.organizationId).catch((e) => console.error("[follow-up]", e));
+  let quotePreview: string | undefined;
+  if (msg.quotedWaMessageId) {
+    const quotedText = await resolveQuotedTextInSession(session.id, msg.quotedWaMessageId);
+    if (!quotedText) quotePreview = quotePreviewWhenUnresolved(msg.quotedForwarded);
+  }
   await persistMessage(session.id, "in", "user", msg.text, {
     inbound_kind: msg.inboundKind ?? "text",
     ...(msg.messageId ? { wa_message_id: msg.messageId } : {}),
     ...(msg.quotedWaMessageId ? { quoted_wa_message_id: msg.quotedWaMessageId } : {}),
+    ...(quotePreview
+      ? { reply_preview: quotePreview, quote_unresolved: true, quote_from_group_hint: true }
+      : {}),
+    ...(msg.referral
+      ? {
+          inbound_referral_type: msg.referral.source_type,
+          inbound_referral_headline: msg.referral.headline,
+        }
+      : {}),
     ...(msg.mediaPath
       ? {
           media_path: msg.mediaPath,
@@ -874,8 +933,53 @@ export async function processMessage(
     templatePromptExtra = templateFollowUpPromptSection(recentTemplate, msg.text);
   }
 
+  const groupIngress = {
+    quotedWaMessageId: msg.quotedWaMessageId,
+    inboundKind: msg.inboundKind,
+    text: msg.text,
+    referral: msg.referral,
+    quotedForwarded: msg.quotedForwarded,
+  };
+  const groupOfferActive =
+    session.mode === "bot" &&
+    !explicitHuman &&
+    lower !== "menu" &&
+    !wantsStructuredIntake &&
+    (isActiveGroupOfferFlow(session.intake_state, session.intake_data) ||
+      shouldStartGroupOfferFlow(groupIngress));
   if (audioPrefCmd.handled && audioPrefCmd.reply) {
     replies.push(audioPrefCmd.reply);
+  } else if (groupOfferActive) {
+    const turn = await handleGroupOfferTurn({
+      sessionId: session.id,
+      firstName,
+      ingress: groupIngress,
+      intake: session.intake_data ?? {},
+      intakeState: session.intake_state,
+    });
+    session.intake_data = turn.patchIntake;
+    session.intake_state = turn.intakeState;
+    if (turn.handoffHuman) session.mode = "humano";
+    await supabaseAdmin
+      .from("sessions")
+      .update({
+        intake_state: turn.intakeState,
+        intake_data: turn.patchIntake as never,
+        ...(turn.handoffHuman ? { mode: "humano" as const } : {}),
+      })
+      .eq("id", session.id);
+    replies.push(...turn.replies);
+    if (turn.notifyOwner) {
+      const offer = turn.patchIntake["group_offer"] as import("@/lib/group-offer-intake.server").GroupOfferData;
+      await notifyOwnerGroupOffer(msg, session.id, offer).catch((e) =>
+        console.error("[alerta-oferta]", e),
+      );
+    }
+    if (turn.handoffHuman) {
+      void ensureTravelIntakeForSession(session.id).catch((e) =>
+        console.error("[lead-intake] oferta-grupo:", e),
+      );
+    }
   } else if (session.mode !== "humano" && templateReplyKind === "decline" && recentTemplate) {
     replies.push(templateDeclineReply(recentTemplate, firstName));
     await supabaseAdmin
@@ -898,9 +1002,11 @@ export async function processMessage(
   } else if (explicitHuman || (offered && affirmative)) {
     await goHuman();
   } else if (lower === "menu") {
+    const intakeMenu = { ...(session.intake_data ?? {}) };
+    delete intakeMenu["group_offer"];
     await supabaseAdmin
       .from("sessions")
-      .update({ mode: "bot", intake_state: null })
+      .update({ mode: "bot", intake_state: null, intake_data: intakeMenu as never })
       .eq("id", session.id);
     replies.push(
       "Beleza! Voltamos ao papo com o Guatá. O que você quer saber?\n\n(Mando áudio quando você me envia voz; em texto, respondo escrito. Digite *opções de áudio* para detalhes.)",

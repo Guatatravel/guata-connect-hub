@@ -87,6 +87,8 @@ export interface Conversation {
     status: "pending" | "sent" | "skipped";
     detail?: string;
   };
+  /** Resumo da oferta do grupo / story (intake group_offer). */
+  groupOfferNote?: string;
   messages: ChatMessage[];
 }
 
