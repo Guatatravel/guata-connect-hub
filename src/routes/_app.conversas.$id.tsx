@@ -30,7 +30,6 @@ import { toast } from "sonner";
 import { ArrowLeft, FileAudio, Mic, Paperclip, Send, Square, X } from "lucide-react";
 import { HandoffControls } from "@/components/guata/handoff-controls";
 import { ConsultantAiDock } from "@/components/guata/consultant-ai-dock";
-import { ConversationTriageCard } from "@/components/guata/conversation-triage-card";
 import { CrmPanel } from "@/components/guata/crm-panel";
 import type { ChatMessage } from "@/types/guata";
 import { formatPhone } from "@/lib/format";
@@ -121,7 +120,6 @@ function ConversaDetail() {
     refetchInterval: 5000,
   });
 
-  const latestMessageId = conv?.messages.at(-1)?.id;
   useEffect(() => {
     let active = true;
     api
@@ -133,7 +131,7 @@ function ConversaDetail() {
     return () => {
       active = false;
     };
-  }, [id, latestMessageId, qc]);
+  }, [id, qc]);
 
   const visibleCount = (conv?.messages.length ?? 0) + outgoing.length;
   useEffect(() => {
@@ -297,8 +295,6 @@ function ConversaDetail() {
       </Button>
 
       <ConversationProfileCard conv={conv} />
-
-      <ConversationTriageCard sessionId={conv.id} />
 
       <CrmPanel conv={conv} />
 

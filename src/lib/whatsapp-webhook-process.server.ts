@@ -151,6 +151,7 @@ async function processInboundMessages(
             }
           : undefined,
         inboundKind: normalized.inboundKind,
+        unsupportedAutoReply: normalized.unsupportedAutoReply,
         mediaPath: normalized.attachment?.storagePath,
         mediaMime: normalized.attachment?.mimeType,
         mediaKind: normalized.attachment?.mediaKind,

@@ -21,7 +21,14 @@ export interface NormalizedInbound {
   text: string;
   inboundKind: "text" | "image" | "audio" | "unsupported";
   attachment?: InboundAttachment;
+  /** Resposta fixa ao cliente (só com Guatá ativo) — formato desconhecido pela Meta. */
+  unsupportedAutoReply?: boolean;
 }
+
+export const UNSUPPORTED_CLIENT_REPLY =
+  "Recebi sua mensagem, mas esse formato ainda não consigo ler aqui. Pode mandar em texto ou uma foto?";
+
+const UNSUPPORTED_INBOUND_NOTE = "(Cliente enviou mensagem em formato não suportado.)";
 
 async function attachStored(
   phone: string,
@@ -31,9 +38,6 @@ async function attachStored(
   const storagePath = await storeChatMedia(phone, media.bytes, media.mimeType, mediaKind);
   return { storagePath, mimeType: media.mimeType, mediaKind };
 }
-
-const UNSUPPORTED_REPLY =
-  "Recebi sua mensagem, mas esse formato ainda não consigo ler aqui. Pode mandar em texto ou uma foto?";
 
 export async function normalizeWhatsAppInbound(
   line: Line,
@@ -229,7 +233,8 @@ export async function normalizeWhatsAppInbound(
   }
 
   return {
-    text: UNSUPPORTED_REPLY,
+    text: UNSUPPORTED_INBOUND_NOTE,
     inboundKind: "unsupported",
+    unsupportedAutoReply: true,
   };
 }

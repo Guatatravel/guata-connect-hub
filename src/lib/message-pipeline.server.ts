@@ -89,6 +89,7 @@ export interface IncomingMessage {
   text: string;
   messageId?: string;
   inboundKind?: "text" | "image" | "audio" | "unsupported";
+  unsupportedAutoReply?: boolean;
   mediaPath?: string;
   mediaMime?: string;
   mediaKind?: "image" | "audio" | "video" | "document";
@@ -890,6 +891,32 @@ export async function processMessage(
         : {}),
     })
     .eq("id", session.id);
+
+  if (msg.unsupportedAutoReply) {
+    const { UNSUPPORTED_CLIENT_REPLY } = await import("@/lib/whatsapp-inbound.server");
+    const { data: modeRow } = await supabaseAdmin
+      .from("sessions")
+      .select("mode")
+      .eq("id", session.id)
+      .maybeSingle();
+    const mode = modeRow?.mode ?? session.mode;
+    const unsupportedReplies: string[] = mode !== "humano" ? [UNSUPPORTED_CLIENT_REPLY] : [];
+    if (unsupportedReplies.length > 0) {
+      const activeAttendant = await loadAttendant(msg.line, msg.organizationId);
+      await deliverTextReplies(
+        session.id,
+        msg.phone,
+        waTarget,
+        unsupportedReplies,
+        session.intake_data ?? {},
+        true,
+        msg.inboundKind,
+        activeAttendant?.tts_voice_profile ?? null,
+        msg.messageId,
+      );
+    }
+    return { replies: unsupportedReplies, sessionId: session.id };
+  }
 
   const audioPrefCmd = await handleBotAudioPreferenceMessage(
     session.id,

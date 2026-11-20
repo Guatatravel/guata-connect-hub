@@ -89,11 +89,6 @@ function ConversasPage() {
             <span className="font-medium truncate">{c.contactName ?? formatPhone(c.phone)}</span>
             <LineBadge line={c.line} org={orgUi} />
             <SessionModeBadge mode={c.mode} />
-            {(c.openTriage?.protocol || c.triagemProtocol) && (
-              <span className="text-[10px] rounded-full bg-accent/30 px-1.5 py-0.5">
-                {c.openTriage?.protocol ?? c.triagemProtocol}
-              </span>
-            )}
             {c.leadStage && <LeadStageBadge stage={c.leadStage} />}
           </div>
           <div className="text-sm text-muted-foreground truncate">{c.lastMessage}</div>

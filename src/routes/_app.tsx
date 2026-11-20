@@ -77,11 +77,6 @@ function AppLayoutInner({
             <div className="font-display text-lg font-semibold text-primary hidden sm:block">
               Guatá Channel
             </div>
-            {gate?.organizationName && (
-              <span className="text-xs text-muted-foreground truncate max-w-[40vw] sm:max-w-none">
-                · {gate.organizationName}
-              </span>
-            )}
             <div className="ml-auto shrink-0">
               <OrgSwitcher />
             </div>

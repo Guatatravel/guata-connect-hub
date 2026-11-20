@@ -223,24 +223,41 @@ export function useRealtimeNotifications() {
               : Promise.resolve(),
           ]);
           showMessageNow(qc, row);
-          if (row.author === "user") {
-            const lists = qc.getQueriesData<Array<{ id: string; mode?: string }>>({
-              queryKey: ["conversations"],
-            });
-            const mode = lists
-              .flatMap(([, list]) => list ?? [])
-              .find((c) => c.id === row.session_id)?.mode;
-            if (mode === "humano") {
-              const preview = (row.text ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
-              toast.info("Cliente respondeu", {
-                id: row.session_id ? `reply-${row.session_id}` : undefined,
-                description: preview || "Nova mensagem no atendimento humano.",
-                duration: 4000,
+          let sessionMode: string | undefined;
+          if (row.author === "user" && row.session_id) {
+            const { data: sessMode } = await supabase
+              .from("sessions")
+              .select("mode")
+              .eq("id", row.session_id)
+              .maybeSingle();
+            sessionMode = sessMode?.mode ?? undefined;
+            if (!sessionMode) {
+              const lists = qc.getQueriesData<Array<{ id: string; mode?: string }>>({
+                queryKey: ["conversations"],
               });
-              playChime();
+              sessionMode = lists
+                .flatMap(([, list]) => list ?? [])
+                .find((c) => c.id === row.session_id)?.mode;
             }
           }
-          if (!chatIsOpen(qc, row.session_id)) {
+          if (row.author === "user" && sessionMode === "humano") {
+            const preview = (row.text ?? "").replace(/\s+/g, " ").trim().slice(0, 140);
+            const sid = row.session_id;
+            toast.info("Cliente respondeu (atendimento humano)", {
+              id: sid ? `reply-${sid}` : undefined,
+              description: preview || "Nova mensagem aguardando você.",
+              duration: 12_000,
+              action: sid
+                ? {
+                    label: "Abrir",
+                    onClick: () =>
+                      void navigateRef.current({ to: "/conversas/$id", params: { id: sid } }),
+                  }
+                : undefined,
+            });
+            playChime();
+            void qc.invalidateQueries({ queryKey: ["unread-counts"] });
+          } else if (!chatIsOpen(qc, row.session_id)) {
             void qc.invalidateQueries({ queryKey: ["unread-counts"] });
           }
           void qc.invalidateQueries({ queryKey: ["conversations"] });

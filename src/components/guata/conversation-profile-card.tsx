@@ -23,11 +23,6 @@ export function ConversationProfileCard({ conv }: { conv: Conversation }) {
             <SessionModeBadge mode={conv.mode} />
             {conv.leadStage && <LeadStageBadge stage={conv.leadStage} />}
           </div>
-          {conv.triagemProtocol && (
-            <p className="text-xs font-medium text-muted-foreground">
-              Protocolo triagem: {conv.triagemProtocol}
-            </p>
-          )}
           {conv.groupOfferNote && (
             <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
               {conv.groupOfferNote}
