@@ -640,7 +640,7 @@ function NotificationSettingsCard() {
         <div className="text-xs text-muted-foreground border-t border-border/50 pt-3">
           <strong className="text-foreground">Como funciona:</strong> mesmo com o painel fechado, o
           Guatá continua respondendo no WhatsApp e gravando triagens no banco. Ao abrir o painel,
-          os contadores nos menus <em>Triagens</em> e <em>Conversas</em> mostram quantos itens
+          o contador em <em>Conversas</em> mostra quantos itens
           estão aguardando você. Enquanto o painel está aberto, notificações e som aparecem em
           tempo real.
         </div>

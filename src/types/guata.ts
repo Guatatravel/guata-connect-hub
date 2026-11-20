@@ -77,6 +77,14 @@ export interface Conversation {
   unseen?: boolean;
   leadStage?: LeadStage;
   triagemProtocol?: string;
+  openTriage?: {
+    protocol: string;
+    status: string;
+    destino: string;
+    staffSeenAt: string | null;
+  };
+  /** Fila humana ou triagem nova ainda não vista. */
+  needsAttention?: boolean;
   crmGuide?: string;
   crmLabels?: string[];
   crmColumn?: "interessados" | "orcamento" | "fechado";

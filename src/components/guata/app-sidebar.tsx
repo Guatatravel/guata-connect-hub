@@ -13,7 +13,6 @@ import {
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { Instagram,
   LayoutDashboard,
-  Plane,
   MessageSquare,
   Settings,
   LogOut,
@@ -37,7 +36,6 @@ type SidebarGate = {
 
 const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/triagens", label: "Triagens das Mensagens", icon: Plane, badgeKey: "triagensAbertas" as const },
   { to: "/conversas", label: "Conversas", icon: MessageSquare, badgeKey: "conversasHumano" as const },
   { to: "/conhecimento", label: "Conhecimento e disparos", icon: BookOpen },
   { to: "/conectar-meta", label: "Conectar WhatsApp", icon: Link2 },

@@ -115,8 +115,8 @@ function DashboardPage() {
               {data.ultimasTriagens.map((t) => (
                 <Link
                   key={t.id}
-                  to="/triagens/$id"
-                  params={{ id: t.id }}
+                  to={t.sessionId ? "/conversas/$id" : "/conversas"}
+                  params={t.sessionId ? { id: t.sessionId } : undefined}
                   className="grid grid-cols-12 items-center py-3 gap-3 hover:bg-secondary/40 -mx-3 px-3 rounded-lg transition"
                 >
                   <div className="col-span-2 font-mono text-sm text-muted-foreground">

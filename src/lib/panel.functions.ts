@@ -413,6 +413,30 @@ export const fetchConversations = createServerFn({ method: "POST" })
       .limit(200);
     if (error) throw new Error(error.message);
 
+    const sessionIds = (data ?? []).map((s) => s.id as string);
+    const intakeBySession = new Map<
+      string,
+      { protocol: string; status: string; destino: string; staffSeenAt: string | null }
+    >();
+    if (sessionIds.length > 0) {
+      const { data: intakes } = await supabaseAdmin
+        .from("travel_intake")
+        .select("session_id, protocol, status, destino, staff_seen_at, created_at")
+        .in("session_id", sessionIds)
+        .in("status", ["aberta", "novo", "atribuido", "contactado", "proposta_enviada"])
+        .order("created_at", { ascending: false });
+      for (const row of intakes ?? []) {
+        const sid = row.session_id as string;
+        if (intakeBySession.has(sid)) continue;
+        intakeBySession.set(sid, {
+          protocol: String(row.protocol ?? ""),
+          status: row.status === "aberta" ? "novo" : String(row.status),
+          destino: String(row.destino ?? ""),
+          staffSeenAt: (row.staff_seen_at as string | null) ?? null,
+        });
+      }
+    }
+
     return (data ?? []).map((s) => {
       const intake = (s.intake_data ?? {}) as Record<string, unknown>;
       const latest = (s as {
@@ -439,7 +463,13 @@ export const fetchConversations = createServerFn({ method: "POST" })
         triagemProtocol:
           typeof intake["triagem_protocol"] === "string"
             ? intake["triagem_protocol"]
-            : undefined,
+            : intakeBySession.get(s.id as string)?.protocol || undefined,
+        openTriage: intakeBySession.get(s.id as string),
+        needsAttention: (() => {
+          const tri = intakeBySession.get(s.id as string);
+          if (s.mode === "humano") return true;
+          return Boolean(tri && tri.status === "novo" && !tri.staffSeenAt);
+        })(),
         ...crmFields(intake),
         messages: [],
       };
@@ -870,9 +900,12 @@ export const releaseBot = createServerFn({ method: "POST" })
   .inputValidator((i) => idSchema.parse(i))
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
+    await assertSessionBelongsToUserOrg(context.userId, data.id);
+    const { resumeBotForSession } = await import("@/lib/handoff-resume.server");
+    await resumeBotForSession(data.id, "owner");
     await supabaseAdmin
       .from("sessions")
-      .update({ mode: "bot", assigned_to: null, staff_seen_at: new Date().toISOString() })
+      .update({ assigned_to: null, staff_seen_at: new Date().toISOString() })
       .eq("id", data.id);
     return { ok: true };
   });
@@ -1010,6 +1043,32 @@ export const fetchTriages = createServerFn({ method: "POST" })
     let hydrated = await hydrateTriages((rows ?? []) as Array<Record<string, unknown>>);
     if (data?.line && data.line !== "all") hydrated = hydrated.filter((r) => r.line === data.line);
     return hydrated;
+  });
+
+const sessionIdSchema = z.object({ sessionId: z.string().uuid() });
+
+export const fetchOpenTriageForSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => sessionIdSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await assertSessionBelongsToUserOrg(context.userId, data.sessionId);
+    const { data: row } = await supabaseAdmin
+      .from("travel_intake")
+      .select(
+        "id, protocol, destino, origem, status, assigned_to, created_at, updated_at, session_id, adultos, criancas, orcamento_brl, data_ida, data_volta, preferencias, staff_seen_at",
+      )
+      .eq("session_id", data.sessionId)
+      .in("status", ["aberta", "novo", "atribuido", "contactado", "proposta_enviada"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!row) return null;
+    const hyd = await hydrateTriages([row as Record<string, unknown>]);
+    const item = hyd[0];
+    const pref = (row.preferencias as Record<string, unknown>) ?? {};
+    const notes = typeof pref.notes === "string" ? pref.notes : undefined;
+    return { ...item, notes, staffSeenAt: row.staff_seen_at as string | null };
   });
 
 export const fetchTriage = createServerFn({ method: "POST" })

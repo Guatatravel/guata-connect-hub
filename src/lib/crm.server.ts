@@ -238,6 +238,11 @@ export async function persistPhoneEcho(input: {
   customerPhone: string;
   text: string;
   waMessageId?: string;
+  mediaPath?: string;
+  mediaMime?: string;
+  mediaKind?: "image" | "audio" | "video" | "document";
+  outboundKind?: string;
+  filename?: string;
 }): Promise<{ ok: boolean; reason?: string }> {
   const { canonicalWaPhone } = await import("@/lib/whatsapp-phone.server");
   const phone = canonicalWaPhone(input.customerPhone);
@@ -306,6 +311,11 @@ export async function persistPhoneEcho(input: {
       ...(input.waMessageId
         ? { wa_message_id: input.waMessageId, delivery_status: "sent" }
         : {}),
+      ...(input.mediaPath ? { media_path: input.mediaPath } : {}),
+      ...(input.mediaMime ? { media_mime: input.mediaMime } : {}),
+      ...(input.mediaKind ? { media_kind: input.mediaKind } : {}),
+      ...(input.outboundKind ? { outbound_kind: input.outboundKind } : {}),
+      ...(input.filename ? { filename: input.filename } : {}),
     } as never,
   });
   if (msgErr) {

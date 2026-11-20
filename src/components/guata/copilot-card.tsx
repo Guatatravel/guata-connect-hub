@@ -18,10 +18,12 @@ function extractSuggestion(text: string) {
 export function CopilotCard({
   sessionId,
   onUseMessage,
+  onSendMessage,
   embedded = false,
 }: {
   sessionId: string;
   onUseMessage: (t: string) => void;
+  onSendMessage?: (t: string) => void;
   embedded?: boolean;
 }) {
   const ask = useServerFn(askCopilot);
@@ -65,9 +67,16 @@ export function CopilotCard({
             >
               {m.content}
               {sug && (
-                <Button size="sm" variant="outline" className="mt-2" onClick={() => onUseMessage(sug)}>
-                  Usar como resposta
-                </Button>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {onSendMessage && (
+                    <Button size="sm" onClick={() => onSendMessage(sug)}>
+                      Enviar ao cliente
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => onUseMessage(sug)}>
+                    Colar no campo
+                  </Button>
+                </div>
               )}
             </div>
           );

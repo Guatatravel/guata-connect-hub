@@ -29,7 +29,10 @@ export function HandoffControls({ sessionId, mode }: { sessionId: string; mode: 
   });
   const release = useMutation({
     mutationFn: () => api.releaseBot(sessionId),
-    onSuccess: () => { toast.success("O Guatá voltou a responder este cliente."); refresh(); },
+    onSuccess: () => {
+      toast.success("O Guatá voltou — ele continua com o contexto quando o cliente falar.");
+      refresh();
+    },
     onError: () => toast.error("Não foi possível devolver ao Guatá"),
   });
 

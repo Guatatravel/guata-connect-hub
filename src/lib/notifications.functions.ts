@@ -32,21 +32,28 @@ export const fetchUnreadCounts = createServerFn({ method: "GET" })
     const [triagensRes, humanoRes] = await Promise.all([
       supabaseAdmin
         .from("travel_intake")
-        .select("id", { count: "exact", head: true })
+        .select("session_id")
         .in("session_id", sessionIds)
         .in("status", ["aberta", "novo"])
         .is("staff_seen_at", null),
       supabaseAdmin
         .from("sessions")
-        .select("last_message_at, staff_seen_at")
-        .eq("organization_id", orgId)
-        .eq("mode", "humano"),
+        .select("id, last_message_at, staff_seen_at, mode")
+        .eq("organization_id", orgId),
     ]);
+    const triagemSessionIds = new Set((triagensRes.data ?? []).map((r) => r.session_id as string));
+    const fila = new Set<string>();
+    for (const s of humanoRes.data ?? []) {
+      if (s.mode !== "humano") continue;
+      if (!s.staff_seen_at || new Date(s.staff_seen_at) < new Date(s.last_message_at as string)) {
+        fila.add(s.id as string);
+      }
+    }
+    for (const sid of triagemSessionIds) fila.add(sid);
+
     return {
-      triagensAbertas: triagensRes.count ?? 0,
-      conversasHumano: (humanoRes.data ?? []).filter(
-        (s) => !s.staff_seen_at || new Date(s.staff_seen_at) < new Date(s.last_message_at),
-      ).length,
+      triagensAbertas: 0,
+      conversasHumano: fila.size,
       organizationId: orgId,
     };
   });

@@ -23,10 +23,12 @@ const EMPTY_DOSSIE = {
 export function DossieCard({
   sessionId,
   onUseMessage,
+  onSendMessage,
   embedded = false,
 }: {
   sessionId: string;
   onUseMessage?: (text: string) => void;
+  onSendMessage?: (text: string) => void;
   embedded?: boolean;
 }) {
   const qc = useQueryClient();
@@ -136,7 +138,7 @@ export function DossieCard({
               </div>
             )}
 
-            {d.mensagem_sugerida && onUseMessage && (
+            {d.mensagem_sugerida && (onUseMessage || onSendMessage) && (
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   Mensagem sugerida
@@ -144,10 +146,17 @@ export function DossieCard({
                 <p className="rounded-lg bg-secondary/40 px-3 py-2 whitespace-pre-wrap">
                   {d.mensagem_sugerida}
                 </p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => onUseMessage(d.mensagem_sugerida)}>
-                    <Send className="h-4 w-4 mr-1" /> Usar no chat
-                  </Button>
+                <div className="flex flex-wrap gap-2">
+                  {onSendMessage && (
+                    <Button size="sm" onClick={() => onSendMessage(d.mensagem_sugerida)}>
+                      <Send className="h-4 w-4 mr-1" /> Enviar ao cliente
+                    </Button>
+                  )}
+                  {onUseMessage && (
+                    <Button size="sm" variant="outline" onClick={() => onUseMessage(d.mensagem_sugerida)}>
+                      Colar no campo
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"

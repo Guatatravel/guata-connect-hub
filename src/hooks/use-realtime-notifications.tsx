@@ -160,15 +160,14 @@ export function useRealtimeNotifications() {
           if (createdAt && new Date(createdAt).getTime() < mountedAt.current - 5000) return;
           const protocol = (payload.new as { protocol?: string })?.protocol ?? "nova";
           const destino = (payload.new as { destino?: string })?.destino ?? "";
-          const triageId = (payload.new as { id?: string })?.id;
           toast.success(`Nova triagem ${protocol}`, {
             description: destino ? `Destino: ${destino}` : "Toque em Abrir para ver o cliente.",
             duration: 10000,
-            action: triageId
+            action: sessionId
               ? {
                   label: "Abrir",
                   onClick: () =>
-                    void navigateRef.current({ to: "/triagens/$id", params: { id: triageId } }),
+                    void navigateRef.current({ to: "/conversas/$id", params: { id: sessionId } }),
                 }
               : undefined,
           });

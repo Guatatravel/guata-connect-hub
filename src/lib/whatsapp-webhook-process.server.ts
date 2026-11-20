@@ -207,8 +207,45 @@ async function processEchoRecord(
   }
 
   const { persistPhoneEcho } = await import("@/lib/crm.server");
-  const text = echoTextFromRecord(echo);
-  if (!text && echoType !== "text") {
+  const { normalizePhoneEchoMedia } = await import("@/lib/whatsapp-echo-media.server");
+  let text = echoTextFromRecord(echo).trim();
+  let mediaPayload: {
+    mediaPath?: string;
+    mediaMime?: string;
+    mediaKind?: "image" | "audio" | "video" | "document";
+    outboundKind?: string;
+    filename?: string;
+  } = {};
+  const needsMedia =
+    echoType === "audio" ||
+    echoType === "voice" ||
+    echoType === "image" ||
+    echoType === "video" ||
+    echoType === "document";
+  if (needsMedia || (!text && echoType !== "text")) {
+    try {
+      const normalized = await normalizePhoneEchoMedia(
+        meta.line,
+        meta.organizationId,
+        customer,
+        echo,
+      );
+      text = normalized.text.trim() || text;
+      if (normalized.attachment) {
+        mediaPayload = {
+          mediaPath: normalized.attachment.storagePath,
+          mediaMime: normalized.attachment.mimeType,
+          mediaKind: normalized.attachment.mediaKind,
+          outboundKind: normalized.attachment.outboundKind,
+          filename: normalized.attachment.filename,
+        };
+      }
+    } catch (err) {
+      console.error("[whatsapp-webhook] eco mídia:", err);
+      errors.push(err instanceof Error ? err.message : "eco mídia");
+    }
+  }
+  if (!text && echoType !== "text" && !mediaPayload.mediaPath) {
     return;
   }
   try {
@@ -218,6 +255,7 @@ async function processEchoRecord(
       customerPhone: customer,
       text: text || "(mensagem pelo celular)",
       waMessageId: echo?.id ? String(echo.id) : undefined,
+      ...mediaPayload,
     });
     if (!result.ok) errors.push(`eco: ${result.reason ?? "falha ao gravar"}`);
   } catch (err) {

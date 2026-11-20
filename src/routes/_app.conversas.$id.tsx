@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { ArrowLeft, FileAudio, Mic, Paperclip, Send, Square, X } from "lucide-react";
 import { HandoffControls } from "@/components/guata/handoff-controls";
 import { ConsultantAiDock } from "@/components/guata/consultant-ai-dock";
+import { ConversationTriageCard } from "@/components/guata/conversation-triage-card";
 import { CrmPanel } from "@/components/guata/crm-panel";
 import type { ChatMessage } from "@/types/guata";
 import { formatPhone } from "@/lib/format";
@@ -256,6 +257,12 @@ function ConversaDetail() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao apagar"),
   });
 
+  const sendTextToClient = async (text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    await replyMut.mutateAsync({ text: t, file: null, replyToMessage: null });
+  };
+
   const editMut = useMutation({
     mutationFn: (payload: { message: ChatMessage; text: string }) =>
       api.editConversationMessage(id, payload.message.id, payload.text),
@@ -291,9 +298,15 @@ function ConversaDetail() {
 
       <ConversationProfileCard conv={conv} />
 
-      <CrmPanel conv={conv} onUseReply={setReply} />
+      <ConversationTriageCard sessionId={conv.id} />
 
-      <ConsultantAiDock sessionId={conv.id} onUseMessage={setReply} />
+      <CrmPanel conv={conv} />
+
+      <ConsultantAiDock
+        sessionId={conv.id}
+        onUseMessage={setReply}
+        onSendMessage={sendTextToClient}
+      />
 
       <Card className="rounded-2xl">
         <CardHeader>
