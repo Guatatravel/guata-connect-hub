@@ -35,7 +35,7 @@ async function gatewayRequest(
       "X-Lovable-AIG-SDK": "raw",
     },
     body: JSON.stringify({
-      model: opts.model ?? "google/gemini-2.5-flash",
+      model: opts.model ?? "google/gemini-3.5-flash-lite",
       messages,
       max_tokens: opts.maxTokens,
       temperature: opts.temperature ?? 0.5,

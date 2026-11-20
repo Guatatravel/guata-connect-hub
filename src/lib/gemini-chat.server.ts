@@ -3,12 +3,21 @@
  */
 import type { ChatMessage } from "@/lib/ai-gateway.server";
 
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_MODEL = "gemini-3.5-flash-lite";
+
+/** Contas novas na API não recebem mais 2.5; redireciona nomes legados do painel/DB. */
+const LEGACY_GEMINI_MODEL: Record<string, string> = {
+  "gemini-2.5-flash-lite": DEFAULT_MODEL,
+  "gemini-2.5-flash": DEFAULT_MODEL,
+};
 
 function geminiModel(model?: string): string {
   const m = model?.trim();
   if (!m) return DEFAULT_MODEL;
-  if (m.startsWith("gemini-") || m.startsWith("google/")) return m.replace(/^google\//, "");
+  if (m.startsWith("gemini-") || m.startsWith("google/")) {
+    const bare = m.replace(/^google\//, "");
+    return LEGACY_GEMINI_MODEL[bare] ?? bare;
+  }
   return DEFAULT_MODEL;
 }
 
