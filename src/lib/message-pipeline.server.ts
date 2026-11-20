@@ -829,10 +829,8 @@ export async function processMessage(
     msg.phone,
     msg.contactName,
   );
-  if (msg.messageId) {
-    void markReadAndTyping(waTarget, msg.messageId, {
-      typing: session.mode !== "humano",
-    });
+  if (msg.messageId && session.mode !== "humano") {
+    void markReadAndTyping(waTarget, msg.messageId, { typing: true });
   }
   if (msg.contactName?.trim()) {
     await supabaseAdmin

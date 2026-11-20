@@ -33,7 +33,14 @@ export function CopilotCard({
   const mut = useMutation({
     mutationFn: async (next: Msg[]) => (await ask({ data: { sessionId, history: next } })).answer,
     onSuccess: (answer, next) => setHistory([...next, { role: "assistant", content: answer }]),
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha no Copiloto"),
+    onError: (e, _next, _ctx) => {
+      setHistory((h) => {
+        const copy = [...h];
+        if (copy.length && copy[copy.length - 1]?.role === "user") copy.pop();
+        return copy;
+      });
+      toast.error(e instanceof Error ? e.message : "Falha no Copiloto");
+    },
   });
 
   const send = () => {

@@ -99,3 +99,25 @@ export async function markMessageEditedLocally(
     .update({ text: newText.slice(0, 4000), metadata: metadata as never })
     .eq("id", messageRowId);
 }
+
+/** Webhook: reação (curtir etc.) em mensagem existente — espelha o WhatsApp no painel. */
+export async function applyWhatsAppReaction(
+  targetWaMessageId: string,
+  emoji: string,
+  actor: "user" | "agent",
+): Promise<void> {
+  const id = targetWaMessageId.trim();
+  if (!id) return;
+  const rows = await rowsByWaMessageId(id);
+  for (const row of rows) {
+    const prev = (row.metadata ?? {}) as MessageMeta;
+    if (prev.deleted_at) continue;
+    const reactions = { ...((prev.reactions as Record<string, string> | undefined) ?? {}) };
+    const trimmed = emoji.trim();
+    if (trimmed) reactions[actor] = trimmed;
+    else delete reactions[actor];
+    const metadata = { ...prev, reactions };
+    if (Object.keys(reactions).length === 0) delete metadata.reactions;
+    await supabaseAdmin.from("messages").update({ metadata: metadata as never }).eq("id", row.id);
+  }
+}

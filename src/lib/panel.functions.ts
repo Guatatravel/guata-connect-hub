@@ -387,6 +387,7 @@ async function mapMessagesForPanel(
         deleted,
         edited: Boolean(meta.edited_at),
         replyTo,
+        reactions: meta.reactions as Record<string, string> | undefined,
       };
     }),
   );
@@ -467,7 +468,9 @@ export const fetchConversations = createServerFn({ method: "POST" })
         openTriage: intakeBySession.get(s.id as string),
         needsAttention: (() => {
           const tri = intakeBySession.get(s.id as string);
-          if (s.mode === "humano") return true;
+          const unseenMsg =
+            !s.staff_seen_at || new Date(s.staff_seen_at) < new Date(s.last_message_at as string);
+          if (s.mode === "humano") return unseenMsg;
           return Boolean(tri && tri.status === "novo" && !tri.staffSeenAt);
         })(),
         ...crmFields(intake),

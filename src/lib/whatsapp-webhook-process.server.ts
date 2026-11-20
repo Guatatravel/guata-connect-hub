@@ -60,6 +60,29 @@ async function processInboundMessages(
       continue;
     }
 
+    if (msgType === "reaction") {
+      const reaction = msg.reaction as { message_id?: string; emoji?: string } | undefined;
+      const targetWaId = reaction?.message_id;
+      if (targetWaId) {
+        try {
+          const { applyWhatsAppReaction } = await import("@/lib/message-revisions.server");
+          await applyWhatsAppReaction(String(targetWaId), String(reaction?.emoji ?? ""), "user");
+        } catch (err) {
+          console.error("[whatsapp-webhook] reaction:", err);
+        }
+      }
+      if (msgId) {
+        await supabaseAdmin
+          .from("whatsapp_processed_messages")
+          .insert({ message_id: msgId })
+          .then(
+            () => {},
+            () => {},
+          );
+      }
+      continue;
+    }
+
     if (msgType === "edit" && (msg.edit as { original_message_id?: string })?.original_message_id) {
       const inner = (msg.edit as { message?: Record<string, unknown> }).message;
       const innerType = String(inner?.type ?? "text");

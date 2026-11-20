@@ -9,6 +9,28 @@ const schema = z.object({
     .max(30),
 });
 
+function normalizeCopilotHistory(
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+): Array<{ role: "user" | "assistant"; content: string }> {
+  const out: Array<{ role: "user" | "assistant"; content: string }> = [];
+  const userParts: string[] = [];
+  const flush = () => {
+    if (userParts.length) {
+      out.push({ role: "user", content: userParts.join("\n\n") });
+      userParts.length = 0;
+    }
+  };
+  for (const h of history) {
+    if (h.role === "user") userParts.push(h.content);
+    else {
+      flush();
+      out.push(h);
+    }
+  }
+  flush();
+  return out;
+}
+
 export const askCopilot = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => schema.parse(i))
@@ -35,7 +57,9 @@ export const askCopilot = createServerFn({ method: "POST" })
       .filter((m) => m.author !== "system")
       .map((m) => `${m.author === "user" ? "Cliente" : m.author === "bot" ? "Guatá (IA)" : "Consultor"}: ${m.text}`)
       .join("\n")
-      .slice(-10000);
+      .slice(-8000);
+    const history = normalizeCopilotHistory(data.history);
+    const { formatAiErrorForPanel } = await import("@/lib/ai-error-messages");
 
     try {
       const answer = await chatForOrganization(
@@ -46,20 +70,19 @@ export const askCopilot = createServerFn({ method: "POST" })
             content:
               "Você é o Copiloto interno do Guatá, assistente do consultor da agência Guatá. O cliente NÃO vê esta conversa. Ajude o consultor a entender o cliente, sugerir estratégia de venda, traduzir e explicar mensagens em outros idiomas (ex.: inglês), e redigir respostas prontas. Responda em português, de forma objetiva, sem Markdown pesado. Quando sugerir uma mensagem para o cliente, coloque-a no idioma do cliente entre as linhas 'MENSAGEM:' e o fim.\n" +
               quotePromptRules(validity) +
-              "- Quando o consultor passar voos/valores, monte a cotação nesse padrão (✈️ Cotação de Voos — Guatá, Trecho, Data, Opção 1/2/3 com '• Sem bagagem despachada' e '• Com bagagem despachada', passageiros, ⚠️ IMPORTANTE com prazo e aviso, e 'Cotação realizada em'). Se faltar dado, pergunte ao consultor; nunca invente valores.\n" +
-              "\nConversa com o cliente:\n" +
-              (transcript || "(sem mensagens ainda)"),
+              "- Quando o consultor passar voos/valores, monte a cotação nesse padrão (✈️ Cotação de Voos — Guatá, Trecho, Data, Opção 1/2/3 com '• Sem bagagem despachada' e '• Com bagagem despachada', passageiros, ⚠️ IMPORTANTE com prazo e aviso, e 'Cotação realizada em'). Se faltar dado, pergunte ao consultor; nunca invente valores.",
           },
-          ...data.history,
+          {
+            role: "user",
+            content: `Conversa com o cliente:\n${transcript || "(sem mensagens ainda)"}`,
+          },
+          ...history,
         ],
         { maxTokens: 900 },
       );
       return { answer: answer || "Não consegui gerar uma resposta agora." };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
-      if (msg === "rate_limit") throw new Error("Muitas solicitações. Tente em alguns segundos.");
-      if (msg === "credits_exhausted") throw new Error("Créditos de IA esgotados. Volta no dia 10, ou quando a Lovable liberar.");
-      if (msg === "ai_quota") throw new Error("O teto de respostas desta agência acabou. Volta no dia 10.");
-      throw new Error("Falha ao consultar o Copiloto.");
+      throw new Error(formatAiErrorForPanel(msg));
     }
   });

@@ -182,6 +182,7 @@ export async function saveAiQuotaSettings(
       api_key: apiKey,
       ai_provider: aiProvider,
       updated_at: new Date().toISOString(),
+      ...(useOwnKey ? { credits_blocked_period: null } : {}),
     },
     { onConflict: "organization_id" },
   );

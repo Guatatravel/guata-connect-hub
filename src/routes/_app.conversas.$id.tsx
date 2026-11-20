@@ -121,6 +121,7 @@ function ConversaDetail() {
   });
 
   useEffect(() => {
+    if (!conv || conv.mode === "humano") return;
     let active = true;
     api
       .markConversationSeen(id)
@@ -131,7 +132,7 @@ function ConversaDetail() {
     return () => {
       active = false;
     };
-  }, [id, qc]);
+  }, [id, conv?.mode, qc]);
 
   const visibleCount = (conv?.messages.length ?? 0) + outgoing.length;
   useEffect(() => {

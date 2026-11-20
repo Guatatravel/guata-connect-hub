@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api/client";
 import type { SessionMode } from "@/types/guata";
 
-/** Botões Assumir / Devolver ao Guatá + marca a conversa como vista ao abrir. */
+/** Assumir / devolver ao Guatá; em humano não marca vista só por abrir a tela. */
 export function HandoffControls({ sessionId, mode }: { sessionId: string; mode: SessionMode }) {
   const qc = useQueryClient();
   const refresh = () => {
@@ -17,10 +17,21 @@ export function HandoffControls({ sessionId, mode }: { sessionId: string; mode: 
   };
 
   useEffect(() => {
+    if (mode === "humano") return;
     api.markConversationSeen(sessionId).then(() =>
       qc.invalidateQueries({ queryKey: ["unread-counts"] }),
     ).catch(() => {});
-  }, [sessionId, qc]);
+  }, [sessionId, mode, qc]);
+
+  const markRead = () => {
+    api
+      .markConversationSeen(sessionId)
+      .then(() => {
+        toast.success("Conversa marcada como lida");
+        refresh();
+      })
+      .catch(() => toast.error("Não foi possível marcar"));
+  };
 
   const assume = useMutation({
     mutationFn: () => api.assumeConversation(sessionId),
@@ -45,9 +56,14 @@ export function HandoffControls({ sessionId, mode }: { sessionId: string; mode: 
           : "O Guatá está respondendo este cliente automaticamente."}
       </span>
       {human ? (
-        <Button size="sm" onClick={() => release.mutate()} disabled={release.isPending}>
-          <Bot className="h-4 w-4 mr-1" /> Devolver para o Guatá
-        </Button>
+        <>
+          <Button size="sm" variant="outline" onClick={markRead}>
+            Marcar como lida
+          </Button>
+          <Button size="sm" onClick={() => release.mutate()} disabled={release.isPending}>
+            <Bot className="h-4 w-4 mr-1" /> Devolver para o Guatá
+          </Button>
+        </>
       ) : (
         <Button size="sm" variant="outline" onClick={() => assume.mutate()} disabled={assume.isPending}>
           <UserRound className="h-4 w-4 mr-1" /> Assumir atendimento

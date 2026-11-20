@@ -61,8 +61,9 @@ export async function generateDossie(sessionId: string): Promise<Dossie | null> 
     ],
     { temperature: 0.3 },
     );
-  } catch {
-    return null;
+  } catch (e) {
+    const { formatAiErrorForPanel } = await import("@/lib/ai-error-messages");
+    throw new Error(formatAiErrorForPanel(e instanceof Error ? e.message : ""));
   }
 
   let dossie: Dossie;

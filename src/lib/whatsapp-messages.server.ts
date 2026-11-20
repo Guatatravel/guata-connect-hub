@@ -121,30 +121,21 @@ export function splitWhatsAppMessages(text: string): string[] {
   return out;
 }
 
-function agentAttendantLabel(staffName: string | null): string {
-  const name = staffName?.trim() || "Consultor";
-  return `Atendente ${name}:`;
-}
-
-/** Texto(s) para o cliente ver quem atende (primeiro balão assinado). */
-export function agentWhatsAppParts(staffName: string | null, body: string): string[] {
+/** Texto(s) para o cliente — consultor identificado só no painel, sem prefixo no WhatsApp. */
+export function agentWhatsAppParts(_staffName: string | null, body: string): string[] {
   const trimmed = body.trim();
   if (!trimmed) return [];
-  const parts = splitWhatsAppMessages(trimmed);
-  if (parts.length === 0) return [];
-  const label = agentAttendantLabel(staffName);
-  return parts.map((p, i) => (i === 0 ? `${label}\n\n${p}` : p));
+  return splitWhatsAppMessages(trimmed);
 }
 
 /**
  * Texto para exibir no painel (espelha o que vai ao WhatsApp em mensagens antigas salvas cruas).
  */
-export function panelDisplayForAgentMessage(text: string, staffName?: string | null): string {
+export function panelDisplayForAgentMessage(text: string, _staffName?: string | null): string {
   const trimmed = text.trim();
   if (!trimmed) return trimmed;
-  if (/^Atendente\s.+:/m.test(trimmed)) return trimmed;
-  const parts = agentWhatsAppParts(staffName ?? null, trimmed);
-  return parts.length > 0 ? parts.join("\n\n") : formatForWhatsApp(trimmed);
+  const legacy = trimmed.replace(/^Atendente\s.+:\s*\n+/m, "");
+  return formatForWhatsApp(legacy);
 }
 
 /** Legenda de mídia com assinatura do consultor. */

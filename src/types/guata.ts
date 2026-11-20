@@ -60,6 +60,8 @@ export interface ChatMessage {
   deleted?: boolean;
   /** Texto alterado após envio. */
   edited?: boolean;
+  /** Reações estilo WhatsApp (emoji por autor no balão alvo). */
+  reactions?: Record<string, string>;
 }
 
 export interface Conversation {

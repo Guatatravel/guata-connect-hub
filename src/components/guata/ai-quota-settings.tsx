@@ -32,8 +32,13 @@ export function AiQuotaSettings() {
   const cap = capText ?? (data?.replyCap === null || data?.replyCap === undefined ? "" : String(data.replyCap));
 
   const mut = useMutation({
-    mutationFn: () =>
-      save({
+    mutationFn: () => {
+      if (own && !apiKey.trim() && !data?.hasOwnKey && !clearKey) {
+        throw new Error(
+          "Cole a chave da agência ou desligue «Usar chave da minha agência» antes de salvar.",
+        );
+      }
+      return save({
         data: {
           useOwnKey: own,
           apiKey: apiKey.trim() || undefined,
@@ -41,7 +46,8 @@ export function AiQuotaSettings() {
           replyCap: data?.canSetCap ? (cap.trim() === "" ? null : Number(cap)) : undefined,
           aiProvider: provider,
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Inteligência salva");
       setApiKey("");

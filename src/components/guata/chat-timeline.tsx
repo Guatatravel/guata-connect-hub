@@ -234,6 +234,24 @@ export function ChatTimeline({
                   />
                 )}
               </div>
+              {m.reactions && Object.keys(m.reactions).length > 0 && (
+                <div
+                  className={cn(
+                    "flex flex-wrap gap-1 -mt-0.5",
+                    mine ? "justify-end" : "justify-start",
+                  )}
+                >
+                  {Object.values(m.reactions).map((emoji, i) => (
+                    <span
+                      key={`${emoji}-${i}`}
+                      className="inline-flex items-center rounded-full border border-[#e9edef] bg-white px-1.5 py-0.5 text-sm shadow-sm"
+                      title="Reação no WhatsApp"
+                    >
+                      {emoji}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );

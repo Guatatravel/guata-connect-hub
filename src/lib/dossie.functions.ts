@@ -31,8 +31,20 @@ export const regenerateDossie = createServerFn({ method: "POST" })
   .inputValidator((i) => idSchema.parse(i))
   .handler(async ({ data, context }) => {
     await assertStaff(context.supabase as never, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { count } = await supabaseAdmin
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", data.id)
+      .neq("author", "system");
+    if (!count) throw new Error("Ainda não há mensagens nesta conversa.");
     const { generateDossie } = await import("./dossie.server");
-    const dossie = await generateDossie(data.id);
-    if (!dossie) throw new Error("Ainda não há mensagens nesta conversa.");
-    return { dossie, at: new Date().toISOString() };
+    try {
+      const dossie = await generateDossie(data.id);
+      if (!dossie) throw new Error("A IA não devolveu um resumo válido. Tente atualizar de novo.");
+      return { dossie, at: new Date().toISOString() };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      throw new Error("Não foi possível gerar o dossiê.");
+    }
   });
