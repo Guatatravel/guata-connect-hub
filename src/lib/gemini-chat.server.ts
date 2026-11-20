@@ -25,6 +25,57 @@ export function looksLikeGeminiApiKey(key: string): boolean {
   return key.trim().startsWith("AIza");
 }
 
+export type GeminiInlinePart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } };
+
+/** Uma rodada multimodal (áudio/imagem) — mesmo endpoint generateContent. */
+export async function geminiGenerateWithParts(
+  apiKey: string,
+  parts: GeminiInlinePart[],
+  opts: { model?: string; maxTokens?: number; temperature?: number; system?: string } = {},
+): Promise<string> {
+  const key = apiKey.trim();
+  if (!key) throw new Error("Chave Gemini não configurada");
+  if (parts.length === 0) return "";
+
+  const body: Record<string, unknown> = {
+    contents: [{ role: "user", parts }],
+    generationConfig: {
+      maxOutputTokens: opts.maxTokens ?? 1024,
+      temperature: opts.temperature ?? 0.3,
+    },
+  };
+  if (opts.system?.trim()) {
+    body.systemInstruction = { parts: [{ text: opts.system.trim() }] };
+  }
+
+  const model = geminiModel(opts.model);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(90000),
+  });
+
+  if (res.status === 429) throw new Error("rate_limit");
+  if (res.status === 402 || res.status === 403) {
+    const text = await res.text().catch(() => "");
+    if (/quota|billing|exceeded|RESOURCE_EXHAUSTED/i.test(text)) throw new Error("credits_exhausted");
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Gemini ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const json = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+  return text.trim();
+}
+
 export async function geminiChatCompletion(
   messages: ChatMessage[],
   apiKey: string,

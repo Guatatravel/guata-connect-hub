@@ -80,6 +80,7 @@ export async function normalizeWhatsAppInbound(
         media.bytes,
         media.mimeType,
         cap,
+        organizationId,
       );
       const text = cap && !described.includes(cap) ? `${cap}\n\n${described}` : described;
       return { text, inboundKind: "image", attachment };
@@ -113,7 +114,7 @@ export async function normalizeWhatsAppInbound(
     }
     const attachment = await attachStored(phone, media, "audio");
     try {
-      const transcript = await transcribeWhatsAppAudio(media.bytes, media.mimeType);
+      const transcript = await transcribeWhatsAppAudio(media.bytes, media.mimeType, organizationId);
       if (transcript) {
         return {
           text: transcript,
@@ -125,7 +126,8 @@ export async function normalizeWhatsAppInbound(
       console.error("[inbound] áudio:", e);
     }
     return {
-      text: "(Áudio — ouça abaixo ou peça para o cliente repetir em texto.)",
+      text:
+        "(Sistema: nota de voz recebida; transcrição indisponível. Peça ao cliente, de forma breve e cordial, que repita o assunto em texto.)",
       inboundKind: "audio",
       attachment,
     };
@@ -149,7 +151,7 @@ export async function normalizeWhatsAppInbound(
     if (mime.startsWith("image/")) {
       const attachment = await attachStored(phone, media, "image");
       try {
-        const text = await describeWhatsAppImage(media.bytes, media.mimeType, cap);
+        const text = await describeWhatsAppImage(media.bytes, media.mimeType, cap, organizationId);
         return { text, inboundKind: "image", attachment };
       } catch {
         return {
@@ -184,6 +186,38 @@ export async function normalizeWhatsAppInbound(
       inboundKind: "unsupported",
       attachment,
     };
+  }
+
+  if (type === "location") {
+    const loc = msg.location as {
+      latitude?: number;
+      longitude?: number;
+      name?: string;
+      address?: string;
+    };
+    const bits = [
+      loc?.name?.trim(),
+      loc?.address?.trim(),
+      loc?.latitude != null && loc?.longitude != null
+        ? `${loc.latitude}, ${loc.longitude}`
+        : "",
+    ].filter(Boolean);
+    const text = bits.length
+      ? `(Cliente compartilhou localização: ${bits.join(" — ")})`
+      : "(Cliente compartilhou localização.)";
+    return { text, inboundKind: "text" };
+  }
+
+  if (type === "contacts") {
+    const contacts = msg.contacts as Array<{ name?: { formatted_name?: string } }> | undefined;
+    const names = (contacts ?? [])
+      .map((c) => c?.name?.formatted_name?.trim())
+      .filter(Boolean);
+    const text =
+      names.length > 0
+        ? `(Cliente compartilhou contato: ${names.join(", ")})`
+        : "(Cliente compartilhou um contato.)";
+    return { text, inboundKind: "text" };
   }
 
   if (type === "button") {

@@ -79,7 +79,7 @@ export async function normalizePhoneEchoMedia(
 
     if (kind === "audio") {
       try {
-        const transcript = await transcribeWhatsAppAudio(media.bytes, media.mimeType);
+        const transcript = await transcribeWhatsAppAudio(media.bytes, media.mimeType, organizationId);
         if (transcript?.trim()) return { text: transcript.trim(), attachment };
       } catch (e) {
         console.error("[echo-media] transcrição:", e);

@@ -72,7 +72,7 @@ export async function chatCompletion(
 
 export async function chatCompletionParts(
   messages: ChatMessageParts[],
-  opts: { model?: string; maxTokens?: number; temperature?: number } = {},
+  opts: { model?: string; maxTokens?: number; temperature?: number; apiKey?: string } = {},
 ): Promise<string> {
   return gatewayRequest(messages, opts);
 }
