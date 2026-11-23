@@ -144,14 +144,19 @@ export async function chatForOrganization(
   if (settings?.use_own_key && !ownKey) throw new Error("Chave de IA da agência não configurada");
 
   const { provider, apiKey } = await resolveAiProvider(organizationId, settings);
+  const envLovable = process.env.LOVABLE_API_KEY?.trim() || null;
 
   try {
-    const answer = await chatWithProvider(provider, apiKey, messages, opts);
+    const answer = await chatWithProvider(provider, apiKey, messages, {
+      ...opts,
+      fallbackLovableKey: provider === "gemini" ? envLovable : null,
+    });
     await clearBlocked(organizationId, Boolean(ownKey));
     await recordCall(organizationId, notice.periodKey);
     return answer;
   } catch (error) {
-    if (error instanceof Error && (error.message === "credits_exhausted" || error.message === "rate_limit")) {
+    // Só bloqueia o período por créditos esgotados — 429/503 são transitórios.
+    if (error instanceof Error && error.message === "credits_exhausted") {
       await markBlocked(organizationId, Boolean(ownKey), notice.periodKey);
     }
     throw error;

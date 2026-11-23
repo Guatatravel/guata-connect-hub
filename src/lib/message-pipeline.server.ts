@@ -1127,8 +1127,11 @@ export async function processMessage(
       }
     } catch (err) {
       console.error("[brain] erro:", err);
+      const { isTransientAiError } = await import("@/lib/ai-retry.server");
       replies.push(
-        "Tive um problema momentâneo. Pode repetir? Se preferir, escreva 'consultor' que chamo nossa equipe.",
+        isTransientAiError(err)
+          ? "A IA está um pouco congestionada agora. Pode mandar de novo em alguns segundos? Se preferir, escreva 'consultor' que chamo nossa equipe."
+          : "Tive um problema momentâneo. Pode repetir? Se preferir, escreva 'consultor' que chamo nossa equipe.",
       );
     }
   }

@@ -157,7 +157,7 @@ async function processInboundMessages(
             source_url?: string;
           }
         | undefined;
-      await processMessage({
+      const incoming = {
         organizationId,
         line,
         phone,
@@ -179,7 +179,9 @@ async function processInboundMessages(
         mediaMime: normalized.attachment?.mimeType,
         mediaKind: normalized.attachment?.mediaKind,
         mediaFilename: normalized.attachment?.filename,
-      });
+      };
+      const { enqueueInboundMessage } = await import("@/lib/inbound-coalesce.server");
+      await enqueueInboundMessage(incoming, processMessage);
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
       errors.push(m);

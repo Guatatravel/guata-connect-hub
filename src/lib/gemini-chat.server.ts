@@ -2,6 +2,7 @@
  * Google Gemini (AI Studio) — server-only. Chave nunca vai ao navegador.
  */
 import type { ChatMessage } from "@/lib/ai-gateway.server";
+import { withAiRetries } from "@/lib/ai-retry.server";
 
 const DEFAULT_MODEL = "gemini-3.5-flash-lite";
 
@@ -29,8 +30,7 @@ export type GeminiInlinePart =
   | { text: string }
   | { inlineData: { mimeType: string; data: string } };
 
-/** Uma rodada multimodal (áudio/imagem) — mesmo endpoint generateContent. */
-export async function geminiGenerateWithParts(
+async function geminiPartsOnce(
   apiKey: string,
   parts: GeminiInlinePart[],
   opts: { model?: string; maxTokens?: number; temperature?: number; system?: string } = {},
@@ -60,6 +60,7 @@ export async function geminiGenerateWithParts(
   });
 
   if (res.status === 429) throw new Error("rate_limit");
+  if (res.status === 503) throw new Error(`Gemini 503: ${await res.text().catch(() => "UNAVAILABLE")}`);
   if (res.status === 402 || res.status === 403) {
     const text = await res.text().catch(() => "");
     if (/quota|billing|exceeded|RESOURCE_EXHAUSTED/i.test(text)) throw new Error("credits_exhausted");
@@ -76,7 +77,19 @@ export async function geminiGenerateWithParts(
   return text.trim();
 }
 
-export async function geminiChatCompletion(
+/** Uma rodada multimodal (áudio/imagem) — com retry em 429/503. */
+export async function geminiGenerateWithParts(
+  apiKey: string,
+  parts: GeminiInlinePart[],
+  opts: { model?: string; maxTokens?: number; temperature?: number; system?: string } = {},
+): Promise<string> {
+  return withAiRetries(() => geminiPartsOnce(apiKey, parts, opts), {
+    attempts: 3,
+    label: "gemini-media",
+  });
+}
+
+async function geminiChatOnce(
   messages: ChatMessage[],
   apiKey: string,
   opts: { model?: string; maxTokens?: number; temperature?: number } = {},
@@ -118,6 +131,7 @@ export async function geminiChatCompletion(
   });
 
   if (res.status === 429) throw new Error("rate_limit");
+  if (res.status === 503) throw new Error(`Gemini 503: ${await res.text().catch(() => "UNAVAILABLE")}`);
   if (res.status === 402 || res.status === 403) {
     const text = await res.text().catch(() => "");
     if (/quota|billing|exceeded|RESOURCE_EXHAUSTED/i.test(text)) throw new Error("credits_exhausted");
@@ -132,4 +146,15 @@ export async function geminiChatCompletion(
   };
   const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   return text.trim();
+}
+
+export async function geminiChatCompletion(
+  messages: ChatMessage[],
+  apiKey: string,
+  opts: { model?: string; maxTokens?: number; temperature?: number } = {},
+): Promise<string> {
+  return withAiRetries(() => geminiChatOnce(messages, apiKey, opts), {
+    attempts: 3,
+    label: "gemini-chat",
+  });
 }
