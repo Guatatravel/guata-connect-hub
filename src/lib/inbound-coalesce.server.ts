@@ -1,10 +1,11 @@
 /**
- * Junta mensagens de texto rápidas do mesmo contato antes de chamar a IA.
+ * Junta texto e áudio (já transcrito) do mesmo contato antes de chamar a IA.
  * Em serverless o Map vale por isolate — ainda cobre rajadas no mesmo processo.
  */
 import type { IncomingMessage } from "@/lib/message-pipeline.server";
 
-const WINDOW_MS = 1600;
+/** Espera após a última msg (texto ou áudio) para pegar complemento digitado. */
+const WINDOW_MS = 4000;
 
 type Bucket = {
   messages: IncomingMessage[];
@@ -21,35 +22,56 @@ function keyOf(msg: IncomingMessage): string {
   return `${msg.organizationId}:${msg.line}:${msg.phone}`;
 }
 
-/** Mídia, formato especial ou citação: processa na hora (não junta). */
+/**
+ * Texto e áudio entram na janela. Imagem/vídeo/documento/citação/referral: na hora.
+ */
 export function shouldCoalesceInbound(msg: IncomingMessage): boolean {
   if (msg.unsupportedAutoReply) return false;
-  if (msg.inboundKind && msg.inboundKind !== "text") return false;
-  if (msg.mediaPath || msg.mediaKind) return false;
   if (msg.quotedWaMessageId) return false;
   if (msg.referral) return false;
-  const t = msg.text.trim();
-  if (!t) return false;
-  // Placeholders internos de mídia — não misturar
-  if (t.startsWith("(Áudio") || t.startsWith("(Cliente enviou") || t.startsWith("(Sistema:")) return false;
-  return true;
+  const kind = msg.inboundKind ?? "text";
+  if (kind === "text") {
+    const t = msg.text.trim();
+    if (!t) return false;
+    return true;
+  }
+  if (kind === "audio") {
+    // Inclui falha de transcrição — ainda pode vir texto em seguida.
+    return Boolean(msg.text.trim());
+  }
+  return false;
 }
 
 function mergeMessages(batch: IncomingMessage[]): IncomingMessage {
   const last = batch[batch.length - 1]!;
   if (batch.length === 1) return last;
+
   const texts = batch.map((m) => m.text.trim()).filter(Boolean);
+  const audioMsgs = batch.filter((m) => m.inboundKind === "audio");
+  const lastAudio = audioMsgs[audioMsgs.length - 1];
+  const hadAudio = audioMsgs.length > 0;
+
+  // Preferir wamid do áudio para mark-as-played (microfone azul no WhatsApp).
+  const audioMessageId =
+    [...audioMsgs].reverse().find((m) => m.messageId)?.messageId ??
+    [...batch].reverse().find((m) => m.messageId)?.messageId;
+
   return {
     ...last,
     text: texts.join("\n"),
-    messageId: last.messageId ?? batch.find((m) => m.messageId)?.messageId,
+    inboundKind: hadAudio ? "audio" : (last.inboundKind ?? "text"),
+    messageId: audioMessageId ?? last.messageId,
     contactName: last.contactName ?? batch.find((m) => m.contactName)?.contactName,
+    mediaPath: lastAudio?.mediaPath ?? last.mediaPath,
+    mediaMime: lastAudio?.mediaMime ?? last.mediaMime,
+    mediaKind: lastAudio?.mediaKind ?? (hadAudio ? "audio" : last.mediaKind),
+    mediaFilename: lastAudio?.mediaFilename ?? last.mediaFilename,
   };
 }
 
 /**
- * Enfileira e, após WINDOW_MS sem nova mensagem de texto, processa o lote junto.
- * Mensagens que não devem coalesce disparam flush imediato do bucket anterior e processam na hora.
+ * Enfileira texto/áudio; após WINDOW_MS sem nova msg, processa o lote junto.
+ * Outros tipos disparam flush do bucket e processam na hora.
  */
 export function enqueueInboundMessage(
   msg: IncomingMessage,
@@ -99,11 +121,16 @@ function flush(
   const merged = mergeMessages(bucket.messages);
   if (bucket.messages.length > 1) {
     console.info(
-      `[inbound-coalesce] ${k} juntou ${bucket.messages.length} mensagens:`,
-      merged.text.slice(0, 120),
+      `[inbound-coalesce] ${k} juntou ${bucket.messages.length} msgs (${merged.inboundKind}):`,
+      merged.text.slice(0, 160),
     );
   }
   void process(merged)
     .then((r) => bucket.waiters.forEach((w) => w.resolve(r)))
     .catch((e) => bucket.waiters.forEach((w) => w.reject(e)));
+}
+
+/** Só para testes. */
+export function coalesceWindowMs(): number {
+  return WINDOW_MS;
 }

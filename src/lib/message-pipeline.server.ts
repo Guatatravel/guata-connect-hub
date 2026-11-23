@@ -618,7 +618,11 @@ async function deliverTextReplies(
     const text = replies[i];
 
     if (i === 0 && tryAudio) {
-      if (inboundWaMessageId) await markReadAndTyping(waTarget, inboundWaMessageId);
+      // Marca o áudio do cliente como lido/reproduzido (microfone azul) antes do TTS.
+      if (inboundWaMessageId) {
+        await markReadAndTyping(waTarget, inboundWaMessageId, { typing: false });
+        await markReadAndTyping(waTarget, inboundWaMessageId, { typing: true });
+      }
       const speech = await synthesizeBotSpeechDetailed(text, ttsVoice);
       if (speech.ok) {
         try {
