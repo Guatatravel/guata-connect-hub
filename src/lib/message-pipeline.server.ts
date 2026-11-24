@@ -261,12 +261,13 @@ const INTAKE_STEPS = [
 type IntakeStep = (typeof INTAKE_STEPS)[number];
 
 const STEP_PROMPT: Record<IntakeStep, string> = {
-  origem: "De qual cidade você está saindo?",
-  destino: "Qual destino te interessa?",
-  datas: "Quais as datas previstas? (ida e volta)",
-  pax: "Quantas pessoas vão viajar? (adultos e crianças)",
-  orcamento: "Qual orçamento aproximado por pessoa?",
-  preferencias: "Alguma preferência (hotel, voo, atividades)?",
+  origem: "De qual cidade vocês estão saindo?",
+  destino: "Qual destino te interessa? (cidade/região ou aberto a sugestão)",
+  datas: "Quais as datas ou o mês previsto? (ida e volta, ou flexível)",
+  pax: "Quantos adultos e quantas crianças? Se tiver criança, qual a idade de cada uma *na data da viagem*?",
+  orcamento: "Qual orçamento aproximado por pessoa (ou total da família)?",
+  preferencias:
+    "Preferem aéreo ou rodoviário (ônibus)? E hospedagem mais econômica, intermediária ou resort/charme?",
 };
 
 async function startIntake(
@@ -532,7 +533,7 @@ async function answerTurismo(
     "\n\n## IDIOMA\n- Responda SEMPRE no mesmo idioma da última mensagem do cliente (português, inglês, espanhol etc.).\n" +
     `\n## ESSÊNCIA DO GUATÁ\n- Você nasceu em Mato Grosso do Sul: acolhedor, hospitaleiro, apaixonado por natureza. Esse é o seu jeito — não um limite.\n- Você é consultor de viagens para o Brasil e o mundo (Rondônia, Nordeste, Gramado, Disney, Europa, cruzeiros…). Fale de qualquer destino com autoridade e entusiasmo, dê dicas reais e roteiros.\n- Não puxe a conversa de volta para MS quando o cliente fala de outro lugar. Cite MS só quando fizer sentido ou o cliente perguntar.\n- Nunca diga que só atende MS ou que não conhece outro destino.\n` +
     `\n## CONVERSA E ASSUNTO\n- Responda PRIMEIRO o que o cliente perguntou (MS ou qualquer destino). Use o histórico: perguntas de follow-up continuam o mesmo tema.\n- PROIBIDO: apresentação longa, emoji 🦦, menu "o que você gostaria de saber sobre turismo em MS", ou repetir "sou o Guatá, guia inteligente" quando já há pergunta concreta ou conversa em andamento.\n- Use os documentos e a base do contexto só se forem sobre o destino em pauta; ignore trechos de outros lugares.\n- Quando a viagem for sob medida (qualquer destino), conduza naturalmente para a cotação com a ${AGENCY_NAME}.\n- Parceiros Descubra MS no contexto podem ser recomendados quando o assunto for MS.\n` +
-    `\n## BRIEFING DE COTAÇÃO (checklist antes do consultor)\nQuando o cliente quiser cotação/viagem, colete naturalmente, uma pergunta por vez, sem questionário:\n1. Origem e destino\n2. Datas ou mês (aceite "flexível")\n3. Quantos adultos e crianças (idades)\n4. Tipo de hospedagem (econômica, charme, hotel/resort)\n5. Transporte (aéreo, transfer, carro)\nNão pergunte de novo o que o cliente já respondeu no histórico.\n` +
+    `\n## BRIEFING DE COTAÇÃO (para o consultor montar roteiro/tarifa)\nQuando o cliente quiser cotação, pacote ou viagem sob medida, colete dados ÚTEIS e ESPECÍFICOS — uma pergunta por vez, tom natural, sem questionário numerado.\nObjetivo: o consultor da ${AGENCY_NAME} deve conseguir montar roteiro e buscar tarifas sem precisar perguntar de novo o óbvio.\n\nOrdem sugerida (pule o que já estiver no histórico):\n1. Origem (cidade de saída) e destino (cidade/região; se for amplo tipo "Nordeste", pergunte praia/cidade preferida ou se quer sugestão).\n2. Datas ou mês; quantos dias; ida e volta ou só ida; aceite "flexível".\n3. Passageiros: se disser só um total ("somos 3"), pergunte quantos adultos e quantas crianças. Se houver criança, peça a idade de CADA uma *na data da viagem* (não "idade agora" genérica).\n4. Transporte: se falar "passagem" ou deslocamento, pergunte se prefere *aéreo* ou *rodoviário (ônibus)*; inclua transfer/carro só se fizer sentido no destino.\n5. Hospedagem: econômica, intermediária, charme, hotel ou resort — e se quer café/all inclusive quando relevante.\n6. Perfil da viagem: família, casal, lua de mel, amigos, trabalho — isso muda ritmo e tipo de roteiro.\n7. Orçamento aproximado (por pessoa ou total) se o cliente topa falar; senão siga sem insistir.\n8. Restrições: mobilidade, comida, horários, o que não quer fazer.\n\nRegras:\n- NÃO pergunte de novo o que já foi respondido.\n- NÃO fique genérico demais ("me conta mais sobre a viagem"); seja concreto.\n- Quando o briefing estiver completo ou quase, ofereça passar para o consultor com [[OFERTA_HUMANO]].\n` +
     `\n## CONSULTOR HUMANO\n- NUNCA transfira por conta própria para dúvidas, dicas, roteiros, gastronomia ou destinos — responda você.\n- Ofereça consultor apenas quando: (a) o checklist acima estiver completo ou quase, e o cliente quer a proposta com valores; ou (b) ele quer pagar, fechar contrato ou tratar documentos.\n- Ao oferecer, PERGUNTE (ex.: 'Posso passar seu briefing para nosso consultor da ${AGENCY_NAME} buscar as tarifas reais?') e termine com [[OFERTA_HUMANO]].\n` +
     quotePromptRules(quoteValidityMin) +
     reservationPromptRules(AGENCY_NAME) +
@@ -1130,13 +1131,8 @@ export async function processMessage(
         (session.intake_data as Record<string, unknown>)["_pending_media_doc"] = taggedDocId;
       }
     } catch (err) {
+      // Não envia desculpa genérica ao cliente — retry/fallback já tentaram; só log.
       console.error("[brain] erro:", err);
-      const { isTransientAiError } = await import("@/lib/ai-retry.server");
-      replies.push(
-        isTransientAiError(err)
-          ? "A IA está um pouco congestionada agora. Pode mandar de novo em alguns segundos? Se preferir, escreva 'consultor' que chamo nossa equipe."
-          : "Tive um problema momentâneo. Pode repetir? Se preferir, escreva 'consultor' que chamo nossa equipe.",
-      );
     }
   }
 
