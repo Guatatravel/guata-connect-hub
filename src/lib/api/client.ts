@@ -9,6 +9,7 @@ import {
   replyAsAgent,
   deleteMessageForEveryone,
   editConversationMessage,
+  reactToConversationMessage,
   releaseBot,
   fetchTriages,
   fetchTriage,
@@ -92,6 +93,10 @@ export const api = {
 
   async editConversationMessage(sessionId: string, messageId: string, text: string) {
     return editConversationMessage({ data: { sessionId, messageId, text } });
+  },
+
+  async reactToConversationMessage(sessionId: string, messageId: string, emoji: string) {
+    return reactToConversationMessage({ data: { sessionId, messageId, emoji } });
   },
 
   async releaseBot(id: string) {

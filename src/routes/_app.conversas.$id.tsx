@@ -256,6 +256,16 @@ function ConversaDetail() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao apagar"),
   });
 
+  const reactMut = useMutation({
+    mutationFn: (payload: { message: ChatMessage; emoji: string }) =>
+      api.reactToConversationMessage(id, payload.message.id, payload.emoji),
+    onSuccess: async (_, payload) => {
+      toast.success(payload.emoji ? "Reação enviada" : "Reação removida");
+      await qc.invalidateQueries({ queryKey: ["conversation", id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Falha ao reagir"),
+  });
+
   const sendTextToClient = async (text: string) => {
     const t = text.trim();
     if (!t) return;
@@ -353,6 +363,7 @@ function ConversaDetail() {
                 setEditDraft(message.text);
               }}
               onDelete={(message) => setDeleting(message)}
+              onReact={(message, emoji) => reactMut.mutate({ message, emoji })}
             />
           </div>
           <input

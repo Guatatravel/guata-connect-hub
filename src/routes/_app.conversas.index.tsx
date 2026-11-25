@@ -2,15 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Archive,
-  ArchiveRestore,
-  Ban,
-  BellRing,
-  Phone,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Ban, BellRing, CheckSquare, Phone, Search, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { LeadStageBadge, SessionModeBadge } from "@/components/guata/status-badge";
 import { LineBadge } from "@/components/guata/line-badge";
@@ -22,7 +14,7 @@ import { formatPhone, timeAgo } from "@/lib/format";
 import type { Conversation } from "@/types/guata";
 import { useOrgLineUi } from "@/hooks/use-org-line-ui";
 
-type TabId = "ativas" | "arquivadas" | "leads" | "recusaram" | "nao_contatar";
+type TabId = "ativas" | "leads" | "nao_contatar";
 
 export const Route = createFileRoute("/_app/conversas/")({
   head: () => ({
@@ -43,6 +35,7 @@ function ConversasPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("ativas");
   const [q, setQ] = useState("");
+  const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [newOpen, setNewOpen] = useState(false);
   const [newPhone, setNewPhone] = useState("");
@@ -61,14 +54,6 @@ function ConversasPage() {
     queryFn: () => api.listConversations(),
     refetchInterval: 8000,
   });
-  const archive = useMutation({
-    mutationFn: (v: { id: string; archived: boolean }) => api.setArchived(v.id, v.archived),
-    onSuccess: (_, v) => {
-      toast.success(v.archived ? "Conversa arquivada" : "Conversa restaurada");
-      qc.invalidateQueries({ queryKey: ["conversations"] });
-    },
-    onError: () => toast.error("Não foi possível atualizar"),
-  });
   const markAllSeen = useMutation({
     mutationFn: () => api.markAllConversationsSeen(),
     onSuccess: (r) => {
@@ -85,6 +70,7 @@ function ConversasPage() {
     onSuccess: (r) => {
       toast.success(`${r.updated} contato(s) em Não contatar`);
       setSelected(new Set());
+      setSelectMode(false);
       qc.invalidateQueries({ queryKey: ["conversations"] });
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao marcar"),
@@ -94,6 +80,7 @@ function ConversasPage() {
     onSuccess: (r) => {
       toast.success(`${r.updated} contato(s) excluído(s)`);
       setSelected(new Set());
+      setSelectMode(false);
       qc.invalidateQueries({ queryKey: ["conversations"] });
     },
     onError: (e: Error) => toast.error(e.message || "Falha ao excluir"),
@@ -102,6 +89,7 @@ function ConversasPage() {
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (data ?? []).filter((c) => {
+      if (c.archived && tab !== "nao_contatar") return false;
       if (term) {
         const hit =
           (c.contactName ?? "").toLowerCase().includes(term) ||
@@ -109,19 +97,16 @@ function ConversasPage() {
         if (!hit) return false;
       }
       if (tab === "leads") {
-        return !c.archived && (c.leadStage === "qualificando" || c.leadStage === "quente");
-      }
-      if (tab === "recusaram") {
-        return Boolean(c.declinedInvite || c.doNotContactReason === "declined_invite");
+        return c.leadStage === "qualificando" || c.leadStage === "quente";
       }
       if (tab === "nao_contatar") {
         return Boolean(c.doNotContact);
       }
-      return tab === "arquivadas" ? c.archived : !c.archived;
+      return !c.doNotContact;
     });
   }, [data, q, tab]);
-  const waiting = list.filter((c) => c.needsAttention && !c.archived);
-  const others = list.filter((c) => !(c.needsAttention && !c.archived));
+  const waiting = list.filter((c) => c.needsAttention);
+  const others = list.filter((c) => !c.needsAttention);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -132,19 +117,22 @@ function ConversasPage() {
     });
   };
 
-  const selectAllVisible = () => {
-    setSelected(new Set(list.map((c) => c.id)));
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelected(new Set());
   };
 
   const Row = ({ c }: { c: Conversation }) => (
     <div className="flex items-center gap-3 p-4 hover:bg-secondary/40 transition">
-      <input
-        type="checkbox"
-        className="h-4 w-4 shrink-0 accent-primary"
-        checked={selected.has(c.id)}
-        onChange={() => toggleSelect(c.id)}
-        aria-label={`Selecionar ${c.contactName ?? c.phone}`}
-      />
+      {selectMode && (
+        <input
+          type="checkbox"
+          className="h-4 w-4 shrink-0 accent-primary"
+          checked={selected.has(c.id)}
+          onChange={() => toggleSelect(c.id)}
+          aria-label={`Selecionar ${c.contactName ?? c.phone}`}
+        />
+      )}
       <Link to="/conversas/$id" params={{ id: c.id }} className="flex flex-1 items-center gap-3 min-w-0">
         <div className="relative h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium">
           {(c.contactName ?? c.phone).slice(0, 2).toUpperCase()}
@@ -161,42 +149,43 @@ function ConversasPage() {
                 Não contatar
               </span>
             )}
-            {c.declinedInvite && !c.doNotContact && (
-              <span className="text-[10px] uppercase tracking-wide rounded-full bg-amber-100 text-amber-900 px-2 py-0.5">
-                Recusou
-              </span>
-            )}
           </div>
           <div className="text-sm text-muted-foreground truncate">{c.lastMessage}</div>
         </div>
         <div className="text-xs text-muted-foreground">{timeAgo(c.lastMessageAt)}</div>
       </Link>
-      <Button
-        size="icon"
-        variant="ghost"
-        title={c.archived ? "Restaurar" : "Arquivar"}
-        onClick={() => archive.mutate({ id: c.id, archived: !c.archived })}
-      >
-        {c.archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-      </Button>
     </div>
   );
 
   const tabs: Array<[TabId, string]> = [
     ["ativas", "Ativas"],
     ["leads", "Leads"],
-    ["recusaram", "Recusaram"],
     ["nao_contatar", "Não contatar"],
-    ["arquivadas", "Arquivadas"],
   ];
 
   return (
     <div className="space-y-4 w-full max-w-3xl mx-auto">
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-semibold text-primary">Conversas</h1>
-        <Button size="sm" onClick={() => setNewOpen((v) => !v)}>
-          <Phone className="h-4 w-4 mr-1" /> Nova conversa
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectMode ? (
+            <Button type="button" size="sm" variant="outline" onClick={exitSelectMode}>
+              <X className="h-4 w-4 mr-1" /> Cancelar
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectMode(true)}
+            >
+              <CheckSquare className="h-4 w-4 mr-1" /> Selecionar
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setNewOpen((v) => !v)}>
+            <Phone className="h-4 w-4 mr-1" /> Nova conversa
+          </Button>
+        </div>
       </div>
 
       <div className="relative">
@@ -226,17 +215,24 @@ function ConversasPage() {
         </div>
       </div>
 
-      {selected.size > 0 && (
+      {selectMode && (
         <Card className="rounded-2xl p-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">{selected.size} selecionado(s)</span>
-          <Button type="button" size="sm" variant="outline" onClick={selectAllVisible}>
+          <span className="text-sm text-muted-foreground">
+            {selected.size ? `${selected.size} selecionado(s)` : "Marque as conversas"}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setSelected(new Set(list.map((c) => c.id)))}
+          >
             Selecionar visíveis
           </Button>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            disabled={bulkOptOut.isPending}
+            disabled={bulkOptOut.isPending || selected.size === 0}
             onClick={() => bulkOptOut.mutate([...selected])}
           >
             <Ban className="h-3.5 w-3.5 mr-1" />
@@ -246,7 +242,7 @@ function ConversasPage() {
             type="button"
             size="sm"
             variant="destructive"
-            disabled={bulkDelete.isPending}
+            disabled={bulkDelete.isPending || selected.size === 0}
             onClick={() => {
               if (
                 window.confirm(
@@ -260,17 +256,13 @@ function ConversasPage() {
             <Trash2 className="h-3.5 w-3.5 mr-1" />
             Excluir
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-            Limpar
-          </Button>
         </Card>
       )}
 
-      {tab === "recusaram" && (
+      {tab === "nao_contatar" && (
         <p className="text-xs text-muted-foreground">
-          Quem já disse não a um convite/modelo. Ao abrir Conversas, o Guatá coloca automaticamente
-          esses números em Não contatar (campanhas e follow-up param). Use a seleção para reforçar ou
-          excluir.
+          Sem campanhas nem follow-up. Quem recusou convite entra aqui automaticamente. Se a pessoa
+          escrever de novo, a equipe pode liberar o contato na conversa.
         </p>
       )}
 

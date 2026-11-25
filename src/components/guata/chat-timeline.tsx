@@ -1,8 +1,10 @@
 import type { ChatMessage } from "@/types/guata";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/format";
-import { FileText, Forward, Pencil, Reply, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { FileText, Forward, Pencil, Reply, SmilePlus, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
+
+const REACTION_PICKER = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
 
 /** Negrito/itálico estilo WhatsApp (* e _). */
 function whatsAppInlineMarkup(text: string): ReactNode {
@@ -58,6 +60,7 @@ export function ChatTimeline({
   onForward,
   onEdit,
   onDelete,
+  onReact,
 }: {
   messages: ChatMessage[];
   /** Nome no balão das mensagens do cliente (WhatsApp). */
@@ -66,7 +69,11 @@ export function ChatTimeline({
   onForward?: (message: ChatMessage) => void;
   onEdit?: (message: ChatMessage) => void;
   onDelete?: (message: ChatMessage) => void;
+  /** Reagir no WhatsApp (emoji vazio remove a reação da equipe). */
+  onReact?: (message: ChatMessage, emoji: string) => void;
 }) {
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+
   return (
     <div className="flex flex-col gap-1">
       {messages.map((m) => {
@@ -97,11 +104,14 @@ export function ChatTimeline({
           !m.mediaKind &&
           showText &&
           m.text !== "Mensagem apagada";
+        const canReact = Boolean(onReact && !m.deleted && m.waMessageId);
+        const agentEmoji = m.reactions?.agent;
+        const reactionEntries = Object.entries(m.reactions ?? {}).filter(([, e]) => e);
         return (
           <div key={m.id} className={cn("flex px-1", mine ? "justify-end" : "justify-start")}>
             <div
               className={cn(
-                "max-w-[82%] px-2.5 pt-1 pb-1 shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] space-y-1",
+                "relative max-w-[82%] px-2.5 pt-1 pb-1 shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] space-y-1",
                 mine
                   ? "rounded-lg rounded-tr-none bg-[#d9fdd3] text-[#111b21]"
                   : "rounded-lg rounded-tl-none bg-white text-[#111b21]",
@@ -110,6 +120,17 @@ export function ChatTimeline({
               <div className="flex items-center justify-between gap-3">
                 <div className="text-[11px] font-medium text-[#075e54]">{label}</div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {canReact && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-[#667781] hover:text-[#111b21] inline-flex items-center gap-1"
+                      title="Reagir no WhatsApp"
+                      onClick={() => setPickerFor((cur) => (cur === m.id ? null : m.id))}
+                    >
+                      <SmilePlus className="h-3 w-3" />
+                      Reagir
+                    </button>
+                  )}
                   {onForward &&
                     !m.deleted &&
                     (m.mediaUrl || (m.text && m.text !== "[áudio]" && m.text !== "Mensagem apagada")) && (
@@ -162,6 +183,39 @@ export function ChatTimeline({
                   )}
                 </div>
               </div>
+              {pickerFor === m.id && canReact && (
+                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-[#e9edef] bg-white px-1.5 py-1 shadow-sm">
+                  {REACTION_PICKER.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={cn(
+                        "rounded-md px-1.5 py-0.5 text-base hover:bg-[#f0f2f5]",
+                        agentEmoji === emoji && "bg-[#d9fdd3]",
+                      )}
+                      title={agentEmoji === emoji ? "Remover reação" : `Reagir com ${emoji}`}
+                      onClick={() => {
+                        onReact!(m, agentEmoji === emoji ? "" : emoji);
+                        setPickerFor(null);
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                  {agentEmoji && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-[#667781] px-1 hover:text-[#c62828]"
+                      onClick={() => {
+                        onReact!(m, "");
+                        setPickerFor(null);
+                      }}
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              )}
               {m.replyTo && (
                 <div className="rounded border-l-4 border-[#25d366] bg-black/5 px-2 py-1 text-xs">
                   <div className="font-medium text-[#075e54]">{m.replyTo.authorLabel}</div>
@@ -234,21 +288,35 @@ export function ChatTimeline({
                   />
                 )}
               </div>
-              {m.reactions && Object.keys(m.reactions).length > 0 && (
+              {reactionEntries.length > 0 && (
                 <div
                   className={cn(
                     "flex flex-wrap gap-1 -mt-0.5",
                     mine ? "justify-end" : "justify-start",
                   )}
                 >
-                  {Object.values(m.reactions).map((emoji, i) => (
-                    <span
-                      key={`${emoji}-${i}`}
-                      className="inline-flex items-center rounded-full border border-[#e9edef] bg-white px-1.5 py-0.5 text-sm shadow-sm"
-                      title="Reação no WhatsApp"
+                  {reactionEntries.map(([actor, emoji]) => (
+                    <button
+                      key={`${actor}-${emoji}`}
+                      type="button"
+                      disabled={!canReact || actor !== "agent"}
+                      className={cn(
+                        "inline-flex items-center rounded-full border border-[#e9edef] bg-white px-1.5 py-0.5 text-sm shadow-sm",
+                        canReact && actor === "agent" && "hover:bg-[#f0f2f5] cursor-pointer",
+                      )}
+                      title={
+                        actor === "user"
+                          ? "Reação do cliente"
+                          : canReact
+                            ? "Sua reação — clique para remover"
+                            : "Reação da equipe"
+                      }
+                      onClick={() => {
+                        if (canReact && actor === "agent") onReact!(m, "");
+                      }}
                     >
                       {emoji}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}

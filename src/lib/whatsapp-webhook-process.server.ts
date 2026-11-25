@@ -209,6 +209,20 @@ async function processEchoRecord(
     return;
   }
 
+  if (echoType === "reaction") {
+    const reaction = echo.reaction as { message_id?: string; emoji?: string } | undefined;
+    const targetWaId = reaction?.message_id;
+    if (targetWaId) {
+      try {
+        const { applyWhatsAppReaction } = await import("@/lib/message-revisions.server");
+        await applyWhatsAppReaction(String(targetWaId), String(reaction?.emoji ?? ""), "agent");
+      } catch (err) {
+        console.error("[whatsapp-webhook] eco reaction:", err);
+      }
+    }
+    return;
+  }
+
   if (echoType === "edit" && (echo.edit as { original_message_id?: string })?.original_message_id) {
     const inner = (echo.edit as { message?: Record<string, unknown> }).message ?? echo;
     const newText = echoTextFromRecord(inner as Record<string, unknown>);

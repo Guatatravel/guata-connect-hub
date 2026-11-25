@@ -14,6 +14,7 @@ import {
   sendWhatsAppText,
   deleteWhatsAppMessage,
   editWhatsAppText,
+  sendWhatsAppReaction,
 } from "@/lib/meta-send.server";
 import {
   signedChatMediaUrl,
@@ -268,6 +269,8 @@ type MessageMeta = {
   delivery_error?: string;
   deleted_at?: string;
   edited_at?: string;
+  /** emoji por ator: user | agent */
+  reactions?: Record<string, string>;
 };
 
 function quoteLabel(author: string): string {
@@ -916,6 +919,58 @@ export const editConversationMessage = createServerFn({ method: "POST" })
       .from("sessions")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", session.id);
+    return { ok: true };
+  });
+
+const reactMessageSchema = z.object({
+  sessionId: z.string().uuid(),
+  messageId: z.string().uuid(),
+  emoji: z.string().max(16),
+});
+
+/** Reage (ou remove reação com emoji vazio) a uma mensagem da conversa via Meta. */
+export const reactToConversationMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => reactMessageSchema.parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await assertSessionBelongsToUserOrg(context.userId, data.sessionId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: session } = await supabaseAdmin
+      .from("sessions")
+      .select("id, phone, line, organization_id")
+      .eq("id", data.sessionId)
+      .eq("organization_id", orgId)
+      .maybeSingle();
+    if (!session) throw new Error("Conversa não encontrada.");
+    const { data: message } = await supabaseAdmin
+      .from("messages")
+      .select("id, metadata")
+      .eq("id", data.messageId)
+      .eq("session_id", data.sessionId)
+      .maybeSingle();
+    if (!message) throw new Error("Mensagem não encontrada.");
+    const meta = (message.metadata ?? {}) as MessageMeta;
+    const waId = meta.wa_message_id?.trim();
+    if (!waId) {
+      throw new Error("Essa mensagem não tem id do WhatsApp para reagir.");
+    }
+    if (meta.deleted_at) throw new Error("Não dá para reagir a mensagem apagada.");
+    const wa = {
+      organizationId: orgId,
+      line: session.line as "descubra" | "viagens",
+    };
+    const emoji = data.emoji.trim();
+    const sent = await sendWhatsAppReaction(wa, session.phone as string, waId, emoji);
+    if (!sent.ok) {
+      throw new Error(
+        sent.reason?.includes("not_configured")
+          ? "WhatsApp não configurado para esta linha."
+          : `A Meta não aceitou a reação: ${sent.reason ?? "erro desconhecido"}`,
+      );
+    }
+    const { applyWhatsAppReaction } = await import("@/lib/message-revisions.server");
+    await applyWhatsAppReaction(waId, emoji, "agent");
     return { ok: true };
   });
 

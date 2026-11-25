@@ -116,8 +116,12 @@ export async function applyWhatsAppReaction(
     const trimmed = emoji.trim();
     if (trimmed) reactions[actor] = trimmed;
     else delete reactions[actor];
-    const metadata = { ...prev, reactions };
-    if (Object.keys(reactions).length === 0) delete metadata.reactions;
+    const metadata: MessageMeta = { ...prev, reactions };
+    if (Object.keys(reactions).length === 0) {
+      const { reactions: _drop, ...rest } = metadata;
+      await supabaseAdmin.from("messages").update({ metadata: rest as never }).eq("id", row.id);
+      continue;
+    }
     await supabaseAdmin.from("messages").update({ metadata: metadata as never }).eq("id", row.id);
   }
 }

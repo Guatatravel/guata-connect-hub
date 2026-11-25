@@ -530,6 +530,48 @@ export function typingDelayMs(text: string): number {
   return Math.round(Math.min(2500, 800 + text.length * 4));
 }
 
+/**
+ * Reage a uma mensagem (curtida etc.) — Cloud API type "reaction".
+ * emoji vazio remove a reação.
+ */
+export async function sendWhatsAppReaction(
+  target: WhatsAppTarget,
+  to: string,
+  targetWaMessageId: string,
+  emoji: string,
+): Promise<SendResult> {
+  const { token, phoneId } = await lineCreds(target);
+  if (!token || !phoneId) {
+    return { ok: false, reason: "not_configured" };
+  }
+  const message_id = targetWaMessageId.trim();
+  if (!message_id) return { ok: false, reason: "missing_message_id" };
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: to.replace(/\D/g, ""),
+      type: "reaction",
+      reaction: {
+        message_id,
+        emoji: emoji.trim(),
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    return { ok: false, reason: `meta_${res.status}: ${err.slice(0, 200)}` };
+  }
+  return { ok: true, messageId: message_id };
+}
+
 /** Apaga no WhatsApp uma mensagem enviada pelo número comercial (janela da Meta). */
 export async function deleteWhatsAppMessage(
   target: WhatsAppTarget,
