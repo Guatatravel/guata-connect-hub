@@ -58,16 +58,26 @@ export function isStopContactRequest(text: string): boolean {
   );
 }
 
+/** Equipe liberou de propósito — backfill de recusa antiga não recoloca. */
+export function wasDoNotContactCleared(
+  intake: Record<string, unknown> | null | undefined,
+): boolean {
+  const raw = intake ?? {};
+  return typeof raw.do_not_contact_cleared_at === "string" && raw.do_not_contact_cleared_at.length > 0;
+}
+
 export function applyDoNotContact(
   intake: Record<string, unknown>,
   reason: DoNotContactReason,
 ): Record<string, unknown> {
-  return {
+  const next = {
     ...intake,
     do_not_contact: true,
     do_not_contact_at: new Date().toISOString(),
     do_not_contact_reason: reason,
   };
+  delete next.do_not_contact_cleared_at;
+  return next;
 }
 
 export function clearDoNotContact(intake: Record<string, unknown>): Record<string, unknown> {
@@ -75,6 +85,8 @@ export function clearDoNotContact(intake: Record<string, unknown>): Record<strin
   delete next.do_not_contact;
   delete next.do_not_contact_at;
   delete next.do_not_contact_reason;
+  // Mantém template_declined_at (histórico), mas impede o backfill de reaplicar o bloqueio.
+  next.do_not_contact_cleared_at = new Date().toISOString();
   return next;
 }
 

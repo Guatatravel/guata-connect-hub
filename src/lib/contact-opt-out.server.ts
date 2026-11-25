@@ -5,6 +5,7 @@ import {
   clearDoNotContact,
   hasDeclinedInvite,
   parseDoNotContact,
+  wasDoNotContactCleared,
   type DoNotContactReason,
 } from "@/lib/contact-opt-out.shared";
 async function cancelFollowUpQuiet(sessionId: string) {
@@ -107,6 +108,7 @@ export async function backfillDeclinedToOptOut(organizationId: string): Promise<
     const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>) };
     if (!hasDeclinedInvite(intake)) continue;
     if (parseDoNotContact(intake).active) continue;
+    if (wasDoNotContactCleared(intake)) continue;
     await saveIntake(row.id as string, applyDoNotContact(intake, "declined_invite"));
     await cancelFollowUpQuiet(row.id as string);
     updated += 1;
