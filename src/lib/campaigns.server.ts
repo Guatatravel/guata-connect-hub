@@ -379,9 +379,10 @@ async function resolveAudience(
   line: CampaignLine,
   audience: CampaignAudience,
 ): Promise<Array<{ phone: string; session_id: string }>> {
+  const { parseDoNotContact, isContactDeleted } = await import("@/lib/contact-opt-out.shared");
   const { data: sessions, error } = await supabaseAdmin
     .from("sessions")
-    .select("id, phone")
+    .select("id, phone, intake_data")
     .eq("organization_id", organizationId)
     .eq("line", line)
     .is("archived_at", null)
@@ -392,6 +393,8 @@ async function resolveAudience(
   const seen = new Set<string>();
 
   for (const s of sessions ?? []) {
+    const intake = (s.intake_data ?? {}) as Record<string, unknown>;
+    if (parseDoNotContact(intake).active || isContactDeleted(intake)) continue;
     const phone = String(s.phone).replace(/\D/g, "");
     if (!phone || seen.has(phone)) continue;
     const lastIn = await lastUserMessageAt(s.id);
@@ -517,8 +520,10 @@ async function targetsForLaunch(
     seen.add(t.phone);
     out.push(t);
   }
+  const { phoneIsDoNotContact } = await import("@/lib/contact-opt-out.server");
   for (const phone of extras) {
     if (seen.has(phone)) continue;
+    if (await phoneIsDoNotContact(orgId, phone)) continue;
     const session_id = await ensureSessionForPhone(orgId, line, phone, newListSessionMode);
     seen.add(phone);
     out.push({ phone, session_id });

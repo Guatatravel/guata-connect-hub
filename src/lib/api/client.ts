@@ -25,6 +25,10 @@ import {
   markConversationSeen,
   markAllConversationsSeen,
   setConversationArchived,
+  setConversationDoNotContact,
+  setManyDoNotContact,
+  deleteConversations,
+  importDeclinedToOptOut,
   startConversation,
 } from "@/lib/panel.functions";
 import type {
@@ -112,6 +116,22 @@ export const api = {
 
   async markAllConversationsSeen() {
     return markAllConversationsSeen();
+  },
+
+  async setDoNotContact(id: string, active: boolean, reason?: "declined_invite" | "manual" | "client_request") {
+    return setConversationDoNotContact({ data: { id, active, reason } });
+  },
+
+  async setManyDoNotContact(ids: string[], reason?: "declined_invite" | "manual" | "client_request") {
+    return setManyDoNotContact({ data: { ids, reason } });
+  },
+
+  async deleteConversations(ids: string[]) {
+    return deleteConversations({ data: { ids } });
+  },
+
+  async importDeclinedToOptOut() {
+    return importDeclinedToOptOut();
   },
 
   async listTriages(filters?: {

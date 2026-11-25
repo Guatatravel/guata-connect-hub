@@ -28,6 +28,12 @@ import { parseLeadStageFromIntake } from "@/lib/lead-intake.server";
 import { parseCrm } from "@/lib/crm.shared";
 import { markQuoteSent, runDueFollowUps } from "@/lib/crm.server";
 import {
+  hasDeclinedInvite,
+  isContactDeleted,
+  parseDoNotContact,
+} from "@/lib/contact-opt-out.shared";
+import { backfillDeclinedToOptOut } from "@/lib/contact-opt-out.server";
+import {
   assertSessionBelongsToUserOrg,
   requireActiveOrganization,
   sessionIdsForOrganization,
@@ -78,12 +84,16 @@ function groupOfferPanelNote(intake: Record<string, unknown>): string | undefine
 
 function crmFields(intake: Record<string, unknown>) {
   const crm = parseCrm(intake);
+  const dnc = parseDoNotContact(intake);
   return {
     crmGuide: crm.guide,
     crmLabels: crm.labels,
     crmColumn: crm.column,
     followUp: crm.followUp,
     groupOfferNote: groupOfferPanelNote(intake),
+    doNotContact: dnc.active,
+    doNotContactReason: dnc.reason,
+    declinedInvite: hasDeclinedInvite(intake),
   };
 }
 
@@ -402,6 +412,9 @@ export const fetchConversations = createServerFn({ method: "POST" })
     await requireStaff(context.userId);
     const orgId = await requireActiveOrganization(context.userId);
     await runDueFollowUps(orgId).catch((e) => console.error("[follow-up]", e));
+    await backfillDeclinedToOptOut(orgId).catch((e) =>
+      console.error("[opt-out] backfill declined:", e),
+    );
     const { data, error } = await supabaseAdmin
       .from("sessions")
       .select(
@@ -438,45 +451,47 @@ export const fetchConversations = createServerFn({ method: "POST" })
       }
     }
 
-    return (data ?? []).map((s) => {
-      const intake = (s.intake_data ?? {}) as Record<string, unknown>;
-      const latest = (s as {
-        messages?: { text?: string; metadata?: unknown }[] | { text?: string; metadata?: unknown } | null;
-      }).messages;
-      const last = Array.isArray(latest) ? latest[0] : latest;
-      const lastMessage = last
-        ? panelMessagePreview(
-            last.text ?? "",
-            (last.metadata ?? {}) as Record<string, unknown>,
-          )
-        : "";
-      return {
-        id: s.id,
-        phone: s.phone,
-        contactName: s.contact_name ?? undefined,
-        line: dbToUiLine(s.line),
-        mode: dbToUiMode(s.mode),
-        lastMessageAt: s.last_message_at,
-        lastMessage,
-        archived: Boolean(s.archived_at),
-        unseen: !s.staff_seen_at || s.staff_seen_at < s.last_message_at,
-        leadStage: parseLeadStageFromIntake(intake),
-        triagemProtocol:
-          typeof intake["triagem_protocol"] === "string"
-            ? intake["triagem_protocol"]
-            : intakeBySession.get(s.id as string)?.protocol || undefined,
-        openTriage: intakeBySession.get(s.id as string),
-        needsAttention: (() => {
-          const tri = intakeBySession.get(s.id as string);
-          const unseenMsg =
-            !s.staff_seen_at || new Date(s.staff_seen_at) < new Date(s.last_message_at as string);
-          if (s.mode === "humano") return unseenMsg;
-          return Boolean(tri && tri.status === "novo" && !tri.staffSeenAt);
-        })(),
-        ...crmFields(intake),
-        messages: [],
-      };
-    });
+    return (data ?? [])
+      .filter((s) => !isContactDeleted((s.intake_data ?? {}) as Record<string, unknown>))
+      .map((s) => {
+        const intake = (s.intake_data ?? {}) as Record<string, unknown>;
+        const latest = (s as {
+          messages?: { text?: string; metadata?: unknown }[] | { text?: string; metadata?: unknown } | null;
+        }).messages;
+        const last = Array.isArray(latest) ? latest[0] : latest;
+        const lastMessage = last
+          ? panelMessagePreview(
+              last.text ?? "",
+              (last.metadata ?? {}) as Record<string, unknown>,
+            )
+          : "";
+        return {
+          id: s.id,
+          phone: s.phone,
+          contactName: s.contact_name ?? undefined,
+          line: dbToUiLine(s.line),
+          mode: dbToUiMode(s.mode),
+          lastMessageAt: s.last_message_at,
+          lastMessage,
+          archived: Boolean(s.archived_at),
+          unseen: !s.staff_seen_at || s.staff_seen_at < s.last_message_at,
+          leadStage: parseLeadStageFromIntake(intake),
+          triagemProtocol:
+            typeof intake["triagem_protocol"] === "string"
+              ? intake["triagem_protocol"]
+              : intakeBySession.get(s.id as string)?.protocol || undefined,
+          openTriage: intakeBySession.get(s.id as string),
+          needsAttention: (() => {
+            const tri = intakeBySession.get(s.id as string);
+            const unseenMsg =
+              !s.staff_seen_at || new Date(s.staff_seen_at) < new Date(s.last_message_at as string);
+            if (s.mode === "humano") return unseenMsg;
+            return Boolean(tri && tri.status === "novo" && !tri.staffSeenAt);
+          })(),
+          ...crmFields(intake),
+          messages: [],
+        };
+      });
   });
 
 export const setConversationArchived = createServerFn({ method: "POST" })
@@ -970,6 +985,79 @@ export const markAllConversationsSeen = createServerFn({ method: "POST" })
       await supabaseAdmin.from("sessions").update({ staff_seen_at: seenAt }).eq("id", row.id);
       updated += 1;
     }
+    return { ok: true, updated };
+  });
+
+export const setConversationDoNotContact = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        active: z.boolean(),
+        reason: z.enum(["declined_invite", "manual", "client_request", "deleted"]).optional(),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await assertSessionBelongsToUserOrg(context.userId, data.id);
+    const { setDoNotContact, unsetDoNotContact } = await import("@/lib/contact-opt-out.server");
+    if (data.active) await setDoNotContact(data.id, data.reason ?? "manual");
+    else await unsetDoNotContact(data.id);
+    return { ok: true };
+  });
+
+export const setManyDoNotContact = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) =>
+    z
+      .object({
+        ids: z.array(z.string().uuid()).min(1).max(200),
+        reason: z.enum(["declined_invite", "manual", "client_request", "deleted"]).optional(),
+      })
+      .parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: rows } = await supabaseAdmin
+      .from("sessions")
+      .select("id")
+      .eq("organization_id", orgId)
+      .in("id", data.ids);
+    const allowed = (rows ?? []).map((r) => r.id as string);
+    const { setDoNotContactMany } = await import("@/lib/contact-opt-out.server");
+    const updated = await setDoNotContactMany(allowed, data.reason ?? "manual");
+    return { ok: true, updated };
+  });
+
+export const deleteConversations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) =>
+    z.object({ ids: z.array(z.string().uuid()).min(1).max(100) }).parse(i),
+  )
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: rows } = await supabaseAdmin
+      .from("sessions")
+      .select("id")
+      .eq("organization_id", orgId)
+      .in("id", data.ids);
+    const allowed = (rows ?? []).map((r) => r.id as string);
+    const { softDeleteContactsMany } = await import("@/lib/contact-opt-out.server");
+    const updated = await softDeleteContactsMany(allowed);
+    return { ok: true, updated };
+  });
+
+/** Garante que quem já tem template_declined entra em Não contatar. */
+export const importDeclinedToOptOut = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const updated = await backfillDeclinedToOptOut(orgId);
     return { ok: true, updated };
   });
 

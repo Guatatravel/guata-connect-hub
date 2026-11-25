@@ -1,5 +1,6 @@
 /**
  * Estágio de lead (SDR suave) para sessões WhatsApp — server-only.
+ * Informacional = só informação. Qualificar só com sinal claro de compra.
  */
 
 export type LeadStage = "informacional" | "qualificando" | "quente";
@@ -16,25 +17,29 @@ const STAGE_RANK: Record<LeadStage, number> = {
   quente: 2,
 };
 
+/** Intenção forte de fechar / falar com consultor. */
 const HOT_RE =
-  /\b(fechar|reservar|quero comprar|quero pacote|passa(r)?\s+(o\s+)?orçamento|passa(r)?\s+(o\s+)?orcamento|chama(r)?\s+(um\s+)?consultor|falar com (um\s+)?consultor|quero orçamento|fechar pacote)\b/i;
+  /\b(fechar|reservar|quero comprar|quero (o )?pacote|passa(r)?\s+(o\s+)?or[cç]amento|chama(r)?\s+(um\s+)?consultor|falar com (um\s+)?consultor|quero or[cç]amento|fechar pacote|manda(r)? (a |o )?(proposta|cotação|cotacao))\b/i;
 
-const QUALIFY_RE =
-  /\b(quanto custa|quanto fica|montar (uma\s+)?viagem|pacote|lua de mel|honeymoon|orçamento|orcamento|viajar|viagem|hotel|voo|passagem|casal|fam[ií]lia|adultos|crianças|pessoas)\b/i;
+/**
+ * Sinal de cotação / montar viagem (não basta citar "viagem" ou "hotel").
+ * Exige verbo de intenção ou pedido de preço/pacote sob medida.
+ */
+const BUY_INTENT_RE =
+  /\b(quero (montar|fazer|ir|viajar|um pacote|uma viagem)|vamos (montar|viajar|para)|preciso (de )?(or[cç]amento|pacote|cotação|cotacao)|mont(a|ar) (uma |um )?(viagem|pacote|roteiro)|cot(a|ar|ação|acao)|or[cç]amento|quanto (custa|fica|sai|seria)|fa[cç]a (um |uma )?(or[cç]amento|pacote)|me (passa|manda) (o |um |uma )?(pre[cç]o|valor|or[cç]amento|pacote))\b/i;
 
-const DATE_OR_MONEY_RE =
-  /\b(r\$\s*\d|(\d{1,2}\s*(mil|k)\b)|\b\d{1,2}\/\d{1,2}\b|janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i;
+/** Pergunta só informativa — não sobe funil. */
+const INFO_ONLY_RE =
+  /\b(como [eé]|o que (fazer|visitar|ver)|onde (fica|comer|ficar)|me (conta|fala|diz) (sobre|mais)|dica|roteiro de|vale a pena|tem (praia|cachoeira|passeio)|qual (a )?melhor|hist[oó]ria|cultura)\b/i;
 
-const INTERNATIONAL_RE =
-  /\b(punta cana|canc[uú]n|europa|disney|paris|maldivas|orlando|caribe|exterior|internacional|miami|cruzeiro)\b/i;
-
-export function detectLeadStage(userText: string, userTurnCount: number): LeadStage {
+export function detectLeadStage(userText: string, _userTurnCount: number): LeadStage {
   const t = userText.trim();
   if (!t) return "informacional";
   if (HOT_RE.test(t)) return "quente";
-  if (QUALIFY_RE.test(t) && DATE_OR_MONEY_RE.test(t)) return "qualificando";
-  if (QUALIFY_RE.test(t)) return "qualificando";
-  if (userTurnCount >= 2 && INTERNATIONAL_RE.test(t)) return "qualificando";
+  if (INFO_ONLY_RE.test(t) && !BUY_INTENT_RE.test(t) && !HOT_RE.test(t)) {
+    return "informacional";
+  }
+  if (BUY_INTENT_RE.test(t)) return "qualificando";
   return "informacional";
 }
 
@@ -53,18 +58,18 @@ export function leadStagePromptSection(
   opts: { mayOfferTravelHook: boolean },
 ): string {
   const hook =
-    opts.mayOfferTravelHook
-      ? `- Se o assunto for viagem internacional em andamento, você pode UMA vez sugerir: "Quer que a ${agencyName} monte isso para você?" (sem repetir se já ofereceu).\n`
-      : "";
+    opts.mayOfferTravelHook && stage !== "informacional"
+      ? `- Só se o cliente já mostrou interesse em cotação/pacote, você pode UMA vez sugerir: "Quer que a ${agencyName} monte isso para você?" (sem repetir se já ofereceu).\n`
+      : `- Estágio informacional: NÃO sugira que a agência "monte" a viagem; só responda a dúvida.\n`;
 
   return (
     `\n## FUNIL ${agencyName} (SDR suave — personagem continua sendo o Guatá)\n` +
     `- Nome da agência comercial: sempre "${agencyName}". Não invente outro nome de agência.\n` +
-    `- informacional: priorize ajudar com conteúdo turístico. NÃO peça orçamento nem insista em venda.\n` +
-    `- qualificando: responda o que pediram e, se faltar, faça até 2 perguntas curtas (datas, pessoas, faixa de investimento).\n` +
+    `- informacional: o cliente quer INFORMAÇÃO. Responda completo. PROIBIDO perguntar origem, datas, quantidade de pessoas, orçamento, hospedagem ou transporte. PROIBIDO checklist de cotação.\n` +
+    `- qualificando: o cliente pediu cotação/pacote/preço para viajar. Responda o que pediram e faça NO MÁXIMO 1 pergunta concreta por mensagem (só o que falta para cotar).\n` +
     `- quente: conduza ao próximo passo (consultor ou fechamento). Ofereça consultor da ${agencyName} quando couber.\n` +
     `- Estágio atual desta conversa: ${stage}.\n` +
-    `- Em dúvida puramente informativa, mantenha tom de guia; convite comercial só com sinal claro de viagem/orçamento.\n` +
+    `- Se a mensagem for curiosidade/dica/roteiro sem pedido de compra, trate como informacional mesmo que cite destino ou hotel.\n` +
     hook
   );
 }

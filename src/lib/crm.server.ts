@@ -151,6 +151,10 @@ export async function setFollowUp(
 ): Promise<FollowUpState> {
   const row = await loadSession(sessionId);
   if (!row) throw new Error("Conversa não encontrada");
+  const { parseDoNotContact } = await import("@/lib/contact-opt-out.shared");
+  if (parseDoNotContact((row.intake_data ?? {}) as Record<string, unknown>).active) {
+    throw new Error("Este contato está em Não contatar — libere antes de agendar follow-up.");
+  }
 
   let steps = input.steps ? normalizeFollowUpSteps(input.steps) : [];
   if (!steps.length) {
@@ -267,6 +271,19 @@ function advanceOrFinish(
 
 async function processDueFollowUpRow(row: SessionCrmRow): Promise<"sent" | "skip" | "retry"> {
   const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>) };
+  const { parseDoNotContact } = await import("@/lib/contact-opt-out.shared");
+  if (parseDoNotContact(intake).active) {
+    const followOpt = parseCrm(intake).followUp;
+    if (followOpt && (followOpt.status === "pending" || followOpt.status === "paused")) {
+      intake.follow_up = {
+        ...followOpt,
+        status: "skipped",
+        detail: "Não contatar — follow-up cancelado.",
+      };
+      await saveIntake(row.id, intake);
+    }
+    return "skip";
+  }
   const follow = parseCrm(intake).followUp;
   if (!follow || follow.status !== "pending") return "skip";
   if (new Date(follow.dueAt).getTime() > Date.now()) return "skip";

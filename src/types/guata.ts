@@ -113,6 +113,11 @@ export interface Conversation {
   };
   /** Resumo da oferta do grupo / story (intake group_offer). */
   groupOfferNote?: string;
+  /** Não receber campanhas / follow-up. */
+  doNotContact?: boolean;
+  doNotContactReason?: "declined_invite" | "manual" | "client_request" | "deleted";
+  /** Já recusou modelo/convite (mesmo legado). */
+  declinedInvite?: boolean;
   messages: ChatMessage[];
 }
 
