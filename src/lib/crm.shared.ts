@@ -87,16 +87,18 @@ function parseFollowUp(raw: unknown): FollowUpState | undefined {
   }
 
   const history = Array.isArray(fu.history)
-    ? (fu.history as FollowUpHistoryEntry[]).slice(-12).map((h): FollowUpHistoryEntry => ({
-        stepIndex: Number(h.stepIndex) || 0,
-        at: String(h.at ?? ""),
-        status:
-          h.status === "sent" || h.status === "error"
-            ? h.status
-            : ("skipped" as const),
-        detail: h.detail ? String(h.detail) : undefined,
-        text: h.text ? String(h.text) : undefined,
-      }))
+    ? fu.history.slice(-12).map((raw): FollowUpHistoryEntry => {
+        const h = raw as Record<string, unknown>;
+        const status: FollowUpHistoryEntry["status"] =
+          h.status === "sent" || h.status === "error" ? h.status : "skipped";
+        return {
+          stepIndex: Number(h.stepIndex) || 0,
+          at: String(h.at ?? ""),
+          status,
+          detail: h.detail ? String(h.detail) : undefined,
+          text: h.text ? String(h.text) : undefined,
+        };
+      })
     : undefined;
 
   return {
