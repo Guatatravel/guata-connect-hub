@@ -38,8 +38,13 @@ export interface GroupOfferIngress {
 const PAYMENT_RE =
   /\b(parcela|parcelamento|boleto|cart[aã]o|pix|entrada|sinal|financi|cr[eé]dito|vezes|\d\s*x|em\s*\d+\s*vezes|condi[cç][aã]o\s+de\s+pagamento|forma\s+de\s+pagamento)\b/i;
 
+/** Citou grupo/story/cartaz — não basta “promoção” genérica (cardápio etc.). */
 const GROUP_OFFER_TEXT_RE =
-  /\b(grupo|story|stories|status|vi\s+no\s+grupo|vi\s+o\s+story|vi\s+seu\s+story|oferta|promo[cç][aã]o|sobre\s+essa\s+promo|cartaz|condi[cç][aã]o\s+especial|pacote\s+do\s+grupo|promo)\b/i;
+  /\b(vi\s+no\s+grupo|vi\s+o\s+story|vi\s+seu\s+story|oferta\s+do\s+grupo|pacote\s+do\s+grupo|no\s+grupo|pelo\s+story|stories|story|cartaz|condi[cç][aã]o\s+especial)\b/i;
+
+/** Parece pacote/viagem (cartaz de turismo), não restaurante ou meme. */
+const TRAVEL_OFFER_RE =
+  /\b(pacote|viagem|turismo|destino|hotel|resort|cruzeiro|passeio|excurs[aã]o|roteiro|all[\s-]?inclusive|di[aá]rias?|hospedagem|a[eé]reo|passagem|transfer|bonito|pantanal|gramado|nordeste|ms\b|mato\s+grosso)\b/i;
 
 export function mentionsPaymentTerms(text: string): boolean {
   return PAYMENT_RE.test(text.trim());
@@ -47,6 +52,10 @@ export function mentionsPaymentTerms(text: string): boolean {
 
 export function looksLikeGroupOfferText(text: string): boolean {
   return GROUP_OFFER_TEXT_RE.test(text.trim());
+}
+
+export function looksLikeTravelOfferText(text: string): boolean {
+  return TRAVEL_OFFER_RE.test(text.trim());
 }
 
 export function groupOfferFromIntake(intake: Record<string, unknown> | undefined): GroupOfferData | null {
@@ -104,30 +113,52 @@ export async function quotedMessageIsCampaignTemplate(
   return kind === "campaign_template" || Boolean(meta.template_name);
 }
 
-/** Sinais de que esta mensagem é sobre oferta do grupo / story (não disparo do painel). */
+/** Sinais de oferta do grupo / story. Imagem sozinha NÃO inicia (evita cardápio, bom dia, etc.). */
 export function shouldStartGroupOfferFlow(ingress: GroupOfferIngress): boolean {
   if (ingress.referral?.source_type || ingress.referral?.headline) return true;
-  if (ingress.inboundKind === "image") return true;
-  if (looksLikeGroupOfferText(ingress.text)) return true;
-  if (ingress.quotedForwarded) return true;
+
+  const text = ingress.text.trim();
+  const groupish = looksLikeGroupOfferText(text);
+  const travelish = looksLikeTravelOfferText(text);
+
+  if (groupish) return true;
+
+  // Foto/cartaz: só se a leitura parecer pacote/viagem
+  if (ingress.inboundKind === "image" && travelish) return true;
+
+  if (ingress.quotedForwarded && (groupish || travelish || mentionsPaymentTerms(text))) {
+    return true;
+  }
+
   if (
     ingress.quotedWaMessageId &&
-    (mentionsPaymentTerms(ingress.text) ||
-      looksLikeGroupOfferText(ingress.text) ||
-      ingress.inboundKind === "image")
+    (mentionsPaymentTerms(text) || groupish || (ingress.inboundKind === "image" && travelish))
   ) {
     return true;
   }
+
   if (
-    mentionsPaymentTerms(ingress.text) &&
-    ingress.text.length < 280 &&
-    (ingress.quotedWaMessageId ||
-      ingress.inboundKind === "image" ||
-      looksLikeGroupOfferText(ingress.text))
+    mentionsPaymentTerms(text) &&
+    text.length < 280 &&
+    (ingress.quotedWaMessageId || groupish || (ingress.inboundKind === "image" && travelish))
   ) {
     return true;
   }
+
   return false;
+}
+
+/** Resumo curto para confirmação — sem despejar OCR/descrição inteira. */
+export function shortOfferHint(raw: string): string {
+  let t = raw.trim();
+  t = t.replace(/^\(+Cliente enviou[^)]*\)+\s*/i, "");
+  t = t.replace(/^\(+Cliente enviou uma imagem:\s*/i, "").replace(/\)+\s*$/g, "");
+  t = t.replace(/Conteúdo da imagem:\s*/gi, "");
+  t = t.replace(/\s+/g, " ").trim();
+  if (!t) return "essa promoção";
+  const first = t.split(/(?<=[.!?])\s+/)[0] ?? t;
+  const cut = first.slice(0, 90).trim();
+  return cut.length < t.length && first.length > 90 ? `${cut}…` : cut;
 }
 
 function cartazSummaryFromInbound(text: string): string | undefined {
@@ -289,24 +320,26 @@ export async function handleGroupOfferTurn(input: {
     if (notifyOwner) offer.alerted_at = new Date().toISOString();
   };
 
+  const labelHint = shortOfferHint(
+    offer.offer_label || visualCandidate || "essa promoção",
+  );
+
   if (offer.step === "confirm") {
     if (AFFIRMATIVE.test(userSaid)) {
       finalizeHandoff();
       replies.push(
         firstName
-          ? `Perfeito, ${firstName}! Anotei *${(offer.offer_label ?? visualCandidate ?? "sua oferta").slice(0, 120)}* e já avisei nossa consultora. Ela te responde aqui em instantes com *pagamento e condições*. 😊`
-          : `Perfeito! Anotei *${(offer.offer_label ?? visualCandidate ?? "sua oferta").slice(0, 120)}* e já avisei nossa consultora. Ela te responde em instantes com *pagamento e condições*. 😊`,
+          ? `Fechado, ${firstName}! Já chamei a consultora — ela te fala por aqui com os detalhes.`
+          : `Fechado! Já chamei a consultora — ela te fala por aqui com os detalhes.`,
       );
     } else if (/^(n[aã]o|nao|n|outra|errad)/i.test(userSaid)) {
       offer.step = "ask_offer";
       offer.offer_label = undefined;
-      replies.push(
-        `Sem problema! Me diz qual *pacote* é — *nome*, *valor* ou manda o *cartaz* de novo.`,
-      );
+      replies.push(`Tranquilo! Qual pacote é então? Pode mandar o nome ou o cartaz de novo.`);
     } else {
       offer.offer_label = userSaid.slice(0, 300);
       replies.push(
-        `Anotado: *${userSaid.slice(0, 160)}*. Confirma que é essa oferta? (sim/não)\n\nPagamento a consultora confirma depois.`,
+        `Beleza — anotei *${shortOfferHint(userSaid)}*. É esse mesmo que você quer? Se for, me confirma que eu chamo a consultora.`,
       );
     }
   } else if (offer.step === "done") {
@@ -322,25 +355,25 @@ export async function handleGroupOfferTurn(input: {
       offer.offer_label = userSaid.slice(0, 300);
       offer.step = "confirm";
       replies.push(
-        `Entendi: *${userSaid.slice(0, 160)}*. É essa oferta do grupo? (sim/não)\n\nSobre *pagamento*, a consultora confirma certinho.`,
+        `Entendi, *${shortOfferHint(userSaid)}*. É esse pacote que te interessou? Se sim, já passo pra consultora.`,
       );
     } else if (visualCandidate) {
       offer.offer_label = visualCandidate.slice(0, 300);
       offer.step = "confirm";
       replies.push(
-        `${name}recebi sua mensagem sobre uma oferta do grupo. Pelo que entendi: *${visualCandidate.slice(0, 180)}*.\n\nÉ essa mesma? (sim/não)\n\nSobre *pagamento e condições especiais*, nossa consultora confirma — não invento valores aqui.`,
+        `${name}vi o que você mandou — parece *${labelHint}*. É sobre essa promoção de viagem? Se for, me confirma que eu chamo a consultora pra combinar os detalhes.`,
       );
     } else if (ingress.quotedWaMessageId || ingress.quotedForwarded) {
       replies.push(
-        `${name}vi que você *respondeu citando* uma mensagem da oferta. Qual *pacote* é — pode mandar o *nome*, o *valor* ou o *cartaz*?`,
+        `${name}vi que você citou uma mensagem. Qual pacote te interessou? Pode falar o nome ou mandar o cartaz.`,
       );
     } else if (offer.referral_headline || offer.source === "story") {
       replies.push(
-        `${name}que bom que você veio pelo story! Qual *oferta* ou *pacote* te interessou? Pode mandar o *nome*, o *valor* ou o *cartaz*.`,
+        `${name}que bom que veio pelo story! Qual pacote te chamou atenção? Manda o nome ou o cartaz que eu te ajudo.`,
       );
     } else {
       replies.push(
-        `${name}vi que é sobre uma *oferta* do grupo ou story. Qual *pacote* você quer falar? Manda o *nome*, o *valor* ou o *cartaz*.`,
+        `${name}me conta qual pacote você quer — nome, valor ou o cartaz — que eu chamo a consultora.`,
       );
     }
 
@@ -352,7 +385,7 @@ export async function handleGroupOfferTurn(input: {
     ) {
       finalizeHandoff();
       replies.push(
-        `Registrei *${offer.offer_label.slice(0, 100)}* e sua dúvida de *pagamento*. A consultora te responde em instantes.`,
+        `Anotei *${shortOfferHint(offer.offer_label)}* e sua dúvida de pagamento. A consultora te responde em instantes.`,
       );
     }
   }
