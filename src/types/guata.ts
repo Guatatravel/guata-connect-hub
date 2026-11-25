@@ -94,8 +94,22 @@ export interface Conversation {
     dueAt: string;
     text: string;
     templateName?: string;
-    status: "pending" | "sent" | "skipped";
+    status: "pending" | "sent" | "skipped" | "paused";
     detail?: string;
+    stepIndex?: number;
+    steps?: Array<{
+      delay: number;
+      unit: "minutes" | "hours" | "days";
+      text: string;
+      templateName?: string;
+    }>;
+    history?: Array<{
+      stepIndex: number;
+      at: string;
+      status: "sent" | "skipped" | "error";
+      detail?: string;
+      text?: string;
+    }>;
   };
   /** Resumo da oferta do grupo / story (intake group_offer). */
   groupOfferNote?: string;

@@ -58,6 +58,17 @@ function ConversasPage() {
     },
     onError: () => toast.error("Não foi possível atualizar"),
   });
+  const markAllSeen = useMutation({
+    mutationFn: () => api.markAllConversationsSeen(),
+    onSuccess: (r) => {
+      toast.success(
+        r.updated ? `${r.updated} conversa(s) marcada(s) como vista(s)` : "Nada pendente para marcar",
+      );
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+      qc.invalidateQueries({ queryKey: ["unread-counts"] });
+    },
+    onError: () => toast.error("Não foi possível marcar como vistas"),
+  });
 
   const list = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -166,8 +177,20 @@ function ConversasPage() {
         <>
           {waiting.length > 0 && (
             <Card className="rounded-2xl overflow-hidden border-destructive/50">
-              <div className="flex items-center gap-2 px-4 py-3 bg-destructive/10 text-destructive font-medium">
-                <BellRing className="h-4 w-4" /> Precisam de atendimento agora ({waiting.length})
+              <div className="flex items-center justify-between gap-2 px-4 py-3 bg-destructive/10 text-destructive font-medium">
+                <div className="flex items-center gap-2">
+                  <BellRing className="h-4 w-4" /> Precisam de atendimento agora ({waiting.length})
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10"
+                  disabled={markAllSeen.isPending}
+                  onClick={() => markAllSeen.mutate()}
+                >
+                  Marcar todos como vistos
+                </Button>
               </div>
               <div className="divide-y divide-border">{waiting.map((c) => <Row key={c.id} c={c} />)}</div>
             </Card>

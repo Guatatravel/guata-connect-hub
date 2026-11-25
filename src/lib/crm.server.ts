@@ -1,11 +1,15 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { sendWhatsAppTemplate, sendWhatsAppText } from "@/lib/meta-send.server";
 import {
+  followUpDelayMs,
+  normalizeFollowUpSteps,
   parseCrm,
   suggestCrm,
   type ConversationCrm,
   type CrmColumnId,
+  type FollowUpDelayUnit,
   type FollowUpState,
+  type FollowUpStep,
 } from "@/lib/crm.shared";
 
 type SessionCrmRow = {
@@ -77,16 +81,50 @@ export async function applyInboundCrm(sessionId: string, text: string) {
     intake.crm_column = suggestion.column;
     changed = true;
   }
-  const pending = current.followUp?.status === "pending";
-  if (pending) {
+  const pending =
+    current.followUp?.status === "pending" || current.followUp?.status === "paused";
+  if (pending && current.followUp) {
     intake.follow_up = {
       ...current.followUp,
       status: "skipped",
       detail: "O cliente respondeu antes do follow-up.",
+      history: [
+        ...(current.followUp.history ?? []),
+        {
+          stepIndex: current.followUp.stepIndex ?? 0,
+          at: new Date().toISOString(),
+          status: "skipped" as const,
+          detail: "Cliente respondeu",
+        },
+      ].slice(-12),
     };
     changed = true;
   }
   if (changed) await saveIntake(sessionId, intake);
+}
+
+/** Cancela follow-up pendente ao arquivar / encerrar. */
+export async function cancelFollowUpOnArchive(sessionId: string) {
+  const row = await loadSession(sessionId);
+  if (!row) return;
+  const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>) };
+  const current = parseCrm(intake).followUp;
+  if (!current || (current.status !== "pending" && current.status !== "paused")) return;
+  intake.follow_up = {
+    ...current,
+    status: "skipped",
+    detail: "Conversa arquivada — follow-up cancelado.",
+    history: [
+      ...(current.history ?? []),
+      {
+        stepIndex: current.stepIndex ?? 0,
+        at: new Date().toISOString(),
+        status: "skipped" as const,
+        detail: "Arquivada",
+      },
+    ].slice(-12),
+  };
+  await saveIntake(sessionId, intake);
 }
 
 export async function markQuoteSent(sessionId: string) {
@@ -104,22 +142,63 @@ export async function markQuoteSent(sessionId: string) {
 
 export async function setFollowUp(
   sessionId: string,
-  input: { days: number; text: string; templateName?: string },
+  input: {
+    days?: number;
+    text?: string;
+    templateName?: string;
+    steps?: FollowUpStep[];
+  },
 ): Promise<FollowUpState> {
   const row = await loadSession(sessionId);
   if (!row) throw new Error("Conversa não encontrada");
-  const text = input.text.trim();
-  if (!text) throw new Error("Escreva o texto do follow-up.");
-  const days = Math.min(30, Math.max(1, input.days));
+
+  let steps = input.steps ? normalizeFollowUpSteps(input.steps) : [];
+  if (!steps.length) {
+    const text = (input.text ?? "").trim();
+    if (!text) throw new Error("Escreva o texto do follow-up ou adicione uma etapa.");
+    const days = Math.min(30, Math.max(1, input.days ?? 2));
+    steps = [
+      {
+        delay: days,
+        unit: "days",
+        text: text.slice(0, 1000),
+        templateName: input.templateName?.trim() || undefined,
+      },
+    ];
+  }
+
+  const first = steps[0]!;
   const followUp: FollowUpState = {
-    dueAt: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString(),
-    text: text.slice(0, 1000),
-    templateName: input.templateName?.trim() || undefined,
+    dueAt: new Date(Date.now() + followUpDelayMs(first.delay, first.unit)).toISOString(),
+    text: first.text,
+    templateName: first.templateName,
     status: "pending",
+    detail: `Etapa 1/${steps.length} agendada.`,
+    steps,
+    stepIndex: 0,
+    history: [],
   };
   const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>), follow_up: followUp };
   await saveIntake(sessionId, intake);
   return followUp;
+}
+
+export async function clearFollowUp(sessionId: string): Promise<void> {
+  const row = await loadSession(sessionId);
+  if (!row) throw new Error("Conversa não encontrada");
+  const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>) };
+  const current = parseCrm(intake).followUp;
+  if (!current) return;
+  if (current.status === "pending" || current.status === "paused") {
+    intake.follow_up = {
+      ...current,
+      status: "skipped",
+      detail: "Cancelado pela equipe.",
+    };
+  } else {
+    delete intake.follow_up;
+  }
+  await saveIntake(sessionId, intake);
 }
 
 async function windowOpen(sessionId: string): Promise<boolean> {
@@ -135,6 +214,182 @@ async function windowOpen(sessionId: string): Promise<boolean> {
   return Date.now() - new Date(data.created_at).getTime() < 24 * 60 * 60 * 1000;
 }
 
+function advanceOrFinish(
+  follow: FollowUpState,
+  stepIndex: number,
+  sentDetail: string,
+): FollowUpState {
+  const steps = follow.steps?.length
+    ? follow.steps
+    : [
+        {
+          delay: 1,
+          unit: "days" as FollowUpDelayUnit,
+          text: follow.text,
+          templateName: follow.templateName,
+        },
+      ];
+  const history = [
+    ...(follow.history ?? []),
+    {
+      stepIndex,
+      at: new Date().toISOString(),
+      status: "sent" as const,
+      detail: sentDetail,
+      text: follow.text,
+    },
+  ].slice(-12);
+
+  const nextIndex = stepIndex + 1;
+  if (nextIndex < steps.length) {
+    const nextStep = steps[nextIndex]!;
+    return {
+      ...follow,
+      stepIndex: nextIndex,
+      text: nextStep.text,
+      templateName: nextStep.templateName,
+      dueAt: new Date(Date.now() + followUpDelayMs(nextStep.delay, nextStep.unit)).toISOString(),
+      status: "pending",
+      detail: `${sentDetail} Próxima etapa ${nextIndex + 1}/${steps.length} agendada.`,
+      steps,
+      history,
+    };
+  }
+  return {
+    ...follow,
+    stepIndex,
+    status: "sent",
+    detail: sentDetail,
+    steps,
+    history,
+  };
+}
+
+async function processDueFollowUpRow(row: SessionCrmRow): Promise<"sent" | "skip" | "retry"> {
+  const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>) };
+  const follow = parseCrm(intake).followUp;
+  if (!follow || follow.status !== "pending") return "skip";
+  if (new Date(follow.dueAt).getTime() > Date.now()) return "skip";
+  const org = row.organization_id;
+  if (!org) return "skip";
+
+  const stepIndex = follow.stepIndex ?? 0;
+  const open = await windowOpen(row.id);
+  let next: FollowUpState = follow;
+
+  if (open) {
+    const res = await sendWhatsAppText(
+      { organizationId: org, line: row.line },
+      row.phone,
+      follow.text,
+    );
+    if (res.ok) {
+      next = advanceOrFinish(follow, stepIndex, "Enviado na janela de 24 horas.");
+      await supabaseAdmin.from("messages").insert({
+        session_id: row.id,
+        direction: "out",
+        author: "agent",
+        text: follow.text,
+        metadata: {
+          follow_up: true,
+          follow_up_step: stepIndex + 1,
+          wa_message_id: res.messageId,
+          delivery_status: "sent",
+        } as never,
+      });
+      intake.follow_up = next;
+      await saveIntake(row.id, intake);
+      await supabaseAdmin
+        .from("sessions")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", row.id);
+      return "sent";
+    }
+    next = {
+      ...follow,
+      dueAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      detail: res.reason ?? "Falha no envio. Nova tentativa em 1 hora.",
+      history: [
+        ...(follow.history ?? []),
+        {
+          stepIndex,
+          at: new Date().toISOString(),
+          status: "error" as const,
+          detail: res.reason ?? "falha",
+        },
+      ].slice(-12),
+    };
+    intake.follow_up = next;
+    await saveIntake(row.id, intake);
+    return "retry";
+  }
+
+  if (follow.templateName) {
+    const res = await sendWhatsAppTemplate(
+      { organizationId: org, line: row.line },
+      row.phone,
+      { name: follow.templateName, bodyParams: [] },
+    );
+    if (res.ok) {
+      next = advanceOrFinish(follow, stepIndex, "Enviado como modelo aprovado (fora das 24h).");
+      await supabaseAdmin.from("messages").insert({
+        session_id: row.id,
+        direction: "out",
+        author: "agent",
+        text: `[modelo ${follow.templateName}] ${follow.text}`,
+        metadata: {
+          follow_up: true,
+          follow_up_step: stepIndex + 1,
+          wa_message_id: res.messageId,
+          delivery_status: "sent",
+        } as never,
+      });
+      intake.follow_up = next;
+      await saveIntake(row.id, intake);
+      await supabaseAdmin
+        .from("sessions")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", row.id);
+      return "sent";
+    }
+    next = {
+      ...follow,
+      status: "skipped",
+      detail: res.reason ?? "A Meta não aceitou o modelo.",
+      history: [
+        ...(follow.history ?? []),
+        {
+          stepIndex,
+          at: new Date().toISOString(),
+          status: "error" as const,
+          detail: res.reason ?? "modelo recusado",
+        },
+      ].slice(-12),
+    };
+    intake.follow_up = next;
+    await saveIntake(row.id, intake);
+    return "skip";
+  }
+
+  next = {
+    ...follow,
+    status: "skipped",
+    detail: "Passou de 24 horas e não havia modelo aprovado nesta etapa.",
+    history: [
+      ...(follow.history ?? []),
+      {
+        stepIndex,
+        at: new Date().toISOString(),
+        status: "skipped" as const,
+        detail: "Sem template fora da janela",
+      },
+    ].slice(-12),
+  };
+  intake.follow_up = next;
+  await saveIntake(row.id, intake);
+  return "skip";
+}
+
 /** Envia follow-ups vencidos desta agência. Chamado ao abrir o painel e ao receber mensagem. */
 export async function runDueFollowUps(orgId: string) {
   const { releaseMistakenTemplateHandoffs } = await import("@/lib/campaigns.server");
@@ -145,90 +400,32 @@ export async function runDueFollowUps(orgId: string) {
     .from("sessions")
     .select("id, phone, line, organization_id, intake_data")
     .eq("organization_id", orgId)
+    .is("archived_at", null)
     .order("last_message_at", { ascending: false })
     .limit(200);
-  const now = Date.now();
   let sent = 0;
   for (const row of (data ?? []) as SessionCrmRow[]) {
-    if (sent >= 8) break;
-    const intake = { ...((row.intake_data ?? {}) as Record<string, unknown>) };
-    const follow = parseCrm(intake).followUp;
-    if (!follow || follow.status !== "pending") continue;
-    if (new Date(follow.dueAt).getTime() > now) continue;
-    const org = row.organization_id;
-    if (!org) continue;
-    const open = await windowOpen(row.id);
-    let next: FollowUpState = follow;
-    if (open) {
-      const res = await sendWhatsAppText(
-        { organizationId: org, line: row.line },
-        row.phone,
-        follow.text,
-      );
-      if (res.ok) {
-        next = { ...follow, status: "sent", detail: "Enviado na janela de 24 horas." };
-        await supabaseAdmin.from("messages").insert({
-          session_id: row.id,
-          direction: "out",
-          author: "agent",
-          text: follow.text,
-          metadata: {
-            follow_up: true,
-            wa_message_id: res.messageId,
-            delivery_status: "sent",
-          } as never,
-        });
-        sent += 1;
-      } else {
-        next = {
-          ...follow,
-          dueAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          detail: res.reason ?? "Falha no envio. Nova tentativa em 1 hora.",
-        };
-      }
-    } else if (follow.templateName) {
-      const res = await sendWhatsAppTemplate(
-        { organizationId: org, line: row.line },
-        row.phone,
-        { name: follow.templateName, bodyParams: [] },
-      );
-      if (res.ok) {
-        next = { ...follow, status: "sent", detail: "Enviado como modelo aprovado, fora das 24 horas." };
-        await supabaseAdmin.from("messages").insert({
-          session_id: row.id,
-          direction: "out",
-          author: "agent",
-          text: `[modelo ${follow.templateName}] ${follow.text}`,
-          metadata: {
-            follow_up: true,
-            wa_message_id: res.messageId,
-            delivery_status: "sent",
-          } as never,
-        });
-        sent += 1;
-      } else {
-        next = {
-          ...follow,
-          status: "skipped",
-          detail: res.reason ?? "A Meta não aceitou o modelo.",
-        };
-      }
-    } else {
-      next = {
-        ...follow,
-        status: "skipped",
-        detail: "Passou de 24 horas e não havia nome de modelo aprovado.",
-      };
-    }
-    intake.follow_up = next;
-    await saveIntake(row.id, intake);
-    if (next.status === "sent") {
-      await supabaseAdmin
-        .from("sessions")
-        .update({ last_message_at: new Date().toISOString() })
-        .eq("id", row.id);
-    }
+    if (sent >= 12) break;
+    const result = await processDueFollowUpRow(row);
+    if (result === "sent") sent += 1;
   }
+}
+
+/** Cron: todas as orgs com follow-up pendente. */
+export async function runDueFollowUpsForAllOrganizations(): Promise<{ processed: number }> {
+  const { data } = await supabaseAdmin
+    .from("sessions")
+    .select("id, phone, line, organization_id, intake_data")
+    .is("archived_at", null)
+    .filter("intake_data->follow_up->>status", "eq", "pending")
+    .limit(80);
+  let processed = 0;
+  for (const row of (data ?? []) as SessionCrmRow[]) {
+    const result = await processDueFollowUpRow(row);
+    if (result !== "skip") processed += 1;
+  }
+  console.info("[follow-up cron] processados:", processed);
+  return { processed };
 }
 
 /** Mensagem que a equipe enviou pelo aplicativo do celular, espelhada no painel. */

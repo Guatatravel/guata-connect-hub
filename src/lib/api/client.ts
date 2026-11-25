@@ -23,6 +23,7 @@ import {
   fetchStaff,
   assumeConversation,
   markConversationSeen,
+  markAllConversationsSeen,
   setConversationArchived,
   startConversation,
 } from "@/lib/panel.functions";
@@ -107,6 +108,10 @@ export const api = {
 
   async markConversationSeen(id: string) {
     return markConversationSeen({ data: { id } });
+  },
+
+  async markAllConversationsSeen() {
+    return markAllConversationsSeen();
   },
 
   async listTriages(filters?: {

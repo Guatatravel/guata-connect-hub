@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { resolveOrganizationForUser } from "@/lib/organizations.server";
-import { patchConversationCrm, runDueFollowUps, setFollowUp } from "@/lib/crm.server";
+import {
+  clearFollowUp,
+  patchConversationCrm,
+  runDueFollowUps,
+  setFollowUp,
+} from "@/lib/crm.server";
 import { CRM_COLUMNS } from "@/lib/crm.shared";
 
 async function requireStaff(userId: string) {
@@ -16,6 +21,13 @@ async function requireStaff(userId: string) {
 }
 
 const columnIds = CRM_COLUMNS.map((c) => c.id) as [string, ...string[]];
+
+const followStepSchema = z.object({
+  delay: z.number().int().min(1).max(60 * 24 * 14),
+  unit: z.enum(["minutes", "hours", "days"]),
+  text: z.string().min(1).max(1000),
+  templateName: z.string().max(120).optional(),
+});
 
 export const updateConversationCrm = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -45,9 +57,13 @@ export const scheduleFollowUp = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
-        days: z.number().int().min(1).max(30),
-        text: z.string().min(1).max(1000),
+        days: z.number().int().min(1).max(30).optional(),
+        text: z.string().min(1).max(1000).optional(),
         templateName: z.string().max(120).optional(),
+        steps: z.array(followStepSchema).min(1).max(3).optional(),
+      })
+      .refine((v) => Boolean(v.steps?.length) || Boolean(v.text?.trim()), {
+        message: "Informe etapas ou o texto do follow-up.",
       })
       .parse(i),
   )
@@ -55,6 +71,15 @@ export const scheduleFollowUp = createServerFn({ method: "POST" })
     await requireStaff(context.userId);
     const followUp = await setFollowUp(data.id, data);
     return { followUp };
+  });
+
+export const cancelFollowUpFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    await requireStaff(context.userId);
+    await clearFollowUp(data.id);
+    return { ok: true };
   });
 
 export const listQuickReplies = createServerFn({ method: "POST" })

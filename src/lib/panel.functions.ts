@@ -485,6 +485,12 @@ export const setConversationArchived = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireStaff(context.userId);
     await assertSessionBelongsToUserOrg(context.userId, data.id);
+    if (data.archived) {
+      const { cancelFollowUpOnArchive } = await import("@/lib/crm.server");
+      await cancelFollowUpOnArchive(data.id).catch((e) =>
+        console.error("[follow-up] cancel on archive:", e),
+      );
+    }
     await supabaseAdmin
       .from("sessions")
       .update({ archived_at: data.archived ? new Date().toISOString() : null })
@@ -939,6 +945,32 @@ export const markConversationSeen = createServerFn({ method: "POST" })
     const seenAt = new Date(Math.max(Date.now(), lastMs)).toISOString();
     await supabaseAdmin.from("sessions").update({ staff_seen_at: seenAt }).eq("id", data.id);
     return { ok: true };
+  });
+
+/** Marca como vistas todas as conversas ativas com mensagem não lida da org. */
+export const markAllConversationsSeen = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireStaff(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    const { data: rows } = await supabaseAdmin
+      .from("sessions")
+      .select("id, last_message_at, staff_seen_at")
+      .eq("organization_id", orgId)
+      .is("archived_at", null)
+      .order("last_message_at", { ascending: false })
+      .limit(300);
+    const now = Date.now();
+    let updated = 0;
+    for (const row of rows ?? []) {
+      const lastMs = row.last_message_at ? new Date(row.last_message_at).getTime() : 0;
+      const seenMs = row.staff_seen_at ? new Date(row.staff_seen_at).getTime() : 0;
+      if (!lastMs || seenMs >= lastMs) continue;
+      const seenAt = new Date(Math.max(now, lastMs)).toISOString();
+      await supabaseAdmin.from("sessions").update({ staff_seen_at: seenAt }).eq("id", row.id);
+      updated += 1;
+    }
+    return { ok: true, updated };
   });
 
 // =========================================================
