@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, ImageIcon, Megaphone, Send } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight, History, ImageIcon, Megaphone, Send } from "lucide-react";
 import { WhatsappTemplateCampaignFields } from "@/components/guata/whatsapp-template-campaign-fields";
 import {
   campaignMetaStatusFn,
   createAndLaunchCampaignFn,
   launchCampaignFn,
+  listCampaignRecipientsFn,
+  listCampaignsFn,
   previewCampaignAudienceFn,
   saveCampaignDraftFn,
 } from "@/lib/campaigns.functions";
@@ -31,6 +33,29 @@ import type {
   CampaignRow,
   CampaignSendMode,
 } from "@/lib/campaigns.types";
+import { formatPhone } from "@/lib/format";
+
+function statusLabel(status: string): string {
+  if (status === "enviado") return "Enviado";
+  if (status === "falhou") return "Falhou";
+  if (status === "ignorado") return "Pulado";
+  if (status === "pendente") return "Pendente";
+  return status;
+}
+
+function statusClass(status: string): string {
+  if (status === "enviado") return "text-emerald-700 bg-emerald-50";
+  if (status === "falhou") return "text-destructive bg-destructive/10";
+  if (status === "ignorado") return "text-amber-800 bg-amber-50";
+  return "text-muted-foreground bg-muted";
+}
+
+function campaignStatusLabel(status: string): string {
+  if (status === "concluida") return "Concluída";
+  if (status === "enviando") return "Enviando…";
+  if (status === "rascunho") return "Rascunho";
+  return status;
+}
 
 const AUDIENCE_LABEL: Record<CampaignAudience, string> = {
   active_24h: "Falaram nas últimas 24h (podem receber agora)",
@@ -67,14 +92,18 @@ function sumStats(rows: { sent_ok: number; sent_fail: number; sent_skip: number 
 }
 
 export function CampaignsTab() {
+  const qc = useQueryClient();
   const previewFn = useServerFn(previewCampaignAudienceFn);
   const metaFn = useServerFn(campaignMetaStatusFn);
+  const listFn = useServerFn(listCampaignsFn);
+  const recipientsFn = useServerFn(listCampaignRecipientsFn);
   const createLaunchFn = useServerFn(createAndLaunchCampaignFn);
   const launchFn = useServerFn(launchCampaignFn);
   const saveDraftFn = useServerFn(saveCampaignDraftFn);
   const imageRef = useRef<HTMLInputElement>(null);
 
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savedImagePath, setSavedImagePath] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   // Linha única: o WhatsApp oficial do Guatá.
@@ -106,6 +135,18 @@ export function CampaignsTab() {
   const { data: meta } = useQuery({
     queryKey: ["campaign-meta-status"],
     queryFn: () => metaFn(),
+  });
+
+  const { data: campaigns, isLoading: campaignsLoading } = useQuery({
+    queryKey: ["campaigns-history"],
+    queryFn: () => listFn(),
+    refetchInterval: 12_000,
+  });
+
+  const { data: recipients, isLoading: recipientsLoading } = useQuery({
+    queryKey: ["campaign-recipients", expandedId],
+    queryFn: () => recipientsFn({ data: { id: expandedId! } }),
+    enabled: Boolean(expandedId),
   });
 
   const { data: preview } = useQuery({
@@ -167,6 +208,7 @@ export function CampaignsTab() {
         );
       }
       resetForm();
+      qc.invalidateQueries({ queryKey: ["campaigns-history"] });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Não foi possível enviar"),
@@ -407,6 +449,112 @@ export function CampaignsTab() {
               Salvar rascunho
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Histórico de disparos
+          </CardTitle>
+          <p className="text-xs text-muted-foreground font-normal">
+            Veja se o lote terminou e quais números foram enviados, falharam ou foram pulados — assim você
+            sabe se pode reenviar só quem faltou.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {campaignsLoading && (
+            <p className="text-sm text-muted-foreground">Carregando histórico…</p>
+          )}
+          {!campaignsLoading && (campaigns ?? []).length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum disparo ainda.</p>
+          )}
+          {(campaigns ?? []).map((c) => {
+            const open = expandedId === c.id;
+            return (
+              <div key={c.id} className="rounded-xl border overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-start gap-2 p-3 text-left hover:bg-muted/40 transition"
+                  onClick={() => setExpandedId(open ? null : c.id)}
+                >
+                  {open ? (
+                    <ChevronDown className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium truncate">{c.title}</span>
+                      <span className="text-[10px] uppercase tracking-wide rounded-full bg-muted px-2 py-0.5 text-muted-foreground">
+                        {campaignStatusLabel(c.status)}
+                      </span>
+                      {c.send_mode === "template" && (
+                        <span className="text-[10px] rounded-full border px-2 py-0.5 text-muted-foreground">
+                          modelo {c.template_name || "—"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+                      <span>
+                        {new Date(c.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                      <span className="text-emerald-700">{c.sent_ok} ok</span>
+                      <span className="text-destructive">{c.sent_fail} falha</span>
+                      <span className="text-amber-800">{c.sent_skip} pulado</span>
+                    </div>
+                  </div>
+                </button>
+                {open && (
+                  <div className="border-t bg-muted/20 px-3 py-2 max-h-64 overflow-auto space-y-1">
+                    {recipientsLoading && (
+                      <p className="text-xs text-muted-foreground py-2">Carregando números…</p>
+                    )}
+                    {!recipientsLoading && (recipients ?? []).length === 0 && (
+                      <p className="text-xs text-muted-foreground py-2">
+                        Sem destinatários gravados neste disparo.
+                      </p>
+                    )}
+                    {(recipients ?? []).map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-start justify-between gap-2 text-sm py-1 border-b border-border/40 last:border-0"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium">{formatPhone(r.phone) || r.phone}</div>
+                          {r.error && (
+                            <div className="text-[11px] text-muted-foreground break-all">
+                              {r.error.slice(0, 160)}
+                            </div>
+                          )}
+                        </div>
+                        <span
+                          className={
+                            "shrink-0 text-[10px] uppercase tracking-wide rounded-full px-2 py-0.5 " +
+                            statusClass(r.status)
+                          }
+                        >
+                          {statusLabel(r.status)}
+                        </span>
+                      </div>
+                    ))}
+                    {!recipientsLoading && (recipients ?? []).some((r) => r.status === "falhou" || r.status === "pendente" || r.status === "ignorado") && (
+                      <p className="text-[11px] text-muted-foreground pt-2">
+                        Dica: para reenviar, use só os números com Falhou / Pendente / Pulado — não a
+                        lista inteira.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     </div>

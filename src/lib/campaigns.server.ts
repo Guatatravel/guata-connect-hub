@@ -132,6 +132,30 @@ export async function listCampaigns(organizationId: string): Promise<CampaignRow
   return (data ?? []) as CampaignRow[];
 }
 
+export type CampaignRecipientRow = {
+  id: string;
+  phone: string;
+  status: string;
+  error: string | null;
+  sent_at: string | null;
+};
+
+/** Destinatários de um disparo (para ver quem recebeu / falhou / pulou). */
+export async function listCampaignRecipients(
+  campaignId: string,
+  organizationId: string,
+): Promise<CampaignRecipientRow[]> {
+  await getCampaign(campaignId, organizationId);
+  const { data, error } = await supabaseAdmin
+    .from("broadcast_recipients")
+    .select("id, phone, status, error, sent_at")
+    .eq("campaign_id", campaignId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CampaignRecipientRow[];
+}
+
 export async function getCampaign(id: string, organizationId?: string): Promise<CampaignRow> {
   const { data, error } = await supabaseAdmin
     .from("broadcast_campaigns")

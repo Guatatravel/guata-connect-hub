@@ -36,6 +36,17 @@ export const listCampaignsFn = createServerFn({ method: "POST" })
     return listCampaigns(orgId);
   });
 
+export const listCampaignRecipientsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((i) => z.object({ id: z.string().uuid() }).parse(i))
+  .handler(async ({ data, context }) => {
+    const { requireStaffUser } = await import("@/lib/diagnostics.server");
+    const { listCampaignRecipients } = await import("@/lib/campaigns.server");
+    await requireStaffUser(context.userId);
+    const orgId = await requireActiveOrganization(context.userId);
+    return listCampaignRecipients(data.id, orgId);
+  });
+
 export const previewCampaignAudienceFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) =>
