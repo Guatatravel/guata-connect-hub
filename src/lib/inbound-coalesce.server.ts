@@ -5,7 +5,7 @@
 import type { IncomingMessage } from "@/lib/message-pipeline.server";
 
 /** Espera após a última msg (texto ou áudio) para pegar complemento digitado. */
-const WINDOW_MS = 4000;
+const WINDOW_MS = 10000;
 
 type Bucket = {
   messages: IncomingMessage[];

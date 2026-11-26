@@ -677,6 +677,7 @@ export type Database = {
           allow_bot_audio: boolean
           bot_audio_client_default: boolean
           bot_audio_monthly_cap: number | null
+          bot_paused_at: string | null
           created_at: string
           id: string
           is_guata: boolean
@@ -690,6 +691,7 @@ export type Database = {
           allow_bot_audio?: boolean
           bot_audio_client_default?: boolean
           bot_audio_monthly_cap?: number | null
+          bot_paused_at?: string | null
           created_at?: string
           id?: string
           is_guata?: boolean
@@ -703,6 +705,7 @@ export type Database = {
           allow_bot_audio?: boolean
           bot_audio_client_default?: boolean
           bot_audio_monthly_cap?: number | null
+          bot_paused_at?: string | null
           created_at?: string
           id?: string
           is_guata?: boolean

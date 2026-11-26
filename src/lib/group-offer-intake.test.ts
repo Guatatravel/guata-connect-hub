@@ -83,20 +83,28 @@ describe("group-offer-intake", () => {
     ).toBe(true);
   });
 
-  test("alerta para o dono inclui oferta", () => {
+  test("alerta para o dono é curto e legível", () => {
     const t = buildOwnerGroupOfferAlert({
       phone: "5567999999999",
       sessionId: "00000000-0000-4000-8000-000000000001",
-      lastUserText: "quero",
+      lastUserText: "Sim",
+      contactName: "Guilherme",
       offer: {
         step: "done",
         source: "cartaz",
-        offer_label: "Promo B",
-        payment_note: "boleto",
+        offer_label: "A imagem é um anúncio de pacote turístico para São Luís.",
+        cartaz_summary:
+          "A imagem é um anúncio de pacote turístico para São Luís. 2 adultos, 7 noites Rede Andrade, 02/04 a 09/04/2027.",
+        payment_note: "Mais qual a forma de pagamento isso já li no cartaz",
+        confirmed_at: new Date().toISOString(),
       },
     });
-    expect(t).toContain("Promo B");
-    expect(t).toContain("boleto");
+    expect(t).toContain("São Luís");
+    expect(t).toContain("Guilherme");
+    expect(t).toContain("forma de pagamento");
+    expect(t).toContain("confirmou");
+    expect(t).not.toContain("Cartaz (leitura)");
+    expect(t.toLowerCase()).not.toContain("a imagem é um anúncio");
   });
 
   test("confirmar pacote inicia briefing, não handoff imediato", async () => {

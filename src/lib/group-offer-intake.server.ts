@@ -264,6 +264,43 @@ export function quotePreviewWhenUnresolved(quotedForwarded?: boolean): string {
   return "Foto ou promoção citada";
 }
 
+/** Extrai destino/datas/hotel do OCR sem o textão "A imagem é um anúncio…". */
+export function compactPackageLine(raw: string | undefined): string {
+  if (!raw?.trim()) return "";
+  const full = raw.replace(/\s+/g, " ").trim();
+  // Destino no texto original (antes de strip) — a 1ª frase OCR às vezes só tem o destino.
+  const dest =
+    full.match(
+      /\b(São Luís|Sao Luis|Jericoacoara|Bonito|Gramado|Natal|Fortaleza|Recife|Maceió|Maceio|Porto Seguro|Punta Cana|Cancún|Cancun|Curitiba|Nordeste|Pantanal|Fernando de Noronha)\b/i,
+    )?.[0] ?? null;
+  let t = full
+    .replace(/^\(?\s*a imagem é um anúncio[^.]*\.\s*/i, "")
+    .replace(/^\(?\s*cliente enviou uma imagem:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const dates = full.match(
+    /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:\s*(?:a|até|ate|-|–)\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?/i,
+  )?.[0];
+  const hotel = full.match(/\b(?:Hotel|Rede|Resort)\s+[A-Za-zÀ-ú0-9][\wÀ-ú0-9\s.&-]{2,40}/i)?.[0];
+  const adults = full.match(/\b\d+\s*adultos?\b/i)?.[0];
+  const nights = full.match(/\b\d+\s*noites?\b/i)?.[0];
+  const parts = [dest?.trim(), dates, hotel?.trim(), adults, nights].filter(Boolean) as string[];
+  if (parts.length > 0) return parts.join(" · ").slice(0, 160);
+  if (!t || /^essa promoção$/i.test(t)) return "";
+  const hint = shortOfferHint(t);
+  if (!hint || hint === "essa promoção") return "";
+  return hint.slice(0, 120);
+}
+
+export function compactPaymentDoubt(raw: string | undefined): string | undefined {
+  if (!raw?.trim()) return undefined;
+  const t = raw.replace(/\s+/g, " ").trim();
+  if (/\bboleto\b/i.test(t)) return "Quer pagar no boleto";
+  if (/formas?\s+de\s+pagamento|pagamento/i.test(t)) return "Dúvida de forma de pagamento";
+  if (/\bparcela|cart[aã]o|pix\b/i.test(t)) return shortOfferHint(t).slice(0, 80);
+  return shortOfferHint(t).slice(0, 80);
+}
+
 export function buildOwnerGroupOfferAlert(input: {
   contactName?: string;
   phone: string;
@@ -272,43 +309,34 @@ export function buildOwnerGroupOfferAlert(input: {
   lastUserText: string;
 }): string {
   const phone = input.phone.replace(/\D/g, "");
-  const src =
-    input.offer.source === "quote"
-      ? "Citou mensagem"
-      : input.offer.source === "story"
-        ? "Story / anúncio"
-        : input.offer.source === "cartaz"
-          ? "Enviou cartaz"
-          : input.offer.source === "mixed"
-            ? "Citação + cartaz / story"
-            : "Texto (grupo / oferta)";
+  const packageLine =
+    compactPackageLine(
+      [input.offer.cartaz_summary, input.offer.offer_label, input.offer.referral_headline, input.offer.quoted_text]
+        .filter(Boolean)
+        .join(" "),
+    ) ||
+    compactPackageLine(input.offer.offer_label) ||
+    "pacote confirmado";
+  const titleHint = packageLine.split(" · ")[0] || "consultor";
+  const payment = compactPaymentDoubt(input.offer.payment_note);
+  const confirmed = Boolean(input.offer.confirmed_at);
   const lines = [
-    `🔔 *Oferta do grupo — consultor*`,
+    `🔔 *Cliente aguardando — ${titleHint.slice(0, 40)}*`,
     `Nome: ${input.contactName ?? "Sem nome"}`,
-    `Contato: +${phone}`,
-    `Origem: ${src}`,
+    `WhatsApp: +${phone}`,
+    `Pacote: ${packageLine}`,
   ];
-  if (input.offer.referral_headline) {
-    lines.push(`Story/ref: ${input.offer.referral_headline.slice(0, 120)}`);
-  }
-  if (input.offer.quoted_text) {
-    lines.push(`Citação no privado: ${input.offer.quoted_text.slice(0, 200)}`);
-  }
-  if (input.offer.cartaz_summary) {
-    lines.push(`Cartaz (leitura): ${input.offer.cartaz_summary.slice(0, 220)}`);
-  }
-  if (input.offer.offer_label) {
-    lines.push(`Oferta: ${input.offer.offer_label.slice(0, 200)}`);
-  }
-  if (input.offer.payment_note) {
-    lines.push(`Pagamento: ${input.offer.payment_note.slice(0, 160)}`);
-  }
-  lines.push(`Última msg: ${input.lastUserText.slice(0, 280)}`);
+  if (payment) lines.push(`Dúvida: ${payment}`);
+  lines.push(
+    confirmed
+      ? "Status: confirmou — quer consultor"
+      : "Status: pediu consultor",
+  );
   lines.push("");
   lines.push(`Painel: https://guata-connect-hub.lovable.app/conversas/${input.sessionId}`);
-  lines.push(`WhatsApp: https://wa.me/${phone}`);
+  lines.push(`WhatsApp direto: https://wa.me/${phone}`);
   lines.push("");
-  lines.push(`Responda: 1 CONTINUAR (Guatá) | 2 ASSUMI (você atende)`);
+  lines.push("Responda: 1 CONTINUAR (Guatá) | 2 ASSUMI (você atende)");
   return lines.join("\n");
 }
 

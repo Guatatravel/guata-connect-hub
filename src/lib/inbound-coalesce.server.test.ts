@@ -37,8 +37,8 @@ describe("shouldCoalesceInbound", () => {
 });
 
 describe("coalesceWindowMs", () => {
-  test("waits about 4 seconds", () => {
-    expect(coalesceWindowMs()).toBe(4000);
+  test("waits about 10 seconds", () => {
+    expect(coalesceWindowMs()).toBe(10000);
   });
 });
 
@@ -56,7 +56,7 @@ describe("enqueueInboundMessage", () => {
     await Promise.all([p1, p2]);
     expect(seen).toHaveLength(1);
     expect(seen[0]!.text).toBe("viagem pra família\npro nordeste");
-  }, 8000);
+  }, 15000);
 
   test("joins audio transcript with following text and keeps audio wamid", async () => {
     const seen: IncomingMessage[] = [];
@@ -88,5 +88,5 @@ describe("enqueueInboundMessage", () => {
     expect(seen[0]!.inboundKind).toBe("audio");
     expect(seen[0]!.messageId).toBe("wamid.audio1");
     expect(seen[0]!.mediaPath).toBe("path/a.ogg");
-  }, 8000);
+  }, 15000);
 });

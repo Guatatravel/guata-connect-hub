@@ -23,6 +23,7 @@ import { Instagram,
   Building2,
   ClipboardList,
   Ticket,
+  HelpCircle,
 } from "lucide-react";
 import { signOut } from "@/lib/auth";
 import { BrandLogo } from "@/components/guata/brand-logo";
@@ -42,6 +43,7 @@ const navItems = [
   { to: "/instagram", label: "Instagram", icon: Instagram },
   { to: "/passhub", label: "Passhub", icon: Ticket },
   { to: "/atendentes", label: "Atendente virtual (IA)", icon: Bot },
+  { to: "/meta-ajuda", label: "Meta / Ajuda", icon: HelpCircle },
   { to: "/equipe", label: "Equipe", icon: Users, orgTeamOnly: true },
   { to: "/solicitacoes", label: "Solicitações", icon: ClipboardList, adminOnly: true },
   { to: "/configuracoes", label: "Configurações", icon: Settings },

@@ -27,6 +27,7 @@ import { Route as AppDiagnosticoWhatsappRouteImport } from './routes/_app.diagno
 import { Route as AppEquipeRouteImport } from './routes/_app.equipe'
 import { Route as AppExtensaoRouteImport } from './routes/_app.extensao'
 import { Route as AppInstagramRouteImport } from './routes/_app.instagram'
+import { Route as AppMetaAjudaRouteImport } from './routes/_app.meta-ajuda'
 import { Route as AppOrganizacoesRouteImport } from './routes/_app.organizacoes'
 import { Route as AppPasshubRouteImport } from './routes/_app.passhub'
 import { Route as AppQuadroRouteImport } from './routes/_app.quadro'
@@ -133,6 +134,11 @@ const AppInstagramRoute = AppInstagramRouteImport.update({
   path: '/instagram',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMetaAjudaRoute = AppMetaAjudaRouteImport.update({
+  id: '/meta-ajuda',
+  path: '/meta-ajuda',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrganizacoesRoute = AppOrganizacoesRouteImport.update({
   id: '/organizacoes',
   path: '/organizacoes',
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
   '/instagram': typeof AppInstagramRoute
+  '/meta-ajuda': typeof AppMetaAjudaRoute
   '/organizacoes': typeof AppOrganizacoesRoute
   '/passhub': typeof AppPasshubRoute
   '/quadro': typeof AppQuadroRoute
@@ -271,6 +278,7 @@ export interface FileRoutesByTo {
   '/equipe': typeof AppEquipeRoute
   '/extensao': typeof AppExtensaoRoute
   '/instagram': typeof AppInstagramRoute
+  '/meta-ajuda': typeof AppMetaAjudaRoute
   '/organizacoes': typeof AppOrganizacoesRoute
   '/passhub': typeof AppPasshubRoute
   '/quadro': typeof AppQuadroRoute
@@ -308,6 +316,7 @@ export interface FileRoutesById {
   '/_app/equipe': typeof AppEquipeRoute
   '/_app/extensao': typeof AppExtensaoRoute
   '/_app/instagram': typeof AppInstagramRoute
+  '/_app/meta-ajuda': typeof AppMetaAjudaRoute
   '/_app/organizacoes': typeof AppOrganizacoesRoute
   '/_app/passhub': typeof AppPasshubRoute
   '/_app/quadro': typeof AppQuadroRoute
@@ -345,6 +354,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/extensao'
     | '/instagram'
+    | '/meta-ajuda'
     | '/organizacoes'
     | '/passhub'
     | '/quadro'
@@ -380,6 +390,7 @@ export interface FileRouteTypes {
     | '/equipe'
     | '/extensao'
     | '/instagram'
+    | '/meta-ajuda'
     | '/organizacoes'
     | '/passhub'
     | '/quadro'
@@ -416,6 +427,7 @@ export interface FileRouteTypes {
     | '/_app/equipe'
     | '/_app/extensao'
     | '/_app/instagram'
+    | '/_app/meta-ajuda'
     | '/_app/organizacoes'
     | '/_app/passhub'
     | '/_app/quadro'
@@ -579,6 +591,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInstagramRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/meta-ajuda': {
+      id: '/_app/meta-ajuda'
+      path: '/meta-ajuda'
+      fullPath: '/meta-ajuda'
+      preLoaderRoute: typeof AppMetaAjudaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/organizacoes': {
       id: '/_app/organizacoes'
       path: '/organizacoes'
@@ -705,6 +724,7 @@ interface AppRouteChildren {
   AppEquipeRoute: typeof AppEquipeRoute
   AppExtensaoRoute: typeof AppExtensaoRoute
   AppInstagramRoute: typeof AppInstagramRoute
+  AppMetaAjudaRoute: typeof AppMetaAjudaRoute
   AppOrganizacoesRoute: typeof AppOrganizacoesRoute
   AppPasshubRoute: typeof AppPasshubRoute
   AppQuadroRoute: typeof AppQuadroRoute
@@ -728,6 +748,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppEquipeRoute: AppEquipeRoute,
   AppExtensaoRoute: AppExtensaoRoute,
   AppInstagramRoute: AppInstagramRoute,
+  AppMetaAjudaRoute: AppMetaAjudaRoute,
   AppOrganizacoesRoute: AppOrganizacoesRoute,
   AppPasshubRoute: AppPasshubRoute,
   AppQuadroRoute: AppQuadroRoute,

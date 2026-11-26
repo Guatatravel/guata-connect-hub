@@ -540,7 +540,7 @@ async function answerTurismo(
       : `\n## BRIEFING DE COTAÇÃO (conversa de consultor — tudo mastigado para a equipe)\nO cliente quer cotação/pacote. Seu papel é CONVERSAR como um bom consultor no WhatsApp: entender a viagem e deixar o briefing COMPLETO para o consultor humano da ${AGENCY_NAME} montar tarifa/roteiro sem perguntar de novo.\n\nEstilo (obrigatório):\n- Tom humano, curto, acolhedor (ex.: "Ótimo!", "Entendido!", "Perfeito!").\n- UMA pergunta concreta por mensagem — nunca lista numerada nem "me passa: 1) 2) 3)".\n- Use o que a pessoa já disse; confirme e avance (não repita pergunta respondida).\n- Quando a resposta for vaga, SUGIRA opções concretas e peça confirmação (ex.: mês "julho/férias" → "Que tal 16 a 21 de julho?"; destino aberto → sugira 1 destino que faça sentido para o perfil e pergunte o que acha).\n- Se falar da família (pais, filhos, idades), aprofunde o que falta (quartos, quem dorme com quem, mobilidade de idosos) com naturalidade.\n- Não invente dados; se não disser, pergunte.\n\nColete (pule o que já está no histórico):\n1. Origem (cidade de saída) e destino (se amplo, sugira ou peça cidade/praia).\n2. Datas ou mês; quantos dias; ida e volta; aceite "flexível".\n3. Quem viaja: total; adultos/crianças; idade de cada criança *na data da viagem*; idosos se citados.\n4. Quartos / arranjo (casal, quem divide com filhos/pais) quando for família/grupo.\n5. Transporte: aéreo ou rodoviário se fizer sentido.\n6. Hospedagem: econômica / intermediária / charme; café ou all inclusive se relevante.\n7. Orçamento aproximado só se toparem; senão siga sem insistir.\n8. Restrições (mobilidade, comida, o que não quer).\n\nQuando passar ao humano:\n- Só ofereça consultor quando o briefing estiver completo ou quase (origem, destino, datas/período, composição do grupo no mínimo) e a pessoa quiser a proposta/valores — ou se pedir pagar/fechar.\n- Frase natural (ex.: "Perfeito! Já deixo tudo organizado e nosso consultor da ${AGENCY_NAME} monta o pacote pra você olhar.") e termine com [[OFERTA_HUMANO]].\n- NÃO transfira cedo demais: o consultor deve receber a conversa mastigada.\n- NUNCA transfira sozinho só por dúvida turística — isso você resolve.\n`) +
     quotePromptRules(quoteValidityMin) +
     reservationPromptRules(AGENCY_NAME) +
-    "\n## CANAL WHATSAPP\n- Responda de forma completa ao que o cliente pediu (biografias, roteiros, listas). Desenvolva o assunto até esclarecer a dúvida.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- NUNCA diga que não pode enviar PDF, mapa, imagem ou arquivo no WhatsApp — o sistema pode anexar após sua resposta.\n- Não diga que o arquivo \"já está anexado\" ou \"segue em anexo\" — o sistema envia o arquivo sozinho depois do seu texto; só explique o que é o material.\n- Não repita na mensagem o título interno do PDF (nome de arquivo .pdf) — o cliente recebe o documento em seguida.\n- PROIBIDO usar 📎 ou citar o nome dos itens da seção ARQUIVOS NO WHATSAPP; o sistema envia o arquivo sozinho.\n- Ao recomendar vídeo ou lugar da base, fale como quem já visitou (ex.: \"Olha, eu já conheci…\") e inclua o link https completo na mensagem se for enviar; evite mensagens só com URL sem contexto.\n- Respostas curtas: prefira um ou dois parágrafos; o sistema divide em poucos balões.\n- Se o cliente pedir mapa/PDF/arquivo, responda com conteúdo útil; não invente bloqueio técnico.\n- Não cite link de agência comercial em pergunta só informativa (mapa, atração, roteiro).\n- Pode usar vários parágrafos e listas com '• ' quando fizer sentido. Sem menus numerados.\n- Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
+    "\n## CANAL WHATSAPP\n- Seja OBJETIVO: 1–3 frases curtas + no máximo UMA pergunta. Pessoas não leem textão no WhatsApp.\n- Cotação/pacote/pagamento: vá direto ao ponto (sem repetir o cartaz inteiro).\n- Só alongue um pouco em curiosidade/roteiro se o cliente pediu detalhe; ainda assim evite muralhas de texto.\n- Se o cliente mandou *nota de voz*, o sistema envia sua resposta em áudio automaticamente; escreva o texto normalmente e NUNCA diga que não pode responder em áudio ou que há limitação da ferramenta.\n- Se a base citar \"Link para o cliente:\" ou um URL (vídeo, site, roteiro), inclua o link completo https://... na resposta para o cliente abrir no celular.\n- Não repita o mesmo link https que você já enviou antes nesta conversa.\n- NUNCA diga que não pode enviar PDF, mapa, imagem ou arquivo no WhatsApp — o sistema pode anexar após sua resposta.\n- Não diga que o arquivo \"já está anexado\" ou \"segue em anexo\" — o sistema envia o arquivo sozinho depois do seu texto; só explique o que é o material.\n- Não repita na mensagem o título interno do PDF (nome de arquivo .pdf) — o cliente recebe o documento em seguida.\n- PROIBIDO usar 📎 ou citar o nome dos itens da seção ARQUIVOS NO WHATSAPP; o sistema envia o arquivo sozinho.\n- Ao recomendar vídeo ou lugar da base, fale como quem já visitou (ex.: \"Olha, eu já conheci…\") e inclua o link https completo na mensagem se for enviar; evite mensagens só com URL sem contexto.\n- Se o cliente pedir mapa/PDF/arquivo, responda com conteúdo útil; não invente bloqueio técnico.\n- Não cite link de agência comercial em pergunta só informativa (mapa, atração, roteiro).\n- Sem menus numerados. Tom natural. NÃO use markdown (sem ** ou ##). Destaque com no máximo *uma* palavra em asterisco por trecho.\n- O Guatá é masculino: fale de si como eu/o Guatá/dele, nunca ela/a Guatá como pessoa.\n" +
     (ongoing
       ? "- A conversa JÁ está em andamento: NÃO cumprimente de novo (sem 'Olá', 'Oi', 'Que pergunta ótima'). Vá direto ao ponto.\n"
       : "- Se for só um cumprimento, cumprimente uma vez (sem textão) e pergunte como pode ajudar.\n") +
@@ -551,7 +551,8 @@ async function answerTurismo(
     (sendableCatalog.length > 0
       ? "\n\n## ARQUIVOS NO WHATSAPP (envio contextual)\n" +
         "Materiais da base que você PODE enviar. Regras:\n" +
-        "- Só envie se o material for sobre o MESMO destino/cidade/assunto que está sendo conversado agora (leia o histórico). Ex.: conversa sobre Rondônia → NUNCA envie mapa de Campo Grande ou material de Bonito.\n" +
+        "- Só envie se o material for sobre o MESMO destino/cidade/assunto que está sendo conversado agora (leia o histórico). Ex.: conversa sobre São Luís ou Jericoacoara → NUNCA envie mapa de Campo Grande, Bonito ou outro lugar.\n" +
+        "- Se o título/hint do arquivo citar outra cidade que NÃO é o destino da conversa, NÃO use a marca — zero PDF/mídia.\n" +
         "- Envie quando o cliente pedir (mapa, PDF, folheto, foto) ou quando o material claramente ajudar naquela resposta. Na dúvida, NÃO envie.\n" +
         "- No máximo um material por resposta; não reenvie o que já mandou nesta conversa.\n" +
         "- Para enviar, termine a resposta com a marca indicada. Sem a marca, nada é enviado.\n" +
@@ -765,15 +766,21 @@ async function notifyOwner(msg: IncomingMessage, sessionId: string) {
   const { data } = await supabaseAdmin
     .from("sessions").select("dossie, intake_data").eq("id", sessionId).maybeSingle();
   const d = (data?.dossie ?? {}) as Record<string, unknown>;
-  const resumo = String(d["resumo"] ?? d["resumo_executivo"] ?? d["intencao"] ?? msg.text).slice(0, 400);
+  const resumo = String(d["resumo"] ?? d["resumo_executivo"] ?? d["intencao"] ?? msg.text)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
   const phone = msg.phone.replace(/\D/g, "");
+  const titleBit = resumo.split(/[.|]/)[0]?.trim().slice(0, 40) || "consultor";
   const text =
-    `🔔 *Cliente aguardando consultor*\n` +
-    `Nome: ${msg.contactName ?? "Sem nome"}\nContato: +${phone}\n` +
-    `Resumo: ${resumo}\n\n` +
-    `Responder pelo painel: https://guata-connect-hub.lovable.app/conversas/${sessionId}\n` +
-    `Chamar pelo seu WhatsApp: https://wa.me/${phone}\n\n` +
-    `Responda aqui:\n1 ou CONTINUAR → o Guatá segue atendendo\n2 ou ASSUMI → você atende (Guatá pausado)\n` +
+    `🔔 *Cliente aguardando — ${titleBit}*\n` +
+    `Nome: ${msg.contactName ?? "Sem nome"}\n` +
+    `WhatsApp: +${phone}\n` +
+    (resumo ? `Resumo: ${resumo}\n` : "") +
+    `Status: quer consultor\n\n` +
+    `Painel: https://guata-connect-hub.lovable.app/conversas/${sessionId}\n` +
+    `WhatsApp direto: https://wa.me/${phone}\n\n` +
+    `Responda: 1 CONTINUAR (Guatá) | 2 ASSUMI (você atende)\n` +
     `Sem resposta em 10 min, o Guatá retoma sozinho.`;
   const intake = { ...((data?.intake_data ?? {}) as Record<string, unknown>) };
   intake["owner_alert_at"] = new Date().toISOString();
@@ -837,6 +844,21 @@ export async function processMessage(
     msg.phone,
     msg.contactName,
   );
+  let ownerAlertSent = false;
+
+  const { isOrgBotPaused } = await import("@/lib/bot-pause.server");
+  if (await isOrgBotPaused(msg.organizationId).catch(() => false)) {
+    if (session.mode === "bot" || session.mode === "triagem" || session.mode === "aguardando") {
+      await supabaseAdmin
+        .from("sessions")
+        .update({ mode: "humano", intake_state: null })
+        .eq("id", session.id);
+      session.mode = "humano";
+    }
+  }
+  // Depois da pausa global — conversão forçada não dispara alerta de handoff.
+  const modeAtStart = session.mode;
+
   if (msg.messageId && session.mode !== "humano") {
     void markReadAndTyping(waTarget, msg.messageId, { typing: true });
   }
@@ -953,9 +975,10 @@ export async function processMessage(
     };
     const pendingOffer = groupOfferFromIntake(intake_data);
     let alertOffer: import("@/lib/group-offer-intake.server").GroupOfferData | null = null;
-    if (pendingOffer?.confirmed_at && !pendingOffer.alerted_at) {
+    if (pendingOffer && !pendingOffer.alerted_at) {
       pendingOffer.alerted_at = new Date().toISOString();
       pendingOffer.step = "done";
+      pendingOffer.confirmed_at = pendingOffer.confirmed_at ?? new Date().toISOString();
       intake_data["group_offer"] = pendingOffer;
       alertOffer = pendingOffer;
     }
@@ -964,7 +987,7 @@ export async function processMessage(
       .update({ mode: "humano", intake_state: null, intake_data: intake_data as never })
       .eq("id", session.id);
     session.intake_data = intake_data;
-    session.mode = "humano";
+    // Não atualiza session.mode aqui — o check de handoff no fim usa modeAtStart.
     void ensureTravelIntakeForSession(session.id).catch((e) =>
       console.error("[lead-intake] handoff:", e),
     );
@@ -972,6 +995,10 @@ export async function processMessage(
       await notifyOwnerGroupOffer(msg, session.id, alertOffer).catch((e) =>
         console.error("[alerta-oferta] handoff:", e),
       );
+      ownerAlertSent = true;
+    } else {
+      await notifyOwner(msg, session.id).catch((e) => console.error("[alerta] handoff:", e));
+      ownerAlertSent = true;
     }
     replies.push(handoffText);
   };
@@ -1064,7 +1091,6 @@ export async function processMessage(
     });
     session.intake_data = turn.patchIntake;
     session.intake_state = turn.intakeState;
-    if (turn.handoffHuman) session.mode = "humano";
     await supabaseAdmin
       .from("sessions")
       .update({
@@ -1079,6 +1105,7 @@ export async function processMessage(
       await notifyOwnerGroupOffer(msg, session.id, offer).catch((e) =>
         console.error("[alerta-oferta]", e),
       );
+      ownerAlertSent = true;
     }
     if (turn.handoffHuman) {
       void ensureTravelIntakeForSession(session.id).catch((e) =>
@@ -1255,7 +1282,9 @@ export async function processMessage(
   const { data: after } = await supabaseAdmin
     .from("sessions").select("mode").eq("id", session.id).maybeSingle();
   const handoff =
-    (after?.mode === "humano" || after?.mode === "aguardando") && after?.mode !== session.mode;
+    (after?.mode === "humano" || after?.mode === "aguardando") &&
+    after?.mode !== modeAtStart;
+  if (after?.mode) session.mode = after.mode as typeof session.mode;
 
   const botOutbound = session.mode !== "humano";
   const activeAttendant = botOutbound
@@ -1446,7 +1475,22 @@ export async function processMessage(
   if (handoff) {
     const { generateDossie } = await import("@/lib/dossie.server");
     await generateDossie(session.id).catch((e) => console.error("[dossie] falhou:", e));
-    await notifyOwner(msg, session.id).catch((e) => console.error("[alerta] falhou:", e));
+    if (!ownerAlertSent) {
+      const offerLeft = groupOfferFromIntake(session.intake_data);
+      if (offerLeft && !offerLeft.alerted_at) {
+        offerLeft.alerted_at = new Date().toISOString();
+        const patch = { ...(session.intake_data ?? {}), group_offer: offerLeft };
+        await supabaseAdmin
+          .from("sessions")
+          .update({ intake_data: patch as never })
+          .eq("id", session.id);
+        await notifyOwnerGroupOffer(msg, session.id, offerLeft).catch((e) =>
+          console.error("[alerta-oferta] falhou:", e),
+        );
+      } else {
+        await notifyOwner(msg, session.id).catch((e) => console.error("[alerta] falhou:", e));
+      }
+    }
   }
 
   return { replies, sessionId: session.id };
