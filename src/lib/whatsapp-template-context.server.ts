@@ -340,5 +340,11 @@ export function historyContentFromRow(
   }
   const followTpl = String(meta.template_name ?? "").trim();
   if (meta.follow_up && followTpl && text) return text;
+
+  // Cliente citou promoção do grupo (marcação) — a IA precisa ver isso e NÃO inventar destino.
+  if (meta.quote_from_group_hint || meta.quote_unresolved || meta.reply_preview) {
+    const preview = String(meta.reply_preview ?? "Foto ou promoção citada").slice(0, 120);
+    return `[Cliente citou mensagem do grupo/marcação: "${preview}". Destino da promoção NÃO está no painel — não invente destino.]\n${text}`;
+  }
   return text;
 }

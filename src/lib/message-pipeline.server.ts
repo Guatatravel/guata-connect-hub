@@ -975,6 +975,26 @@ export async function processMessage(
     templatePromptExtra = templateFollowUpPromptSection(recentTemplate, msg.text);
   }
 
+  let unresolvedGroupQuote = false;
+  if (msg.quotedWaMessageId) {
+    const quotedLocal = await resolveQuotedTextInSession(session.id, msg.quotedWaMessageId);
+    unresolvedGroupQuote = !quotedLocal;
+  }
+  if (
+    unresolvedGroupQuote ||
+    msg.quotedForwarded ||
+    /\b(dessa\s+promo|dessa\s+oferta|desse\s+pacote|quero\s+(essa|desse|dessa)\s+)/i.test(msg.text)
+  ) {
+    const groupCiteRules =
+      `\n\n## MARCAÇÃO / PROMOÇÃO DO GRUPO\n` +
+      `- O cliente veio citando uma foto/promoção do grupo (ou disse "dessa promoção").\n` +
+      `- A Meta NÃO enviou o destino dessa foto. PROIBIDO inventar destino (ex.: Porto Seguro, Bonito) se ele não escreveu.\n` +
+      `- Responda a dúvida pontual (pagamento etc.) com cuidado: não invente condição de boleto; diga que o consultor confirma no pacote certo.\n` +
+      `- Em seguida peça o destino/nome da promoção ou que mande a foto de novo — UMA pergunta.\n` +
+      `- Só ofereça consultor com [[OFERTA_HUMANO]] depois de saber qual promoção/destino, ou se ele já disser claramente.\n`;
+    templatePromptExtra = (templatePromptExtra ?? "") + groupCiteRules;
+  }
+
   const groupIngress = {
     quotedWaMessageId: msg.quotedWaMessageId,
     inboundKind: msg.inboundKind,

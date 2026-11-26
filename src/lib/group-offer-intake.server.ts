@@ -36,11 +36,11 @@ export interface GroupOfferIngress {
 }
 
 const PAYMENT_RE =
-  /\b(parcela|parcelamento|boleto|cart[aã]o|pix|entrada|sinal|financi|cr[eé]dito|vezes|\d\s*x|em\s*\d+\s*vezes|condi[cç][aã]o\s+de\s+pagamento|forma\s+de\s+pagamento)\b/i;
+  /\b(parcela|parcelamento|boleto|cart[aã]o|pix|entrada|sinal|financi|cr[eé]dito|vezes|\d\s*x|em\s*\d+\s*vezes|condi[cç][aãõ]e?s?\s+de\s+pagamento|forma\s+de\s+pagamento)\b/i;
 
-/** Citou grupo/story/cartaz — não basta “promoção” genérica (cardápio etc.). */
+/** Citou grupo/story/cartaz / “dessa promoção” (marcação). */
 const GROUP_OFFER_TEXT_RE =
-  /\b(vi\s+no\s+grupo|vi\s+o\s+story|vi\s+seu\s+story|oferta\s+do\s+grupo|pacote\s+do\s+grupo|no\s+grupo|pelo\s+story|stories|story|cartaz|condi[cç][aã]o\s+especial)\b/i;
+  /\b(vi\s+no\s+grupo|vi\s+o\s+story|vi\s+seu\s+story|oferta\s+do\s+grupo|pacote\s+do\s+grupo|no\s+grupo|pelo\s+story|stories|story|cartaz|condi[cç][aã]o\s+especial|dessa\s+promo([cç][aã]o)?|dessa\s+oferta|desse\s+pacote|quero\s+(essa|desse|dessa)\s+(promo|promo([cç][aã]o)|oferta|pacote)|marcação|marcacao)\b/i;
 
 /** Parece pacote/viagem (cartaz de turismo), não restaurante ou meme. */
 const TRAVEL_OFFER_RE =
@@ -151,8 +151,9 @@ export function shouldStartGroupOfferFlow(ingress: GroupOfferIngress): boolean {
 /** Resumo curto para confirmação — sem despejar OCR/descrição inteira. */
 export function shortOfferHint(raw: string): string {
   let t = raw.trim();
-  t = t.replace(/^\(+Cliente enviou[^)]*\)+\s*/i, "");
+  // Preferir strip da legenda OCR (não engolir o conteúdo com [^)]*).
   t = t.replace(/^\(+Cliente enviou uma imagem:\s*/i, "").replace(/\)+\s*$/g, "");
+  t = t.replace(/^\(+Cliente enviou[^)]*\)+\s*/i, "");
   t = t.replace(/Conteúdo da imagem:\s*/gi, "");
   t = t.replace(/\s+/g, " ").trim();
   if (!t) return "essa promoção";
@@ -194,10 +195,11 @@ export async function resolveQuotedTextInSession(
 }
 
 export function quotePreviewWhenUnresolved(quotedForwarded?: boolean): string {
+  // Estilo WhatsApp: "Grupo · Foto" — a Meta quase nunca manda o destino da foto do grupo.
   if (quotedForwarded) {
-    return "Mensagem citada (encaminhada — costuma ser do grupo; texto não espelhado no painel)";
+    return "Foto";
   }
-  return "Mensagem citada (texto não disponível no painel — pode ser do grupo)";
+  return "Foto ou promoção citada";
 }
 
 export function buildOwnerGroupOfferAlert(input: {
@@ -364,9 +366,15 @@ export async function handleGroupOfferTurn(input: {
         `${name}vi o que você mandou — parece *${labelHint}*. É sobre essa promoção de viagem? Se for, me confirma que eu chamo a consultora pra combinar os detalhes.`,
       );
     } else if (ingress.quotedWaMessageId || ingress.quotedForwarded) {
-      replies.push(
-        `${name}vi que você citou uma mensagem. Qual pacote te interessou? Pode falar o nome ou mandar o cartaz.`,
-      );
+      if (mentionsPaymentTerms(userSaid)) {
+        replies.push(
+          `${name}vi que você veio da marcação/promoção do grupo. Boleto ou cartão o consultor confirma no pacote certo — me diz qual destino/promoção é essa (ou manda a foto de novo) que eu chamo a equipe.`,
+        );
+      } else {
+        replies.push(
+          `${name}vi que você citou a promoção do grupo. Qual pacote/destino é? Pode falar o nome ou mandar o cartaz de novo.`,
+        );
+      }
     } else if (offer.referral_headline || offer.source === "story") {
       replies.push(
         `${name}que bom que veio pelo story! Qual pacote te chamou atenção? Manda o nome ou o cartaz que eu te ajudo.`,

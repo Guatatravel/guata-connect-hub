@@ -280,7 +280,10 @@ function quoteLabel(author: string): string {
   return "Mensagem";
 }
 
-/** Quando o wamid citado não está no painel, aproxima a bolha citada (ex.: cartaz do Guatá). */
+/**
+ * Citação sem wamid local (marcação do grupo): nunca inventar "Consultor + última imagem".
+ * Parece o WhatsApp: "Grupo / marcação · Foto".
+ */
 function inferQuotedReplyTo(
   author: string,
   text: string,
@@ -290,42 +293,56 @@ function inferQuotedReplyTo(
 ): { authorLabel: string; text: string } | undefined {
   if (author !== "user") return undefined;
   const quotedWaId = meta.quoted_wa_message_id || meta.reply_to_wa_message_id;
-  const paymentFollowUp = /\b(pagamento|parcela|condi[cç][õo]es)\b/i.test(text);
+  const groupHint = Boolean(meta.quote_from_group_hint || meta.quote_unresolved);
+  const paymentFollowUp = /\b(pagamento|parcela|condi[cç][õo]es|boleto|cart[aã]o)\b/i.test(text);
   const wantsQuote = Boolean(quotedWaId || meta.reply_preview || meta.quote_unresolved);
   if (!wantsQuote && !paymentFollowUp) return undefined;
 
-  const t = new Date(createdAt).getTime();
-  const prior = thread
-    .filter((row) => row.author !== "user" && new Date(row.created_at).getTime() < t)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // Marcação/grupo: cartão honesto — a Meta não manda a foto do grupo.
+  if (groupHint || (quotedWaId && meta.reply_preview)) {
+    if (meta.reply_preview || groupHint) {
+      return {
+        authorLabel: "Grupo / marcação",
+        text: (meta.reply_preview || "Foto ou promoção citada").slice(0, 200),
+      };
+    }
+  }
 
-  for (const row of prior) {
-    const rowMeta = (row.metadata ?? {}) as MessageMeta;
-    const isCartaz =
-      /\[cartaz\]/i.test(row.text) ||
-      rowMeta.media_kind === "image" ||
-      /imagem enviad[ao] no whatsapp/i.test(row.text);
-    if (isCartaz) {
-      const parts = row.text
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-      const snippet = (parts.find((p) => !/^\(cliente enviou/i.test(p)) ?? parts[0] ?? "[cartaz]")
-        .slice(0, 200);
-      return { authorLabel: quoteLabel(row.author), text: snippet };
+  // Só procura cartaz local se NÃO for citação de grupo e o wamid não resolveu.
+  if (!groupHint && paymentFollowUp && !quotedWaId) {
+    const t = new Date(createdAt).getTime();
+    const prior = thread
+      .filter((row) => row.author !== "user" && new Date(row.created_at).getTime() < t)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+    for (const row of prior) {
+      const rowMeta = (row.metadata ?? {}) as MessageMeta;
+      const isCartaz =
+        /\[cartaz\]/i.test(row.text) ||
+        rowMeta.media_kind === "image" ||
+        /imagem enviad[ao] no whatsapp/i.test(row.text);
+      if (isCartaz) {
+        const parts = row.text
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+        const snippet = (parts.find((p) => !/^\(cliente enviou/i.test(p)) ?? parts[0] ?? "[cartaz]")
+          .slice(0, 200);
+        return { authorLabel: quoteLabel(row.author), text: snippet };
+      }
     }
   }
 
   if (meta.reply_preview) {
     return {
-      authorLabel: meta.quote_from_group_hint ? "Guatá" : "Mensagem citada",
+      authorLabel: meta.quote_from_group_hint ? "Grupo / marcação" : "Mensagem citada",
       text: meta.reply_preview.slice(0, 200),
     };
   }
   if (quotedWaId) {
     return {
-      authorLabel: "Guatá",
-      text: "Mensagem citada (cartaz ou oferta — detalhe não salvo no painel)",
+      authorLabel: "Grupo / marcação",
+      text: "Foto ou promoção citada",
     };
   }
   return undefined;

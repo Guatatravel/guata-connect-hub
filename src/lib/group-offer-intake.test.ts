@@ -65,7 +65,15 @@ describe("group-offer-intake", () => {
   });
 
   test("preview de citação sem texto", () => {
-    expect(quotePreviewWhenUnresolved(true)).toContain("grupo");
+    expect(quotePreviewWhenUnresolved(true)).toBe("Foto");
+    expect(quotePreviewWhenUnresolved(false)).toContain("promoção");
+  });
+
+  test("dessa promoção inicia oferta do grupo", () => {
+    expect(looksLikeGroupOfferText("Quero dessa promoção ai")).toBe(true);
+    expect(
+      shouldStartGroupOfferFlow({ text: "Quero dessa promoção ai" }),
+    ).toBe(true);
   });
 
   test("alerta para o dono inclui oferta", () => {
