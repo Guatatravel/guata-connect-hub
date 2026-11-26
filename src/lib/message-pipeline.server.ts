@@ -599,12 +599,14 @@ async function deliverTextReplies(
   const ttsVoice = resolveTtsVoice(intake, attendantTtsVoice);
   const orgPolicy = await getOrgBotAudioPolicy(waTarget.organizationId);
   const quotaOk = orgCanSendTtsNow(orgPolicy);
+  const { loadOrgElevenLabsCreds } = await import("@/lib/org-tts.server");
+  const orgTts = await loadOrgElevenLabsCreds(waTarget.organizationId).catch(() => null);
   const tryAudio =
     botMode &&
     orgPolicy.allowBotAudio &&
     quotaOk &&
     shouldSendAudioReply(intake, inboundKind) &&
-    isBotTtsConfigured() &&
+    isBotTtsConfigured(orgTts) &&
     replies.length > 0;
 
   if (inboundKind === "audio" && !tryAudio) {
@@ -613,7 +615,7 @@ async function deliverTextReplies(
       allowBotAudio: orgPolicy.allowBotAudio,
       quotaOk,
       textOnly: audioPrefs.textOnly,
-      ttsConfigured: isBotTtsConfigured(),
+      ttsConfigured: isBotTtsConfigured(orgTts),
     });
   }
 
@@ -628,7 +630,7 @@ async function deliverTextReplies(
         await markReadAndTyping(waTarget, inboundWaMessageId, { typing: false });
         await markReadAndTyping(waTarget, inboundWaMessageId, { typing: true });
       }
-      const speech = await synthesizeBotSpeechDetailed(text, ttsVoice);
+      const speech = await synthesizeBotSpeechDetailed(text, ttsVoice, orgTts);
       if (speech.ok) {
         try {
           let audioPath: string | undefined;

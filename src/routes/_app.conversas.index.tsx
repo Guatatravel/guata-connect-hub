@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Ban, BellRing, CheckSquare, Phone, Search, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api/client";
@@ -10,9 +11,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { formatPhone, timeAgo } from "@/lib/format";
 import type { Conversation } from "@/types/guata";
 import { useOrgLineUi } from "@/hooks/use-org-line-ui";
+import { fetchMetaAjudaStatus, setBotPausedFn } from "@/lib/bot-pause.functions";
 
 type TabId = "ativas" | "leads" | "nao_contatar";
 
@@ -53,6 +58,22 @@ function ConversasPage() {
     queryKey: ["conversations"],
     queryFn: () => api.listConversations(),
     refetchInterval: 8000,
+  });
+  const metaStatusFn = useServerFn(fetchMetaAjudaStatus);
+  const pauseFn = useServerFn(setBotPausedFn);
+  const { data: metaStatus } = useQuery({
+    queryKey: ["meta-ajuda-status"],
+    queryFn: () => metaStatusFn(),
+    refetchInterval: 60_000,
+  });
+  const pauseMut = useMutation({
+    mutationFn: (paused: boolean) => pauseFn({ data: { paused } }),
+    onSuccess: (r) => {
+      toast.success(r.botPaused ? "BOT pausado — só humano" : "BOT reativado");
+      qc.invalidateQueries({ queryKey: ["meta-ajuda-status"] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Não foi possível alterar a pausa"),
   });
   const markAllSeen = useMutation({
     mutationFn: () => api.markAllConversationsSeen(),
@@ -163,8 +184,48 @@ function ConversasPage() {
     ["nao_contatar", "Não contatar"],
   ];
 
+  const serviceCount = metaStatus?.serviceCount ?? 0;
+  const freeTier = metaStatus?.freeTier ?? 1000;
+  const botPaused = Boolean(metaStatus?.botPaused);
+
   return (
     <div className="space-y-4 w-full max-w-3xl mx-auto">
+      <Card className="p-4 space-y-3 border-dashed">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="pause-bot-conversas" className="text-sm font-medium">
+              Pausar BOT (só humano)
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Com pausa ligada, o BOT não responde. Atenda no celular (grátis na Meta) ou no painel.
+            </p>
+          </div>
+          <Switch
+            id="pause-bot-conversas"
+            checked={botPaused}
+            disabled={pauseMut.isPending}
+            onCheckedChange={(v) => pauseMut.mutate(v)}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground border-t pt-3">
+          <span>Mensagens pela plataforma este mês:</span>
+          <Badge
+            variant={
+              serviceCount >= freeTier
+                ? "destructive"
+                : serviceCount >= freeTier * 0.8
+                  ? "secondary"
+                  : "outline"
+            }
+          >
+            {serviceCount} de {freeTier} grátis (estimativa)
+          </Badge>
+          <Link to="/meta-ajuda" className="underline text-foreground">
+            Entender Meta × plataforma
+          </Link>
+        </div>
+      </Card>
+
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-display text-3xl font-semibold text-primary">Conversas</h1>
         <div className="flex items-center gap-2">

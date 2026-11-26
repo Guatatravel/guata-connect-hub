@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { HelpCircle, ExternalLink, PauseCircle, PlayCircle } from "lucide-react";
-import { toast } from "sonner";
+import { HelpCircle, ExternalLink } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -11,170 +10,232 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchMetaAjudaStatus, setBotPausedFn } from "@/lib/bot-pause.functions";
+import { fetchMetaAjudaStatus } from "@/lib/bot-pause.functions";
 
 export const Route = createFileRoute("/_app/meta-ajuda")({
   component: MetaAjudaPage,
 });
 
+const META_PRICING =
+  "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing";
+const META_COEXIST =
+  "https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users";
+
+function MetaLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a
+      className="text-foreground underline inline-flex items-center gap-1"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      {children} <ExternalLink className="h-3.5 w-3.5" />
+    </a>
+  );
+}
+
 const HELP_ITEMS: Array<{
   id: string;
   title: string;
-  tag: "Meta" | "Painel";
+  tag: "Meta" | "Plataforma" | "Painel";
   body: ReactNode;
 }> = [
   {
-    id: "app-vs-api",
-    title: "1. App no celular vs plataforma (Guatá)",
+    id: "mensalidade",
+    title: "1. Mensalidade da plataforma (painel + BOT)",
+    tag: "Plataforma",
+    body: (
+      <div className="space-y-2 text-muted-foreground">
+        <p>
+          É o que a agência paga pelo <strong className="text-foreground">painel</strong> (Conversas,
+          Conhecimento, Disparos) e pelo <strong className="text-foreground">BOT</strong> automático.
+        </p>
+        <p>
+          <strong className="text-foreground">Exemplo:</strong> sua mensalidade do sistema cobre o
+          software. Isso <em>não</em> inclui a fatura da Meta pelo WhatsApp.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "meta-cobranca",
+    title: "2. Cobrança da Meta (WhatsApp)",
     tag: "Meta",
     body: (
       <div className="space-y-2 text-muted-foreground">
         <p>
-          Mensagem digitada no <strong className="text-foreground">WhatsApp Business do celular</strong>{" "}
-          não entra na cobrança da Cloud API nem nas 1.000 mensagens service.
+          A Meta cobra mensagens enviadas pela <strong className="text-foreground">API</strong>{" "}
+          (BOT ou alguém digitando no painel), por categoria e país do cliente.
         </p>
         <p>
-          Resposta pelo <strong className="text-foreground">Guatá / painel / bot</strong> usa a API e
-          conta (service ou template, conforme o tipo).
+          <strong className="text-foreground">Exemplo:</strong> o BOT responde “Oi, qual o destino?”
+          → isso pode contar como mensagem <em>service</em> na Meta. Digitar no app do celular →{" "}
+          <strong className="text-foreground">não</strong> entra nessa cobrança.
+        </p>
+        <p>
+          Consulte: <MetaLink href={META_PRICING}>Pricing oficial da Meta</MetaLink>
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "app-vs-bot",
+    title: "3. Celular (app) vs BOT / painel",
+    tag: "Meta",
+    body: (
+      <div className="space-y-2 text-muted-foreground">
+        <p>
+          <strong className="text-foreground">Você no WhatsApp Business do celular:</strong> grátis
+          para a Meta (coexistência).
+        </p>
+        <p>
+          <strong className="text-foreground">BOT ou painel:</strong> usa Cloud API → entra nas
+          regras de preço da Meta.
+        </p>
+        <p>
+          <strong className="text-foreground">Exemplo:</strong> cliente manda “quero pacote”. Você
+          responde no app → grátis. Se o BOT responder sozinho → conta na cota da API.
+        </p>
+        <p>
+          <MetaLink href={META_COEXIST}>Coexistência (app + API)</MetaLink>
         </p>
       </div>
     ),
   },
   {
     id: "mil",
-    title: "2. As 1.000 mensagens service por mês",
+    title: "4. As 1.000 mensagens service grátis",
     tag: "Meta",
     body: (
       <div className="space-y-2 text-muted-foreground">
         <p>
           Por número comercial, a Meta libera cerca de{" "}
-          <strong className="text-foreground">1.000 mensagens service</strong> grátis por mês
-          (respostas livres na janela de 24h via API). A partir da 1.001ª, cobra.
+          <strong className="text-foreground">1.000 mensagens service</strong> por mês (respostas
+          livres na janela de 24h via API). Depois da 1.001ª, cobra.
         </p>
         <p>
-          O contador nesta página é uma <strong className="text-foreground">estimativa do Guatá</strong>{" "}
-          (mensagens enviadas pelo bot/painel). A fatura oficial está no Meta Business Suite.
+          <strong className="text-foreground">Exemplo:</strong> 800 respostas do BOT no mês → ainda
+          no grátis. 1.050 → as últimas 50 podem ser cobradas.
+        </p>
+        <p>
+          O contador em Conversas é uma <strong className="text-foreground">estimativa do painel</strong>.
+          A conta certa está no Meta Business Suite.
+        </p>
+        <p>
+          <MetaLink href={META_PRICING}>Ver regra das 1.000 na Meta</MetaLink>
         </p>
       </div>
     ),
   },
   {
     id: "templates",
-    title: "3. Templates (modelos aprovados)",
-    tag: "Meta",
-    body: (
-      <p className="text-muted-foreground">
-        Disparo com modelo aprovado (marketing, utility, auth) cobra na entrega — é outro tipo de
-        cobrança, separado das 1.000 service. Use em Conhecimento → Disparos com cuidado.
-      </p>
-    ),
-  },
-  {
-    id: "coexist",
-    title: "4. Coexistência: celular e painel juntos",
+    title: "5. Templates (disparos com modelo)",
     tag: "Meta",
     body: (
       <div className="space-y-2 text-muted-foreground">
-        <p>Cliente manda mensagem → aparece no celular e no painel ao mesmo tempo.</p>
         <p>
-          Se você responde no app, o Guatá coloca aquela conversa em{" "}
-          <strong className="text-foreground">humano</strong> e para de responder junto.
+          Modelos aprovados (marketing, utility, auth) cobram na entrega —{" "}
+          <strong className="text-foreground">não</strong> usam a cota das 1.000 service.
         </p>
-        <p>Se o bot estiver ligado e você não assumir, a resposta pela API conta nas 1.000.</p>
+        <p>
+          <strong className="text-foreground">Exemplo:</strong> campanha “promo fim de semana” para
+          200 números → até 200 cobranças de template, separadas do BOT no dia a dia.
+        </p>
+        <p>
+          <MetaLink href={META_PRICING}>Categorias e preços</MetaLink>
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "apis",
+    title: "6. APIs de inteligência (chave da agência)",
+    tag: "Plataforma",
+    body: (
+      <div className="space-y-2 text-muted-foreground">
+        <p>
+          Em <strong className="text-foreground">Configurações → Inteligência</strong> a agência
+          pode colar chave própria (Gemini ou Lovable). Sem chave própria, usa a conta
+          compartilhada da plataforma (com possíveis limites).
+        </p>
+        <p>
+          <strong className="text-foreground">Exemplo:</strong> “Usar chave da minha agência”
+          ligado + chave Gemini → o BOT pensa na sua conta Google, não na compartilhada.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: "voz",
+    title: "7. Voz do BOT (ElevenLabs)",
+    tag: "Plataforma",
+    body: (
+      <div className="space-y-2 text-muted-foreground">
+        <p>
+          Em <strong className="text-foreground">Configurações → Voz do BOT</strong> você pode
+          colar a chave ElevenLabs da agência e, se quiser, os Voice IDs.
+        </p>
+        <p>
+          <strong className="text-foreground">Exemplo:</strong> cliente manda áudio → BOT responde
+          em áudio com a voz da sua conta ElevenLabs. Sem chave própria, tenta a do servidor (se
+          existir).
+        </p>
       </div>
     ),
   },
   {
     id: "pausar",
-    title: "5. Pausar Guatá (só humano)",
+    title: "8. Pausar o BOT (só humano)",
     tag: "Painel",
     body: (
-      <p className="text-muted-foreground">
-        O interruptor no topo desta página pausa o bot em toda a organização: novas mensagens não
-        disparam a IA e as conversas em bot passam para humano. Ideal quando a equipe atende só pelo
-        celular para não gastar a cota da Meta.
-      </p>
+      <div className="space-y-2 text-muted-foreground">
+        <p>
+          O interruptor fica em <strong className="text-foreground">Conversas</strong> (topo). Com
+          pausa ligada, o BOT não responde; a equipe atende no celular ou no painel.
+        </p>
+        <p>
+          <strong className="text-foreground">Exemplo:</strong> fim de mês perto das 1.000 → pause o
+          BOT e atenda pelo app (grátis na Meta).
+        </p>
+        <p>
+          <Link to="/conversas" className="underline text-foreground">
+            Ir para Conversas
+          </Link>
+        </p>
+      </div>
     ),
   },
   {
     id: "conversas",
-    title: "6. Conversas, Leads e Não contatar",
+    title: "9. Conversas, Leads e Não contatar",
     tag: "Painel",
     body: (
       <p className="text-muted-foreground">
-        Em Conversas: Ativas (em atendimento), Leads (qualificando/quente) e Não contatar (opt-out).
-        Use Liberar contato se a pessoa voltar a querer receber mensagens.
+        Em Conversas: Ativas, Leads (qualificando/quente) e Não contatar (opt-out). Use Liberar
+        contato se a pessoa voltar a querer receber mensagens.
       </p>
     ),
   },
   {
     id: "disparos",
-    title: "7. Disparos e modelos",
+    title: "10. Disparos e modelos",
     tag: "Painel",
     body: (
       <p className="text-muted-foreground">
-        Em Conhecimento → Disparos você sincroniza templates da WABA e envia campanhas. Confira o
-        histórico por telefone antes de reenviar.
+        Em Conhecimento → Disparos: sincronize templates da WABA e envie campanhas. Veja o histórico
+        por telefone antes de reenviar (lembre: template = cobrança Meta).
       </p>
-    ),
-  },
-  {
-    id: "links",
-    title: "8. Links oficiais da Meta",
-    tag: "Meta",
-    body: (
-      <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-        <li>
-          <a
-            className="text-foreground underline inline-flex items-center gap-1"
-            href="https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Pricing WhatsApp <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </li>
-        <li>
-          <a
-            className="text-foreground underline inline-flex items-center gap-1"
-            href="https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Coexistência / app + API <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </li>
-      </ul>
     ),
   },
 ];
 
 function MetaAjudaPage() {
-  const qc = useQueryClient();
   const statusFn = useServerFn(fetchMetaAjudaStatus);
-  const pauseFn = useServerFn(setBotPausedFn);
-
   const { data, isLoading } = useQuery({
     queryKey: ["meta-ajuda-status"],
     queryFn: () => statusFn(),
     refetchInterval: 60_000,
-  });
-
-  const pauseMut = useMutation({
-    mutationFn: (paused: boolean) => pauseFn({ data: { paused } }),
-    onSuccess: (r) => {
-      qc.setQueryData(["meta-ajuda-status"], (old: typeof data) =>
-        old
-          ? { ...old, botPaused: r.botPaused, botPausedAt: r.botPausedAt }
-          : old,
-      );
-      toast.success(r.botPaused ? "Guatá pausado — só humano" : "Guatá reativado");
-      qc.invalidateQueries({ queryKey: ["meta-ajuda-status"] });
-    },
-    onError: (e: Error) => toast.error(e.message || "Não foi possível alterar a pausa"),
   });
 
   const count = data?.serviceCount ?? 0;
@@ -188,58 +249,44 @@ function MetaAjudaPage() {
           Meta / Ajuda
         </h1>
         <p className="text-muted-foreground">
-          Cobrança WhatsApp, pausa do bot e guia rápido do painel
+          Mensalidade da plataforma × cobrança da Meta, BOT e guia do painel
         </p>
       </header>
 
-      <section className="rounded-2xl border bg-card p-5 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {paused ? (
-              <PauseCircle className="h-8 w-8 text-amber-600" />
-            ) : (
-              <PlayCircle className="h-8 w-8 text-emerald-600" />
-            )}
-            <div>
-              <Label htmlFor="pause-guata" className="text-base font-medium">
-                Pausar Guatá (só humano)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Com pausa ligada, a IA não responde em nenhuma conversa.
-              </p>
-            </div>
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-6 w-12" />
-          ) : (
-            <Switch
-              id="pause-guata"
-              checked={paused}
-              disabled={pauseMut.isPending}
-              onCheckedChange={(v) => pauseMut.mutate(v)}
-            />
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-          <span className="text-sm text-muted-foreground">Service estimado este mês:</span>
-          {isLoading ? (
-            <Skeleton className="h-6 w-24" />
-          ) : (
-            <Badge variant={count >= free ? "destructive" : count >= free * 0.8 ? "secondary" : "outline"}>
-              {count} / {free}
+      <section className="rounded-2xl border bg-card p-5 shadow-sm space-y-3">
+        <p className="text-sm font-medium text-foreground">Mensagens pela plataforma este mês</p>
+        {isLoading ? (
+          <Skeleton className="h-6 w-40" />
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant={count >= free ? "destructive" : count >= free * 0.8 ? "secondary" : "outline"}
+            >
+              {count} de {free} grátis (estimativa)
             </Badge>
-          )}
-          <span className="text-xs text-muted-foreground">
-            (proxy do Guatá — confira a fatura na Meta)
-          </span>
-        </div>
+            {paused && (
+              <Badge variant="secondary">BOT pausado — veja Conversas</Badge>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Contagem aproximada do painel (BOT + respostas no painel). A fatura oficial está no Meta
+          Business Suite.{" "}
+          <MetaLink href={META_PRICING}>Abrir pricing Meta</MetaLink>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Para pausar o BOT:{" "}
+          <Link to="/conversas" className="underline text-foreground">
+            Conversas
+          </Link>
+          .
+        </p>
       </section>
 
       <section className="rounded-2xl border bg-card p-2 shadow-sm md:p-4">
         <div className="mb-2 flex items-center gap-2 px-2 pt-2">
           <HelpCircle className="h-5 w-5 text-muted-foreground" />
-          <h2 className="font-medium">Guia — Meta e painel</h2>
+          <h2 className="font-medium">Guia completo</h2>
         </div>
         <Accordion type="multiple" className="px-2">
           {HELP_ITEMS.map((item) => (

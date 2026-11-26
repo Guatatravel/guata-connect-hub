@@ -1,14 +1,16 @@
 /**
  * Texto → áudio para respostas do bot no WhatsApp.
  *
- * Env (opcional, use um provedor):
- * - ELEVENLABS_API_KEY + GUATA_TTS_VOICE_MALE_ID / GUATA_TTS_VOICE_FEMALE_ID
- * - OPENAI_API_KEY + GUATA_TTS_OPENAI_VOICE_MALE (default onyx) / GUATA_TTS_OPENAI_VOICE_FEMALE (default nova)
+ * Prioridade ElevenLabs: chave/vozes da agência (painel) → env do servidor.
+ * Fallback: OPENAI_API_KEY.
  */
 import { normalizeAgencyNameInText } from "@/lib/agency-branding";
 import type { BotVoiceProfile } from "@/lib/bot-audio-preference.server";
+import type { OrgElevenLabsCreds } from "@/lib/org-tts.server";
 
 const MAX_SPEECH_CHARS = 700;
+
+export type TtsOrgOverride = Partial<OrgElevenLabsCreds> | null | undefined;
 
 export function plainTextForSpeech(text: string): string {
   return normalizeAgencyNameInText(
@@ -20,7 +22,7 @@ export function plainTextForSpeech(text: string): string {
   ).slice(0, MAX_SPEECH_CHARS);
 }
 
-function maleVoiceId(): string | null {
+function envMaleVoiceId(): string | null {
   return (
     process.env.ELEVENLABS_VOICE_ID?.trim() ||
     process.env.GUATA_TTS_VOICE_MALE_ID?.trim() ||
@@ -28,7 +30,7 @@ function maleVoiceId(): string | null {
   );
 }
 
-function femaleVoiceId(): string | null {
+function envFemaleVoiceId(): string | null {
   return (
     process.env.ELEVENLABS_VOICE_FEMALE_ID?.trim() ||
     process.env.GUATA_TTS_VOICE_FEMALE_ID?.trim() ||
@@ -36,15 +38,27 @@ function femaleVoiceId(): string | null {
   );
 }
 
-function elevenLabsTtsReady(): boolean {
-  return Boolean(
-    process.env.ELEVENLABS_API_KEY?.trim() && (maleVoiceId() || femaleVoiceId()),
-  );
+function resolveElevenLabsKey(org?: TtsOrgOverride): string | null {
+  if (org?.useOwn && org.apiKey?.trim()) return org.apiKey.trim();
+  return process.env.ELEVENLABS_API_KEY?.trim() || null;
+}
+
+function maleVoiceId(org?: TtsOrgOverride): string | null {
+  return org?.voiceMaleId?.trim() || envMaleVoiceId();
+}
+
+function femaleVoiceId(org?: TtsOrgOverride): string | null {
+  return org?.voiceFemaleId?.trim() || envFemaleVoiceId();
+}
+
+function elevenLabsTtsReady(org?: TtsOrgOverride): boolean {
+  const key = resolveElevenLabsKey(org);
+  return Boolean(key && (maleVoiceId(org) || femaleVoiceId(org)));
 }
 
 /** True se OpenAI ou ElevenLabs (com voice id) estiverem prontos. */
-export function isBotTtsConfigured(): boolean {
-  return elevenLabsTtsReady() || Boolean(process.env.OPENAI_API_KEY?.trim());
+export function isBotTtsConfigured(org?: TtsOrgOverride): boolean {
+  return elevenLabsTtsReady(org) || Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 export interface TtsConfigStatus {
@@ -56,18 +70,19 @@ export interface TtsConfigStatus {
   summary: string;
 }
 
-export function getTtsConfigStatus(): TtsConfigStatus {
-  const elevenLabsKey = Boolean(process.env.ELEVENLABS_API_KEY?.trim());
-  const male = Boolean(maleVoiceId());
-  const female = Boolean(femaleVoiceId());
+export function getTtsConfigStatus(org?: TtsOrgOverride): TtsConfigStatus {
+  const elevenLabsKey = Boolean(resolveElevenLabsKey(org));
+  const male = Boolean(maleVoiceId(org) || (org?.useOwn ? envMaleVoiceId() : null));
+  const female = Boolean(femaleVoiceId(org) || (org?.useOwn ? envFemaleVoiceId() : null));
   const openAiKey = Boolean(process.env.OPENAI_API_KEY?.trim());
-  const configured = isBotTtsConfigured();
-  let summary = "Nenhum provedor de voz configurado no servidor.";
-  if (elevenLabsKey && !male && !female) {
-    summary =
-      "ELEVENLABS_API_KEY presente, mas falta GUATA_TTS_VOICE_MALE_ID ou ELEVENLABS_VOICE_ID.";
-  } else if (elevenLabsTtsReady()) {
-    summary = `ElevenLabs pronto (voz${male && female ? " M+F" : male ? " M" : " F"}).`;
+  const configured = isBotTtsConfigured(org);
+  let summary = "Nenhum provedor de voz configurado.";
+  if (elevenLabsKey && !maleVoiceId(org) && !femaleVoiceId(org) && !envMaleVoiceId() && !envFemaleVoiceId()) {
+    summary = "ElevenLabs com chave, mas falta ID de voz (masculina ou feminina).";
+  } else if (elevenLabsTtsReady(org)) {
+    const m = Boolean(maleVoiceId(org) || envMaleVoiceId());
+    const f = Boolean(femaleVoiceId(org) || envFemaleVoiceId());
+    summary = `ElevenLabs pronto (voz${m && f ? " M+F" : m ? " M" : " F"}${org?.useOwn ? ", chave da agência" : ", servidor"}).`;
   } else if (openAiKey) {
     summary = "OpenAI TTS configurado (fallback).";
   }
@@ -81,9 +96,11 @@ export function getTtsConfigStatus(): TtsConfigStatus {
   };
 }
 
-function voiceIdFor(profile: BotVoiceProfile): string | null {
-  if (profile === "female") return femaleVoiceId() || maleVoiceId();
-  return maleVoiceId() || femaleVoiceId();
+function voiceIdFor(profile: BotVoiceProfile, org?: TtsOrgOverride): string | null {
+  if (profile === "female") {
+    return femaleVoiceId(org) || envFemaleVoiceId() || maleVoiceId(org) || envMaleVoiceId();
+  }
+  return maleVoiceId(org) || envMaleVoiceId() || femaleVoiceId(org) || envFemaleVoiceId();
 }
 
 function openAiVoice(profile: BotVoiceProfile): string {
@@ -136,9 +153,10 @@ async function requestElevenLabs(
 async function synthesizeElevenLabs(
   text: string,
   profile: BotVoiceProfile,
+  org?: TtsOrgOverride,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | { error: string }> {
-  const key = process.env.ELEVENLABS_API_KEY?.trim();
-  const voiceId = voiceIdFor(profile);
+  const key = resolveElevenLabsKey(org);
+  const voiceId = voiceIdFor(profile, org);
   if (!key || !voiceId) {
     return { error: "elevenlabs_missing_key_or_voice_id" };
   }
@@ -202,14 +220,15 @@ export type SynthesizeResult =
 export async function synthesizeBotSpeechDetailed(
   text: string,
   profile: BotVoiceProfile,
+  org?: TtsOrgOverride,
 ): Promise<SynthesizeResult> {
   const spoken = plainTextForSpeech(text);
   if (!spoken || spoken.length < 3) {
     return { ok: false, reason: "texto_curto_para_voz" };
   }
 
-  if (elevenLabsTtsReady()) {
-    const el = await synthesizeElevenLabs(spoken, profile);
+  if (elevenLabsTtsReady(org)) {
+    const el = await synthesizeElevenLabs(spoken, profile, org);
     if ("bytes" in el && el.bytes.length > 0) {
       return { ok: true, bytes: el.bytes, mimeType: el.mimeType };
     }
@@ -230,20 +249,22 @@ export async function synthesizeBotSpeechDetailed(
 export async function synthesizeBotSpeech(
   text: string,
   profile: BotVoiceProfile,
+  org?: TtsOrgOverride,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
-  const r = await synthesizeBotSpeechDetailed(text, profile);
+  const r = await synthesizeBotSpeechDetailed(text, profile, org);
   return r.ok ? { bytes: r.bytes, mimeType: r.mimeType } : null;
 }
 
 /** Gera ~1s de áudio para diagnóstico no painel. */
 export async function probeBotTts(
   profile: BotVoiceProfile = "male",
+  org?: TtsOrgOverride,
 ): Promise<{ ok: boolean; detail: string }> {
-  const cfg = getTtsConfigStatus();
+  const cfg = getTtsConfigStatus(org);
   if (!cfg.configured) {
     return { ok: false, detail: cfg.summary };
   }
-  const r = await synthesizeBotSpeechDetailed("Teste de voz do Guatá.", profile);
+  const r = await synthesizeBotSpeechDetailed("Teste de voz do BOT.", profile, org);
   if (r.ok) {
     return {
       ok: true,

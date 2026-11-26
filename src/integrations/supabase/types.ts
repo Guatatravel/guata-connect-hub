@@ -795,24 +795,36 @@ export type Database = {
           ai_provider: string
           api_key: string | null
           credits_blocked_period: string | null
+          elevenlabs_api_key: string | null
+          elevenlabs_voice_female_id: string | null
+          elevenlabs_voice_male_id: string | null
           organization_id: string
           updated_at: string
+          use_own_elevenlabs: boolean
           use_own_key: boolean
         }
         Insert: {
           ai_provider?: string
           api_key?: string | null
           credits_blocked_period?: string | null
+          elevenlabs_api_key?: string | null
+          elevenlabs_voice_female_id?: string | null
+          elevenlabs_voice_male_id?: string | null
           organization_id: string
           updated_at?: string
+          use_own_elevenlabs?: boolean
           use_own_key?: boolean
         }
         Update: {
           ai_provider?: string
           api_key?: string | null
           credits_blocked_period?: string | null
+          elevenlabs_api_key?: string | null
+          elevenlabs_voice_female_id?: string | null
+          elevenlabs_voice_male_id?: string | null
           organization_id?: string
           updated_at?: string
+          use_own_elevenlabs?: boolean
           use_own_key?: boolean
         }
         Relationships: []
