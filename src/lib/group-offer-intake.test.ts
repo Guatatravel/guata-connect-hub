@@ -1,15 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import {
+  asksToReadCartaz,
   buildOwnerGroupOfferAlert,
+  cartazSummaryFromInbound,
   groupOfferBriefingPromptExtra,
   handleGroupOfferTurn,
+  isMostlyPaymentQuestion,
   looksLikeGroupOfferText,
   looksLikeTravelOfferText,
   mentionsPaymentTerms,
+  parseInboundImageText,
   quotePreviewWhenUnresolved,
   shortOfferHint,
   shouldStartGroupOfferFlow,
   templateReplyBlocksGroupOffer,
+  userTextLooksLikeOfferLabel,
 } from "@/lib/group-offer-intake.server";
 
 describe("group-offer-intake", () => {
@@ -125,5 +130,65 @@ describe("group-offer-intake", () => {
     });
     expect(extra).toContain("Bonito");
     expect(extra).toContain("[[OFERTA_HUMANO]]");
+  });
+
+  test("legenda de pagamento + OCR: prioriza cartaz", () => {
+    const inbound =
+      "Formas de pagamento de pacote\n\n(Conteúdo da imagem: Pacote Curitiba 09/02 a 16/02 Hotel Nacional Inn, aéreo Campo Grande)";
+    expect(mentionsPaymentTerms("Formas de pagamento de pacote")).toBe(true);
+    expect(isMostlyPaymentQuestion("Formas de pagamento de pacote")).toBe(true);
+    expect(userTextLooksLikeOfferLabel("Formas de pagamento de pacote")).toBe(false);
+    const parsed = parseInboundImageText(inbound);
+    expect(parsed.caption).toContain("Formas de pagamento");
+    expect(parsed.imageBody).toContain("Curitiba");
+    expect(cartazSummaryFromInbound(inbound)).toContain("Curitiba");
+    expect(shortOfferHint(inbound)).toContain("Curitiba");
+  });
+
+  test("leia o cartaz não é nome de pacote; reusa OCR", async () => {
+    expect(asksToReadCartaz("Leia o cartaz")).toBe(true);
+    expect(userTextLooksLikeOfferLabel("Leia o cartaz")).toBe(false);
+    const turn = await handleGroupOfferTurn({
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      firstName: "Guilherme",
+      ingress: { text: "Leia o cartaz" },
+      intake: {
+        group_offer: {
+          step: "confirm",
+          source: "cartaz",
+          offer_label: "Formas de pagamento de pacote",
+          cartaz_summary: "Pacote Curitiba 09/02 a 16/02 Hotel Nacional Inn",
+          payment_note: "Formas de pagamento de pacote",
+        },
+      },
+      intakeState: "oferta_grupo",
+    });
+    expect(turn.startBriefing).toBe(false);
+    expect(turn.replies.join(" ")).toContain("Curitiba");
+    expect(turn.replies.join(" ").toLowerCase()).not.toContain("anotei *leia");
+    const offer = turn.patchIntake["group_offer"] as { offer_label?: string };
+    expect(offer.offer_label?.toLowerCase()).toContain("curitiba");
+  });
+
+  test("imagem com legenda de pagamento confirma destino do OCR", async () => {
+    const inbound =
+      "Formas de pagamento de pacote\n\n(Conteúdo da imagem: Pacote Curitiba 7 noites Hotel Nacional Inn aéreo Campo Grande)";
+    const turn = await handleGroupOfferTurn({
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      firstName: "Guilherme",
+      ingress: { text: inbound, inboundKind: "image" },
+      intake: {},
+      intakeState: null,
+    });
+    expect(turn.replies.join(" ")).toContain("Curitiba");
+    expect(turn.replies.join(" ").toLowerCase()).toContain("pagamento");
+    const offer = turn.patchIntake["group_offer"] as {
+      offer_label?: string;
+      payment_note?: string;
+      step: string;
+    };
+    expect(offer.step).toBe("confirm");
+    expect(offer.offer_label?.toLowerCase()).toContain("curitiba");
+    expect(offer.payment_note?.toLowerCase()).toContain("pagamento");
   });
 });
