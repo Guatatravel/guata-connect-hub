@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildOwnerGroupOfferAlert,
+  groupOfferBriefingPromptExtra,
+  handleGroupOfferTurn,
   looksLikeGroupOfferText,
   looksLikeTravelOfferText,
   mentionsPaymentTerms,
@@ -90,5 +92,38 @@ describe("group-offer-intake", () => {
     });
     expect(t).toContain("Promo B");
     expect(t).toContain("boleto");
+  });
+
+  test("confirmar pacote inicia briefing, não handoff imediato", async () => {
+    const turn = await handleGroupOfferTurn({
+      sessionId: "00000000-0000-4000-8000-000000000001",
+      firstName: "Ana",
+      ingress: { text: "sim" },
+      intake: {
+        group_offer: {
+          step: "confirm",
+          source: "story",
+          offer_label: "Pacote Nordeste 5 diárias",
+        },
+      },
+      intakeState: "oferta_grupo",
+    });
+    expect(turn.startBriefing).toBe(true);
+    expect(turn.handoffHuman).toBe(false);
+    expect(turn.notifyOwner).toBe(false);
+    expect(turn.patchIntake["lead_stage"]).toBe("qualificando");
+    const offer = turn.patchIntake["group_offer"] as { step: string; confirmed_at?: string };
+    expect(offer.step).toBe("done");
+    expect(offer.confirmed_at).toBeTruthy();
+  });
+
+  test("briefing extra cita pacote confirmado", () => {
+    const extra = groupOfferBriefingPromptExtra({
+      step: "done",
+      offer_label: "Bonito 3 dias",
+      confirmed_at: new Date().toISOString(),
+    });
+    expect(extra).toContain("Bonito");
+    expect(extra).toContain("[[OFERTA_HUMANO]]");
   });
 });

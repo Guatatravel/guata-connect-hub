@@ -63,6 +63,8 @@ import { ensureTravelIntakeForSession } from "@/lib/lead-intake.server";
 import {
   buildOwnerGroupOfferAlert,
   GROUP_OFFER_INTAKE_STATE,
+  groupOfferBriefingPromptExtra,
+  groupOfferFromIntake,
   handleGroupOfferTurn,
   isActiveGroupOfferFlow,
   quotePreviewWhenUnresolved,
@@ -944,18 +946,33 @@ export async function processMessage(
     /^(sim|s|quero|pode|pode sim|claro|ok|okay|por favor|bora|isso|yes|yeah|sure|sí|si|vale)\b/i.test(lower);
 
   const goHuman = async () => {
-    const intake_data = {
+    const intake_data: Record<string, unknown> = {
       ...(session.intake_data ?? {}),
       lead_stage: "quente" as LeadStage,
       lead_updated_at: new Date().toISOString(),
     };
+    const pendingOffer = groupOfferFromIntake(intake_data);
+    let alertOffer: import("@/lib/group-offer-intake.server").GroupOfferData | null = null;
+    if (pendingOffer?.confirmed_at && !pendingOffer.alerted_at) {
+      pendingOffer.alerted_at = new Date().toISOString();
+      pendingOffer.step = "done";
+      intake_data["group_offer"] = pendingOffer;
+      alertOffer = pendingOffer;
+    }
     await supabaseAdmin
       .from("sessions")
       .update({ mode: "humano", intake_state: null, intake_data: intake_data as never })
       .eq("id", session.id);
+    session.intake_data = intake_data;
+    session.mode = "humano";
     void ensureTravelIntakeForSession(session.id).catch((e) =>
       console.error("[lead-intake] handoff:", e),
     );
+    if (alertOffer) {
+      await notifyOwnerGroupOffer(msg, session.id, alertOffer).catch((e) =>
+        console.error("[alerta-oferta] handoff:", e),
+      );
+    }
     replies.push(handoffText);
   };
 
@@ -1067,6 +1084,52 @@ export async function processMessage(
       void ensureTravelIntakeForSession(session.id).catch((e) =>
         console.error("[lead-intake] oferta-grupo:", e),
       );
+    } else if (turn.startBriefing) {
+      const offer = turn.patchIntake["group_offer"] as import("@/lib/group-offer-intake.server").GroupOfferData;
+      const briefingExtra =
+        (templatePromptExtra ?? "") + groupOfferBriefingPromptExtra(offer);
+      try {
+        const raw = await answerTurismo(
+          msg.text,
+          msg.line,
+          session.id,
+          firstName,
+          "qualificando",
+          turn.patchIntake,
+          briefingExtra,
+        );
+        const offerTag = raw.includes("[[OFERTA_HUMANO]]");
+        const intakePatch: Record<string, unknown> = { ...turn.patchIntake };
+        if (offerTag) {
+          await supabaseAdmin
+            .from("sessions")
+            .update({
+              intake_state: "oferta_humano",
+              intake_data: intakePatch as never,
+            })
+            .eq("id", session.id);
+          session.intake_state = "oferta_humano";
+        }
+        const mediaTag = raw.match(/\[\[ENVIAR_MIDIA:([0-9a-f-]{36})\]\]/i);
+        const pdfTag = raw.match(/\[\[ENVIAR_PDF:([0-9a-f-]{36})\]\]/i);
+        const body = raw
+          .replace(/\[\[OFERTA_HUMANO\]\]/g, "")
+          .replace(/\[\[ENVIAR_MIDIA:[0-9a-f-]{36}\]\]/gi, "")
+          .replace(/\[\[ENVIAR_PDF:[0-9a-f-]{36}\]\]/gi, "")
+          .trim();
+        if (body) replies.push(...splitWhatsAppMessages(body));
+        const taggedDocId = pdfTag?.[1] ?? mediaTag?.[1];
+        if (taggedDocId) {
+          (session.intake_data as Record<string, unknown>)["_pending_media_doc"] = taggedDocId;
+        }
+      } catch (err) {
+        console.error("[brain] briefing-oferta:", err);
+        replies.push(
+          firstName
+            ? `Fechado, ${firstName}! De qual cidade vocês saem?`
+            : "Fechado! De qual cidade vocês saem?",
+        );
+      }
     }
   } else if (session.mode !== "humano" && templateReplyKind === "decline" && recentTemplate) {
     replies.push(templateDeclineReply(recentTemplate, firstName));
@@ -1127,14 +1190,23 @@ export async function processMessage(
     }
     try {
       const leadStage = await refreshLeadStage(session, msg.text);
+      const confirmedOffer = groupOfferFromIntake(session.intake_data);
+      const offerBriefingExtra =
+        confirmedOffer?.confirmed_at && !confirmedOffer.alerted_at
+          ? groupOfferBriefingPromptExtra(confirmedOffer)
+          : "";
       const raw = await answerTurismo(
         msg.text,
         msg.line,
         session.id,
         firstName,
-        leadStage,
+        confirmedOffer?.confirmed_at && !confirmedOffer.alerted_at
+          ? leadStage === "informacional"
+            ? "qualificando"
+            : leadStage
+          : leadStage,
         session.intake_data,
-        templatePromptExtra,
+        (templatePromptExtra ?? "") + offerBriefingExtra,
       );
       const offer = raw.includes("[[OFERTA_HUMANO]]");
       const hookUsed =

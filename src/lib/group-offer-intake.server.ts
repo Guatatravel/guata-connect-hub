@@ -1,6 +1,6 @@
 /**
- * Ofertas divulgadas no grupo / story: identificar pacote, confirmar e repassar ao consultor
- * sem inventar condição de pagamento.
+ * Ofertas divulgadas no grupo / story / marcação: identificar pacote, confirmar,
+ * briefing mastigado e só então repassar ao consultor — sem inventar condição de pagamento.
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { TemplateUserReplyKind } from "@/lib/whatsapp-template-context.server";
@@ -270,6 +270,35 @@ export interface GroupOfferTurnResult {
   intakeState: string | null;
   handoffHuman: boolean;
   notifyOwner: boolean;
+  /** Pacote confirmado — seguir com briefing mastigado antes do humano. */
+  startBriefing: boolean;
+}
+
+/** Contexto para answerTurismo após confirmar story/grupo/marcação. */
+export function groupOfferBriefingPromptExtra(offer: GroupOfferData): string {
+  const label =
+    offer.offer_label?.trim() ||
+    offer.cartaz_summary?.split("\n")[0]?.trim() ||
+    offer.referral_headline?.trim() ||
+    offer.quoted_text?.trim() ||
+    "promoção confirmada";
+  const hint = shortOfferHint(label);
+  const lines = [
+    `\n\n## PACOTE JÁ CONFIRMADO (story / grupo / marcação)`,
+    `- O cliente confirmou o pacote/promoção: ${hint}.`,
+    `- NÃO pergunte de novo qual pacote, destino da promoção ou se é “esse mesmo”.`,
+    `- NÃO invente condição de pagamento (boleto/parcela); se perguntar, diga que o consultor confirma no pacote.`,
+    `- Entre já no BRIEFING DE COTAÇÃO: uma pergunta concreta por mensagem (origem, datas/período, quem viaja…).`,
+    `- Comece com uma frase curta de ok (ex.: “Fechado!”) e a primeira pergunta do que ainda falta.`,
+    `- Quando origem + período + composição do grupo estiverem claros (ou a pessoa pedir valores/fechar), ofereça o consultor com [[OFERTA_HUMANO]].`,
+  ];
+  if (offer.payment_note) {
+    lines.push(`- Cliente já falou de pagamento: ${offer.payment_note.slice(0, 160)} — anote e não invente resposta.`);
+  }
+  if (offer.cartaz_summary) {
+    lines.push(`- Leitura do cartaz (só contexto): ${offer.cartaz_summary.slice(0, 200)}`);
+  }
+  return lines.join("\n");
 }
 
 export async function handleGroupOfferTurn(input: {
@@ -306,6 +335,7 @@ export async function handleGroupOfferTurn(input: {
   const replies: string[] = [];
   let handoffHuman = false;
   let notifyOwner = false;
+  let startBriefing = false;
   let intakeState: string | null = GROUP_OFFER_INTAKE_STATE;
 
   const visualCandidate =
@@ -313,13 +343,14 @@ export async function handleGroupOfferTurn(input: {
     offer.quoted_text?.slice(0, 160) ||
     offer.referral_headline?.slice(0, 120);
 
-  const finalizeHandoff = () => {
+  /** Pacote ok → briefing (não chama humano ainda). */
+  const finalizeForBriefing = () => {
     offer.step = "done";
     offer.confirmed_at = offer.confirmed_at ?? new Date().toISOString();
-    handoffHuman = true;
-    notifyOwner = !offer.alerted_at;
+    startBriefing = true;
+    handoffHuman = false;
+    notifyOwner = false;
     intakeState = null;
-    if (notifyOwner) offer.alerted_at = new Date().toISOString();
   };
 
   const labelHint = shortOfferHint(
@@ -328,12 +359,7 @@ export async function handleGroupOfferTurn(input: {
 
   if (offer.step === "confirm") {
     if (AFFIRMATIVE.test(userSaid)) {
-      finalizeHandoff();
-      replies.push(
-        firstName
-          ? `Fechado, ${firstName}! Já chamei a consultora — ela te fala por aqui com os detalhes.`
-          : `Fechado! Já chamei a consultora — ela te fala por aqui com os detalhes.`,
-      );
+      finalizeForBriefing();
     } else if (/^(n[aã]o|nao|n|outra|errad)/i.test(userSaid)) {
       offer.step = "ask_offer";
       offer.offer_label = undefined;
@@ -341,34 +367,40 @@ export async function handleGroupOfferTurn(input: {
     } else {
       offer.offer_label = userSaid.slice(0, 300);
       replies.push(
-        `Beleza — anotei *${shortOfferHint(userSaid)}*. É esse mesmo que você quer? Se for, me confirma que eu chamo a consultora.`,
+        `Beleza — anotei *${shortOfferHint(userSaid)}*. É esse mesmo que você quer? Se for, me confirma que eu te ajudo a montar.`,
       );
     }
   } else if (offer.step === "done") {
-    handoffHuman = true;
-    intakeState = null;
-    if (!offer.alerted_at && userSaid.length > 0) {
-      notifyOwner = true;
-      offer.alerted_at = new Date().toISOString();
-      offer.payment_note = offer.payment_note ?? userSaid.slice(0, 300);
+    // Fluxo antigo / estado residual: se já confirmou, segue briefing no pipeline.
+    if (offer.confirmed_at && !offer.alerted_at) {
+      startBriefing = true;
+      intakeState = null;
+    } else {
+      handoffHuman = true;
+      intakeState = null;
+      if (!offer.alerted_at && userSaid.length > 0) {
+        notifyOwner = true;
+        offer.alerted_at = new Date().toISOString();
+        offer.payment_note = offer.payment_note ?? userSaid.slice(0, 300);
+      }
     }
   } else {
     if (userTextLooksLikeOfferLabel(userSaid)) {
       offer.offer_label = userSaid.slice(0, 300);
       offer.step = "confirm";
       replies.push(
-        `Entendi, *${shortOfferHint(userSaid)}*. É esse pacote que te interessou? Se sim, já passo pra consultora.`,
+        `Entendi, *${shortOfferHint(userSaid)}*. É esse pacote que te interessou? Se sim, me confirma que eu já peço os detalhes pra montar.`,
       );
     } else if (visualCandidate) {
       offer.offer_label = visualCandidate.slice(0, 300);
       offer.step = "confirm";
       replies.push(
-        `${name}vi o que você mandou — parece *${labelHint}*. É sobre essa promoção de viagem? Se for, me confirma que eu chamo a consultora pra combinar os detalhes.`,
+        `${name}vi o que você mandou — parece *${labelHint}*. É sobre essa promoção de viagem? Se for, me confirma que eu te ajudo a montar.`,
       );
     } else if (ingress.quotedWaMessageId || ingress.quotedForwarded) {
       if (mentionsPaymentTerms(userSaid)) {
         replies.push(
-          `${name}vi que você veio da marcação/promoção do grupo. Boleto ou cartão o consultor confirma no pacote certo — me diz qual destino/promoção é essa (ou manda a foto de novo) que eu chamo a equipe.`,
+          `${name}vi que você veio da marcação/promoção do grupo. Boleto ou cartão o consultor confirma no pacote certo — me diz qual destino/promoção é essa (ou manda a foto de novo) que eu te ajudo.`,
         );
       } else {
         replies.push(
@@ -381,7 +413,7 @@ export async function handleGroupOfferTurn(input: {
       );
     } else {
       replies.push(
-        `${name}me conta qual pacote você quer — nome, valor ou o cartaz — que eu chamo a consultora.`,
+        `${name}me conta qual pacote você quer — nome, valor ou o cartaz — que eu te ajudo a montar.`,
       );
     }
 
@@ -391,10 +423,7 @@ export async function handleGroupOfferTurn(input: {
       offer.step === "confirm" &&
       !replies.length
     ) {
-      finalizeHandoff();
-      replies.push(
-        `Anotei *${shortOfferHint(offer.offer_label)}* e sua dúvida de pagamento. A consultora te responde em instantes.`,
-      );
+      finalizeForBriefing();
     }
   }
 
@@ -402,10 +431,14 @@ export async function handleGroupOfferTurn(input: {
     ...input.intake,
     group_offer: offer,
   };
+  if (startBriefing) {
+    patchIntake["lead_stage"] = "qualificando";
+    patchIntake["lead_updated_at"] = new Date().toISOString();
+  }
   if (handoffHuman) {
     patchIntake["lead_stage"] = "quente";
     patchIntake["lead_updated_at"] = new Date().toISOString();
   }
 
-  return { replies, patchIntake, intakeState, handoffHuman, notifyOwner };
+  return { replies, patchIntake, intakeState, handoffHuman, notifyOwner, startBriefing };
 }
